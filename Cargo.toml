@@ -1,4 +1,10 @@
 [package]
+authors = ["DatenLord <dev@datenlord.io>"]
+categories = ["Driver"]
+keywords = ["RDMA", "Driver"]
+description = "Blue RDMA Driver"
+license = "Apache-2.0"
+repository = "todo"
 name = "blue-rdma-driver"
 version = "0.1.0"
 edition = "2021"
