@@ -5,8 +5,10 @@ mod virt_to_phy;
 mod page;
 
 /// Number of bits for a 4KB page size
+#[cfg(target_arch = "x86_64")]
 #[cfg(feature = "page_size_4k")]
 pub(crate) const PAGE_SIZE_BITS: u8 = 12;
+
 /// Number of bits for a 2MB huge page size
 #[cfg(feature = "page_size_2m")]
 pub(crate) const PAGE_SIZE_BITS: u8 = 21;

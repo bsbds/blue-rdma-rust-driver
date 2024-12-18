@@ -36,13 +36,19 @@ impl ConscMem {
 
     /// Reserves memory pages using mmap.
     fn reserve(num_pages: usize) -> io::Result<MmapMut> {
+        /// Number of bits representing a 4K page size
+        const PAGE_SIZE_4K_BITS: u8 = 12;
         let len = PAGE_SIZE
             .checked_mul(num_pages)
             .ok_or(io::Error::from(io::ErrorKind::Unsupported))?;
+        #[cfg(feature = "page_size_2m")]
         let mmap = MmapOptions::new()
             .len(len)
             .huge(Some(PAGE_SIZE_BITS))
             .map_anon()?;
+        #[cfg(feature = "page_size_4k")]
+        let mmap = MmapOptions::new().len(len).map_anon()?;
+
         mmap.lock()?;
 
         Ok(mmap)
