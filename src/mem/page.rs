@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData};
 
 use memmap2::{MmapMut, MmapOptions};
 
-use super::{virt_to_phy::virt_to_phy, HUGE_PAGE_2MB_BITS, HUGE_PAGE_2MB_SIZE};
+use super::{virt_to_phy::virt_to_phy, PAGE_SIZE, PAGE_SIZE_BITS};
 
 use std::ops::{Deref, DerefMut};
 
@@ -36,12 +36,12 @@ impl ConscMem {
 
     /// Reserves memory pages using mmap.
     fn reserve(num_pages: usize) -> io::Result<MmapMut> {
-        let len = HUGE_PAGE_2MB_SIZE
+        let len = PAGE_SIZE
             .checked_mul(num_pages)
             .ok_or(io::Error::from(io::ErrorKind::Unsupported))?;
         let mmap = MmapOptions::new()
             .len(len)
-            .huge(Some(HUGE_PAGE_2MB_BITS))
+            .huge(Some(PAGE_SIZE_BITS))
             .map_anon()?;
         mmap.lock()?;
 
@@ -51,7 +51,7 @@ impl ConscMem {
     /// Checks if the physical pages backing the memory mapping are consecutive.
     #[allow(clippy::as_conversions)] // casting usize ot u64 is safe
     fn ensure_consecutive(mmap: &MmapMut) -> io::Result<bool> {
-        let virt_addrs = mmap.chunks(HUGE_PAGE_2MB_SIZE).map(<[u8]>::as_ptr);
+        let virt_addrs = mmap.chunks(PAGE_SIZE).map(<[u8]>::as_ptr);
         let phy_addrs = virt_to_phy(virt_addrs)?;
         if phy_addrs.iter().any(Option::is_none) {
             return Err(io::Error::from(io::ErrorKind::NotFound));
@@ -61,7 +61,7 @@ impl ConscMem {
             .flatten()
             .skip(1)
             .zip(phy_addrs.iter().flatten())
-            .all(|(a, b)| a.saturating_sub(*b) == HUGE_PAGE_2MB_SIZE as u64);
+            .all(|(a, b)| a.saturating_sub(*b) == PAGE_SIZE as u64);
 
         Ok(is_consec)
     }
@@ -156,7 +156,7 @@ impl<Slot: SlotSize> SlotAlloc<Slot> {
 
     /// Returns the total number of slots that can be allocated.
     fn num_slots_total() -> usize {
-        HUGE_PAGE_2MB_SIZE / Self::slot_size()
+        PAGE_SIZE / Self::slot_size()
     }
 
     /// Returns the maximum slot number that can be allocated.
@@ -167,7 +167,7 @@ impl<Slot: SlotSize> SlotAlloc<Slot> {
     /// Returns the size of each slot in bytes.
     fn slot_size() -> usize {
         assert!(
-            Slot::size() <= HUGE_PAGE_2MB_SIZE && Slot::size() != 0,
+            Slot::size() <= PAGE_SIZE && Slot::size() != 0,
             "invalid slot size"
         );
         Slot::size()

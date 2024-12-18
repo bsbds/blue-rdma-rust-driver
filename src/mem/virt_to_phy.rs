@@ -3,7 +3,7 @@ use std::{
     io::{self, Read, Seek},
 };
 
-use super::{HUGE_PAGE_2MB_BITS, HUGE_PAGE_2MB_SIZE};
+use super::{PAGE_SIZE, PAGE_SIZE_BITS};
 
 /// Size of the PFN (Page Frame Number) mask in bytes
 const PFN_MASK_SIZE: usize = 8;
@@ -30,7 +30,7 @@ where
 
     let mut file = File::open("/proc/self/pagemap")?;
     for virt_addr in virt_addrs {
-        let virt_pfn = virt_addr >> HUGE_PAGE_2MB_BITS;
+        let virt_pfn = virt_addr >> PAGE_SIZE_BITS;
         let offset = PFN_MASK_SIZE as u64 * virt_pfn;
         let _pos = file.seek(io::SeekFrom::Start(offset))?;
         let mut buf = [0u8; PFN_MASK_SIZE];
@@ -41,8 +41,7 @@ where
             continue;
         }
         let phy_pfn = entry & PFN_MASK;
-        let phy_addr =
-            (phy_pfn << HUGE_PAGE_2MB_BITS) + (virt_addr & (HUGE_PAGE_2MB_SIZE as u64 - 1));
+        let phy_addr = (phy_pfn << PAGE_SIZE_BITS) + (virt_addr & (PAGE_SIZE as u64 - 1));
         phy_addrs.push(Some(phy_addr));
     }
 
