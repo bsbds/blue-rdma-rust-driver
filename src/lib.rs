@@ -165,3 +165,7 @@
         dead_code
     )
 )]
+
+#[allow(unused)]
+/// Memory operation components
+mod mem;
