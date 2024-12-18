@@ -9,6 +9,11 @@ name = "blue-rdma-driver"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = ["page_size_2m"]
+page_size_2m = []
+page_size_4k = []
+
 [dependencies]
 criterion = "0.5.1"
 libc = "0.2.168"

@@ -4,8 +4,13 @@ mod virt_to_phy;
 /// Page implementation
 mod page;
 
+/// Number of bits for a 4KB page size
+#[cfg(feature = "page_size_4k")]
+pub(crate) const PAGE_SIZE_BITS: u8 = 12;
 /// Number of bits for a 2MB huge page size
+#[cfg(feature = "page_size_2m")]
 pub(crate) const PAGE_SIZE_BITS: u8 = 21;
+
 /// Size of a 2MB huge page in bytes
 pub(crate) const PAGE_SIZE: usize = 1 << PAGE_SIZE_BITS;
 
