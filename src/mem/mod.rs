@@ -1,6 +1,9 @@
 /// Tools for converting virtual address to physicall address
 mod virt_to_phy;
 
+/// Page implementation
+mod page;
+
 /// Number of bits for a 2MB huge page size
 pub(crate) const HUGE_PAGE_2MB_BITS: u8 = 21;
 /// Size of a 2MB huge page in bytes

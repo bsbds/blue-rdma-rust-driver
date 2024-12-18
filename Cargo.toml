@@ -11,3 +11,4 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2.168"
+memmap2 = "0.9.5"
