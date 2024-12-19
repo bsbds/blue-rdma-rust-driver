@@ -1,4 +1,6 @@
-use blue_rdma_driver::bench_wrappers::virt_to_phy_bench_wrapper;
+use blue_rdma_driver::bench_wrappers::{
+    virt_to_phy_bench_range_wrapper, virt_to_phy_bench_wrapper,
+};
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 
 fn benchmark_virt_to_phy_batch(c: &mut Criterion) {
@@ -19,9 +21,19 @@ fn benchmark_virt_to_phy_single(c: &mut Criterion) {
     });
 }
 
+fn benchmark_virt_to_phy_range_batch(c: &mut Criterion) {
+    let data: Vec<Vec<u8>> = (0..100).map(|_| vec![0u8; 4096]).collect();
+    let start = data[0].as_ptr();
+
+    c.bench_function("virt_to_phy 100 addresses", |b| {
+        b.iter(|| virt_to_phy_bench_range_wrapper(start, 100))
+    });
+}
+
 criterion_group!(
     benches,
     benchmark_virt_to_phy_batch,
-    benchmark_virt_to_phy_single
+    benchmark_virt_to_phy_single,
+    benchmark_virt_to_phy_range_batch
 );
 criterion_main!(benches);
