@@ -15,20 +15,17 @@ pub(crate) struct ConscMem {
 impl ConscMem {
     /// Creates a new consecutive memory region of the specified number of pages.
     pub(crate) fn new(num_pages: usize) -> io::Result<Self> {
+        /// TODO: implements allocating multiple consecutive pages
+        assert_eq!(num_pages, 1, "currently only supports allocating one page");
         let inner = Self::try_reserve_consecutive(num_pages)?;
         Ok(Self { inner })
     }
 
     /// Attempts to reserve consecutive physical memory pages.
     fn try_reserve_consecutive(num_pages: usize) -> io::Result<MmapMut> {
-        /// Maximum attempts for opportunistic reservation.
-        /// TODO: use hugetlbfs for reservation
-        const MAX_ATTEMPTS: usize = 10;
-        for _ in 0..MAX_ATTEMPTS {
-            let mmap = Self::reserve(num_pages)?;
-            if Self::ensure_consecutive(&mmap)? {
-                return Ok(mmap);
-            }
+        let mmap = Self::reserve(num_pages)?;
+        if Self::ensure_consecutive(&mmap)? {
+            return Ok(mmap);
         }
 
         Err(io::Error::from(io::ErrorKind::OutOfMemory))
@@ -60,7 +57,10 @@ impl ConscMem {
         let virt_addrs = mmap.chunks(PAGE_SIZE).map(<[u8]>::as_ptr);
         let phy_addrs = virt_to_phy(virt_addrs)?;
         if phy_addrs.iter().any(Option::is_none) {
-            return Err(io::Error::from(io::ErrorKind::NotFound));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "physical address not found",
+            ));
         }
         let is_consec = phy_addrs
             .iter()
