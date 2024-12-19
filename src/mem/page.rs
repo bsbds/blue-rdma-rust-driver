@@ -1,4 +1,4 @@
-use std::{io, marker::PhantomData};
+use std::{io, marker::PhantomData, sync::Arc};
 
 use memmap2::{MmapMut, MmapOptions};
 
@@ -87,107 +87,6 @@ impl DerefMut for ConscMem {
     }
 }
 
-/// A fixed-size slot allocator that manages memory slots within a consecutive memory region.
-pub(crate) struct SlotAlloc<Mem, Slot> {
-    /// The underlying consecutive memory allocation
-    mem: Mem,
-    /// List of free slot indices that can be allocated
-    free_list: Vec<usize>,
-    /// Phantom data to carry the Slot type parameter
-    _marker: PhantomData<Slot>,
-}
-
-/// Trait for types that can specify their size requirements for memory slots.
-pub(crate) trait SlotSize {
-    /// Returns the size in bytes required for this slot type.
-    fn size() -> usize;
-}
-
-#[allow(clippy::arithmetic_side_effects)]
-impl<Mem, Slot: SlotSize> SlotAlloc<Mem, Slot> {
-    /// Creates a new slot allocator with the given consecutive memory region.
-    pub(crate) fn new(mem: Mem) -> Self {
-        let num_slots = Self::num_slots_total();
-        let alloc = (0..num_slots).collect();
-        Self {
-            mem,
-            free_list: alloc,
-            _marker: PhantomData,
-        }
-    }
-
-    /// Returns true if there are free slots available.
-    pub(crate) fn has_free_slot(&self) -> bool {
-        !self.free_list.is_empty()
-    }
-
-    /// Returns the total number of slots that can be allocated.
-    pub(crate) fn num_slots_total() -> usize {
-        PAGE_SIZE / Self::slot_size()
-    }
-
-    /// Returns the maximum slot number that can be allocated.
-    pub(crate) fn slot_num_max() -> usize {
-        Self::num_slots_total().saturating_sub(1)
-    }
-
-    /// Returns the size of each slot in bytes.
-    pub(crate) fn slot_size() -> usize {
-        assert!(
-            Slot::size() <= PAGE_SIZE && Slot::size() != 0,
-            "invalid slot size"
-        );
-        Slot::size()
-    }
-}
-
-#[allow(clippy::arithmetic_side_effects)]
-impl<Mem, Slot> SlotAlloc<Mem, Slot>
-where
-    Mem: AsMut<[u8]>,
-    Slot: SlotSize,
-{
-    /// Allocates a new memory slot if available.
-    /// Returns None if no slots are available.
-    pub(crate) fn alloc_one(&mut self) -> Option<&mut [u8]> {
-        let slot_size = Self::slot_size();
-        let sn = self.free_list.pop()?;
-        let slot = self
-            .mem
-            .as_mut()
-            .get_mut(sn * slot_size..sn * (slot_size + 1))
-            .unwrap_or_else(|| unreachable!("range should always exists"));
-        Some(slot)
-    }
-
-    /// Deallocates a previously allocated memory slot.
-    /// Returns true if deallocation was successful, false otherwise.
-    pub(crate) fn dealloc(&mut self, buf: &mut [u8]) -> bool {
-        if buf.len() != Self::slot_size() {
-            return false;
-        }
-        let addr = Self::slice_ptr_addr_usize(buf);
-        let begin = Self::slice_ptr_addr_usize(self.mem.as_mut());
-        let sn = begin.checked_sub(addr).map(|dlt| dlt / Self::slot_size());
-        let Some(sn) = sn else {
-            return false;
-        };
-        if sn > Self::slot_num_max() {
-            return false;
-        }
-        buf.fill(0);
-        self.free_list.push(sn);
-
-        true
-    }
-
-    /// Converts a slice pointer to its address as usize.
-    #[allow(clippy::as_conversions)]
-    fn slice_ptr_addr_usize<T>(slice: &[T]) -> usize {
-        slice.as_ptr() as usize
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -195,25 +94,5 @@ mod test {
     #[test]
     fn consc_mem_alloc_succ() {
         let mem = ConscMem::new(1).expect("failed to allocate");
-    }
-
-    #[test]
-    fn slot_alloc_dealloc_ok() {
-        struct Slot;
-        impl SlotSize for Slot {
-            fn size() -> usize {
-                16
-            }
-        }
-        let mut mem = [0u8; 1024];
-        let mut alloc = SlotAlloc::<_, Slot>::new(&mut mem);
-        let slot_size = SlotAlloc::<&mut [u8], Slot>::slot_size();
-        let total = SlotAlloc::<&mut [u8], Slot>::num_slots_total();
-        assert_eq!(slot_size, 16);
-        assert_eq!(total, 1024 / 16);
-        assert!(alloc.has_free_slot());
-        let slot = alloc.alloc_one().unwrap();
-        let slot1 = alloc.alloc_one().unwrap();
-        //assert!(alloc.dealloc(slot));
     }
 }

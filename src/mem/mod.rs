@@ -4,6 +4,9 @@ pub(crate) mod virt_to_phy;
 /// Page implementation
 mod page;
 
+/// Slot allocation implementation
+pub(crate) mod slot_alloc;
+
 /// Number of bits for a 4KB page size
 #[cfg(target_arch = "x86_64")]
 #[cfg(feature = "page_size_4k")]
