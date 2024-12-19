@@ -2,7 +2,7 @@ use std::{io, marker::PhantomData, sync::Arc};
 
 use memmap2::{MmapMut, MmapOptions};
 
-use super::{virt_to_phy::virt_to_phy, PAGE_SIZE, PAGE_SIZE_BITS};
+use super::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
 
 use std::ops::{Deref, DerefMut};
 
@@ -55,7 +55,7 @@ impl ConscMem {
     #[allow(clippy::as_conversions)] // casting usize ot u64 is safe
     fn ensure_consecutive(mmap: &MmapMut) -> io::Result<bool> {
         let virt_addrs = mmap.chunks(PAGE_SIZE).map(<[u8]>::as_ptr);
-        let phy_addrs = virt_to_phy(virt_addrs)?;
+        let phy_addrs = virt_to_phy_range(mmap.as_ptr(), mmap.len() >> PAGE_SIZE_BITS)?;
         if phy_addrs.iter().any(Option::is_none) {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
