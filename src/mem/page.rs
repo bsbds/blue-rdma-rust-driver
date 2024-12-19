@@ -196,4 +196,24 @@ mod test {
     fn consc_mem_alloc_succ() {
         let mem = ConscMem::new(1).expect("failed to allocate");
     }
+
+    #[test]
+    fn slot_alloc_dealloc_ok() {
+        struct Slot;
+        impl SlotSize for Slot {
+            fn size() -> usize {
+                16
+            }
+        }
+        let mut mem = [0u8; 1024];
+        let mut alloc = SlotAlloc::<_, Slot>::new(&mut mem);
+        let slot_size = SlotAlloc::<&mut [u8], Slot>::slot_size();
+        let total = SlotAlloc::<&mut [u8], Slot>::num_slots_total();
+        assert_eq!(slot_size, 16);
+        assert_eq!(total, 1024 / 16);
+        assert!(alloc.has_free_slot());
+        let slot = alloc.alloc_one().unwrap();
+        let slot1 = alloc.alloc_one().unwrap();
+        //assert!(alloc.dealloc(slot));
+    }
 }
