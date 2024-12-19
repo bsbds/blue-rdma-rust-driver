@@ -1,5 +1,5 @@
 /// Tools for converting virtual address to physicall address
-mod virt_to_phy;
+pub(crate) mod virt_to_phy;
 
 /// Page implementation
 mod page;

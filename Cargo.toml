@@ -15,6 +15,12 @@ page_size_2m = []
 page_size_4k = []
 
 [dependencies]
-criterion = "0.5.1"
 libc = "0.2.168"
 memmap2 = "0.9.5"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "virt_to_phy"
+harness = false

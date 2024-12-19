@@ -169,3 +169,5 @@
 #[allow(unused)]
 /// Memory operation components
 mod mem;
+
+pub mod bench_wrappers;
