@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["page_size_2m"]
+default = ["page_size_4k"]
 page_size_2m = []
 page_size_4k = []
 
@@ -24,4 +24,8 @@ criterion = "0.5.1"
 
 [[bench]]
 name = "virt_to_phy"
+harness = false
+
+[[bench]]
+name = "ring_buffer"
 harness = false

@@ -5,25 +5,27 @@
 
 use std::{io, marker::PhantomData, ops::Deref};
 
+use crate::mem::slot_alloc::RcSlot;
+
 /// A trait for devices that require synchronization of head and tail pointers.
-trait SyncDevice {
+pub(crate) trait SyncDevice {
     /// Synchronizes the head pointer of the device.
     ///
     /// # Errors
     ///
     /// Returns an error if the synchronization fails.
-    fn sync_head_ptr(&self) -> io::Result<()>;
+    fn sync_head_ptr(&self, value: u32) -> io::Result<()>;
 
     /// Synchronizes the tail pointer of the device.
     ///
     /// # Errors
     ///
     /// Returns an error if the synchronization fails.
-    fn sync_tail_ptr(&self) -> io::Result<()>;
+    fn sync_tail_ptr(&self, value: u32) -> io::Result<()>;
 }
 
 /// Card device type
-struct Card {
+pub(crate) struct Card {
     /// Physical address of the ring buffer.
     pa: u64,
     /// Memory-mapped address of the head register
@@ -33,6 +35,15 @@ struct Card {
 }
 
 impl Card {
+    /// Creates a new `Card`
+    pub(crate) fn new(pa: u64, head_remote_addr: u64, tail_remote_addr: u64) -> Self {
+        Self {
+            pa,
+            head_remote_addr,
+            tail_remote_addr,
+        }
+    }
+
     /// Writes the head value to the remote address
     fn write_head(&self, value: u32) {
         Self::write_addr(self.head_remote_addr, value);
@@ -53,9 +64,54 @@ impl Card {
 }
 
 /// Mock device type that uses RPC for communication
-struct Mock<Rpc> {
+pub(crate) struct Mock<Rpc> {
     /// Rpc object for interacting with the mock device
     rpc: Rpc,
+}
+
+impl<Rpc> Mock<Rpc> {
+    /// Creates a new `Mock`
+    pub(crate) fn new(rpc: Rpc) -> Self {
+        Self { rpc }
+    }
+}
+
+/// A dummy device type.
+pub(crate) struct Dummy;
+
+impl SyncDevice for Card {
+    fn sync_head_ptr(&self, value: u32) -> io::Result<()> {
+        self.write_head(value);
+
+        Ok(())
+    }
+
+    fn sync_tail_ptr(&self, value: u32) -> io::Result<()> {
+        self.write_tail(value);
+
+        Ok(())
+    }
+}
+
+// TODO: implement RPCs
+impl<Rpc> SyncDevice for Mock<Rpc> {
+    fn sync_head_ptr(&self, _value: u32) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn sync_tail_ptr(&self, _value: u32) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl SyncDevice for Dummy {
+    fn sync_head_ptr(&self, _value: u32) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn sync_tail_ptr(&self, _value: u32) -> io::Result<()> {
+        Ok(())
+    }
 }
 
 /// Support 4096 descriptors
@@ -71,7 +127,7 @@ const RING_BUF_LEN_WRAP_MASK: u32 = (1 << (RING_BUF_LEN_BITS + 1)) - 1;
 /// Context of a ring buffer.
 ///
 /// For head/tails porinter, pack guard (1 bit) and idx (31 bits) into a single u32.
-struct RingCtx<Dev> {
+pub(crate) struct RingCtx<Dev> {
     /// The head pointer
     head: u32,
     /// The tail pointer
@@ -81,6 +137,15 @@ struct RingCtx<Dev> {
 }
 
 impl<Dev> RingCtx<Dev> {
+    /// Creates a new `RingCtx`
+    pub(crate) fn new(dev: Dev) -> Self {
+        Self {
+            head: 0,
+            tail: 0,
+            dev,
+        }
+    }
+
     /// Returns the current head index in the ring buffer
     fn head_idx(&self) -> usize {
         (self.head & RING_BUF_LEN_MASK) as usize
@@ -123,28 +188,23 @@ impl<Dev> RingCtx<Dev> {
     }
 }
 
-impl SyncDevice for RingCtx<Card> {
+impl<Dev: SyncDevice> RingCtx<Dev> {
+    /// Synchronizes the head pointer of the device.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the synchronization fails.
     fn sync_head_ptr(&self) -> io::Result<()> {
-        self.dev.write_head(self.head);
-
-        Ok(())
+        self.dev.sync_head_ptr(self.head)
     }
 
+    /// Synchronizes the tail pointer of the device.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the synchronization fails.
     fn sync_tail_ptr(&self) -> io::Result<()> {
-        self.dev.write_tail(self.tail);
-
-        Ok(())
-    }
-}
-
-// TODO: implement RPCs
-impl<Rpc> SyncDevice for RingCtx<Mock<Rpc>> {
-    fn sync_head_ptr(&self) -> io::Result<()> {
-        Ok(())
-    }
-
-    fn sync_tail_ptr(&self) -> io::Result<()> {
-        Ok(())
+        self.dev.sync_head_ptr(self.head)
     }
 }
 
@@ -161,13 +221,24 @@ pub(crate) trait Descriptor {
 /// * `Buf` - The underlying buffer type
 /// * `Dev` - The device type
 /// * `Desc` - The descriptor type used for operations
-struct Ring<Buf, Dev, Desc> {
+pub(crate) struct Ring<Buf, Dev, Desc> {
     /// Context of the ring buffer
     ctx: RingCtx<Dev>,
     /// The underlying buffer
     buf: Buf,
     /// The descriptor type
     _marker: PhantomData<Desc>,
+}
+
+impl<Buf, Dev, Desc> Ring<Buf, Dev, Desc> {
+    /// Creates a new `Ring`
+    pub(crate) fn new(ctx: RingCtx<Dev>, buf: Buf) -> Self {
+        Self {
+            ctx,
+            buf,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<Buf, Dev, Desc> Ring<Buf, Dev, Desc>
@@ -223,11 +294,11 @@ where
 
     /// Flushes any pending produce operations by synchronizing the head pointer.
     pub(crate) fn flush_produce(&self) {
-        self.ctx.dev().sync_head_ptr();
+        self.ctx.sync_head_ptr();
     }
 
     /// Flushes any pending consume operations by synchronizing the tail pointer.
     pub(crate) fn flush_consume(&self) {
-        self.ctx.dev().sync_tail_ptr();
+        self.ctx.sync_tail_ptr();
     }
 }

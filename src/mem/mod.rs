@@ -2,7 +2,7 @@
 pub(crate) mod virt_to_phy;
 
 /// Page implementation
-mod page;
+pub(crate) mod page;
 
 /// Slot allocation implementation
 pub(crate) mod slot_alloc;

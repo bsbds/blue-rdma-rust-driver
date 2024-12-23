@@ -87,6 +87,18 @@ impl DerefMut for ConscMem {
     }
 }
 
+impl AsMut<[u8]> for ConscMem {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.inner
+    }
+}
+
+impl AsRef<[u8]> for ConscMem {
+    fn as_ref(&self) -> &[u8] {
+        &self.inner
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
