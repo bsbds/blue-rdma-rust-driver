@@ -176,4 +176,8 @@ mod mem;
 /// Descriptor definitions
 mod desc;
 
+#[allow(unused)]
+/// RDMA ring buffer implementation
+mod ring;
+
 pub mod bench_wrappers;
