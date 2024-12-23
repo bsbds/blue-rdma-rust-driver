@@ -166,8 +166,14 @@
     )
 )]
 
+// FIXME: removed clippy unused
+
 #[allow(unused)]
 /// Memory operation components
 mod mem;
+
+#[allow(unused)]
+/// Descriptor definitions
+mod desc;
 
 pub mod bench_wrappers;
