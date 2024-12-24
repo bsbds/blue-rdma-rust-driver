@@ -43,17 +43,20 @@ pub fn virt_to_phy_bench_range_wrapper(
 
 #[derive(Clone, Copy)]
 pub struct BenchDesc {
-    _inner: [u8; 32],
+    inner: [u8; 32],
 }
 
 impl BenchDesc {
     pub fn new(data: [u8; 32]) -> Self {
-        Self { _inner: data }
+        Self { inner: data }
     }
 }
 
 impl Descriptor for BenchDesc {
     fn try_consume(&mut self) -> bool {
+        let _valid = self.inner[0] == 1;
+        self.inner[0] = 0;
+        // ignore the valid bit for benchmark
         true
     }
 
@@ -69,8 +72,12 @@ pub struct RingWrapper {
 }
 
 impl RingWrapper {
-    pub fn produce<Descs: Iterator<Item = BenchDesc>>(&mut self, descs: Descs) {
+    pub fn force_produce<Descs: Iterator<Item = BenchDesc>>(&mut self, descs: Descs) {
         self.inner.force_produce(descs.into_iter());
+    }
+
+    pub fn produce<Descs: ExactSizeIterator<Item = BenchDesc>>(&mut self, descs: Descs) {
+        self.inner.produce(descs.into_iter()).unwrap();
     }
 
     pub fn consume(&mut self) -> Option<&BenchDesc> {
