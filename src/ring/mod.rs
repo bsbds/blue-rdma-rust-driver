@@ -177,7 +177,10 @@ where
     Desc: Descriptor,
 {
     /// Appends some descriptors to the ring buffer
-    pub(crate) fn produce(&mut self, descs: Vec<Desc>) -> io::Result<()> {
+    pub(crate) fn produce<Descs: ExactSizeIterator<Item = Desc>>(
+        &mut self,
+        descs: Descs,
+    ) -> io::Result<()> {
         if descs
             .len()
             .checked_add(self.ctx.len())
@@ -199,7 +202,7 @@ where
     /// # Safety
     ///
     /// Caller must ensure there is sufficient space in the ring buffer before calling.
-    pub(crate) fn force_produce(&mut self, descs: Vec<Desc>) {
+    pub(crate) fn force_produce<Descs: Iterator<Item = Desc>>(&mut self, descs: Descs) {
         let buf = self.buf.as_mut();
         for entry in descs {
             buf[self.ctx.head_idx()] = entry;
