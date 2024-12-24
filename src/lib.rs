@@ -180,4 +180,8 @@ mod desc;
 /// RDMA ring buffer implementation
 mod ring;
 
+#[allow(unused)]
+/// Worker implementation
+mod ring_worker;
+
 pub mod bench_wrappers;
