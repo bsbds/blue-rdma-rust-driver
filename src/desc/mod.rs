@@ -90,7 +90,7 @@ impl MetaReportQueueDescBthReth {
         self.c0.expected_psn().into()
     }
     pub(crate) fn set_expected_psn(&mut self, val: u32) {
-        self.c0.set_expected_psn(val.into());
+        self.c0.set_expected_psn(u24::masked_new(val));
     }
     pub(crate) fn req_status(&self) -> u8 {
         self.c0.req_status()
@@ -102,25 +102,25 @@ impl MetaReportQueueDescBthReth {
         self.c0.trans().into()
     }
     pub(crate) fn set_trans(&mut self, val: u8) {
-        self.c0.set_trans(val.into());
+        self.c0.set_trans(u3::masked_new(val));
     }
     pub(crate) fn opcode(&self) -> u8 {
         self.c0.opcode().into()
     }
     pub(crate) fn set_opcode(&mut self, val: u8) {
-        self.c0.set_opcode(val.into());
+        self.c0.set_opcode(u5::masked_new(val));
     }
     pub(crate) fn dqpn(&self) -> u32 {
         self.c0.dqpn().into()
     }
     pub(crate) fn set_dqpn(&mut self, val: u32) {
-        self.c0.set_dqpn(val.into());
+        self.c0.set_dqpn(u24::masked_new(val));
     }
     pub(crate) fn psn(&self) -> u32 {
         self.c1.psn().into()
     }
     pub(crate) fn set_psn(&mut self, val: u32) {
-        self.c1.set_psn(val.into());
+        self.c1.set_psn(u24::masked_new(val));
     }
     pub(crate) fn solicited(&self) -> bool {
         self.c1.solicited()
@@ -138,13 +138,7 @@ impl MetaReportQueueDescBthReth {
         self.c1.pad_cnt().into()
     }
     pub(crate) fn set_pad_cnt(&mut self, val: u8) {
-        self.c1.set_pad_cnt(val.into());
-    }
-    pub(crate) fn reserved1(&self) -> u8 {
-        self.c1.reserved1().into()
-    }
-    pub(crate) fn set_reserved1(&mut self, val: u8) {
-        self.c1.set_reserved1(val.into());
+        self.c1.set_pad_cnt(u2::masked_new(val));
     }
     pub(crate) fn rkey(&self) -> u32 {
         self.c1.rkey()
@@ -168,7 +162,7 @@ impl MetaReportQueueDescBthReth {
         self.c3.msn().into()
     }
     pub(crate) fn set_msn(&mut self, val: u32) {
-        self.c3.set_msn(val.into());
+        self.c3.set_msn(u24::masked_new(val));
     }
     pub(crate) fn can_auto_ack(&self) -> bool {
         self.c3.can_auto_ack()

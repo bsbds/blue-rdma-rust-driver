@@ -29,3 +29,7 @@ harness = false
 [[bench]]
 name = "ring_buffer"
 harness = false
+
+[[bench]]
+name = "descriptor"
+harness = false
