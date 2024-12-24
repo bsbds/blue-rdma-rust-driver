@@ -212,8 +212,9 @@ impl<Dev: SyncDevice> RingCtx<Dev> {
 
 /// A trait for descriptors in the ring buffer
 pub(crate) trait Descriptor {
-    /// Returns `true` if the descriptor's valid bit is set, indicating it contains valid data
-    fn f_valid(&self) -> bool;
+    /// Returns `true` if the descriptor's valid bit is set, indicating it contains valid data.
+    /// If the valid bit is set, it should be cleared to 0 before returning.
+    fn try_consume(&mut self) -> bool;
 
     /// Size in bytes of the descriptor
     ///
@@ -292,7 +293,7 @@ where
     pub(crate) fn try_consume(&mut self) -> Option<&Desc> {
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
-        let ready = buf[tail].f_valid();
+        let ready = buf[tail].try_consume();
         ready.then(|| {
             self.ctx.inc_tail();
             &buf[tail]

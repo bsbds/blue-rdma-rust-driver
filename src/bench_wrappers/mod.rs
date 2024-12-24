@@ -51,7 +51,7 @@ impl BenchDesc {
 }
 
 impl Descriptor for BenchDesc {
-    fn f_valid(&self) -> bool {
+    fn try_consume(&mut self) -> bool {
         true
     }
 
