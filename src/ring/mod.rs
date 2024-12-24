@@ -2,6 +2,8 @@
     clippy::as_conversions,     // safe to converts u32 to usize
     clippy::indexing_slicing    // panic is expected behaviour
 )]
+#[cfg(test)]
+mod test;
 
 use std::{io, marker::PhantomData, ops::Deref};
 
@@ -114,10 +116,10 @@ impl SyncDevice for Dummy {
     }
 }
 
-/// Support 4096 descriptors
-const RING_BUF_LEN_BITS: u8 = 12;
+/// Number of bits used to represent the length of the ring buffer.
+const RING_BUF_LEN_BITS: u8 = 7;
 /// Highest bit of the ring buffer
-const RING_BUF_LEN: u32 = 1 << RING_BUF_LEN_BITS;
+pub(crate) const RING_BUF_LEN: u32 = 1 << RING_BUF_LEN_BITS;
 /// Mask used to calculate the length of the ring buffer
 const RING_BUF_LEN_MASK: u32 = (1 << RING_BUF_LEN_BITS) - 1;
 /// Mask used to wrap indices around the ring buffer length.
@@ -159,7 +161,7 @@ impl<Dev> RingCtx<Dev> {
     /// Returns the current length of data in the ring buffer
     fn len(&self) -> usize {
         let dlt = self.head.wrapping_sub(self.tail);
-        (dlt & RING_BUF_LEN_MASK) as usize
+        (dlt & RING_BUF_LEN_WRAP_MASK) as usize
     }
 
     /// Returns true if the ring buffer is empty
@@ -174,12 +176,12 @@ impl<Dev> RingCtx<Dev> {
 
     /// Increments the head pointer of the ring buffer
     fn inc_head(&mut self) {
-        self.head = self.head.wrapping_add(1) & RING_BUF_LEN_MASK;
+        self.head = self.head.wrapping_add(1) & RING_BUF_LEN_WRAP_MASK;
     }
 
     /// Increments the tail pointer of the ring buffer
     fn inc_tail(&mut self) {
-        self.tail = self.tail.wrapping_add(1) & RING_BUF_LEN_MASK;
+        self.tail = self.tail.wrapping_add(1) & RING_BUF_LEN_WRAP_MASK;
     }
 
     /// Returns a reference to the associated device
@@ -212,6 +214,13 @@ impl<Dev: SyncDevice> RingCtx<Dev> {
 pub(crate) trait Descriptor {
     /// Returns `true` if the descriptor's valid bit is set, indicating it contains valid data
     fn f_valid(&self) -> bool;
+
+    /// Size in bytes of the descriptor
+    ///
+    /// # Safty
+    ///
+    /// This value should never larger than `usize::MAX / RING_BUF_LEN`
+    fn size() -> usize;
 }
 
 /// A ring buffer for RDMA operations.
@@ -230,23 +239,21 @@ pub(crate) struct Ring<Buf, Dev, Desc> {
     _marker: PhantomData<Desc>,
 }
 
-impl<Buf, Dev, Desc> Ring<Buf, Dev, Desc> {
-    /// Creates a new `Ring`
-    pub(crate) fn new(ctx: RingCtx<Dev>, buf: Buf) -> Self {
-        Self {
-            ctx,
-            buf,
-            _marker: PhantomData,
-        }
-    }
-}
-
 impl<Buf, Dev, Desc> Ring<Buf, Dev, Desc>
 where
     Buf: AsMut<[Desc]>,
     Dev: SyncDevice,
     Desc: Descriptor,
 {
+    /// Creates a new `Ring`
+    pub(crate) fn new(ctx: RingCtx<Dev>, mut buf: Buf) -> Option<Self> {
+        (buf.as_mut().len() >= RING_BUF_LEN as usize).then_some(Self {
+            ctx,
+            buf,
+            _marker: PhantomData,
+        })
+    }
+
     /// Appends some descriptors to the ring buffer
     pub(crate) fn produce<Descs: ExactSizeIterator<Item = Desc>>(
         &mut self,
