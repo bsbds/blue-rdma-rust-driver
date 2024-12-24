@@ -194,6 +194,19 @@ where
         Ok(())
     }
 
+    /// Appends descriptors to the ring buffer without checking if it is full.
+    ///
+    /// # Safety
+    ///
+    /// Caller must ensure there is sufficient space in the ring buffer before calling.
+    pub(crate) fn force_produce(&mut self, descs: Vec<Desc>) {
+        let buf = self.buf.as_mut();
+        for entry in descs {
+            buf[self.ctx.head_idx()] = entry;
+            self.ctx.inc_head();
+        }
+    }
+
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_consume(&mut self) -> Option<&Desc> {
         let buf = self.buf.as_mut();
