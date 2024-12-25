@@ -184,4 +184,8 @@ mod ring;
 /// Worker implementation
 mod ring_worker;
 
+#[allow(unused)]
+/// Memory translation table
+mod mtt;
+
 pub mod bench_wrappers;

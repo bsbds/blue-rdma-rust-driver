@@ -16,6 +16,7 @@ page_size_4k = []
 
 [dependencies]
 bilge = "0.2.0"
+bitvec = "1.0.1"
 libc = "0.2.168"
 memmap2 = "0.9.5"
 
