@@ -1,96 +1,341 @@
-#![allow(missing_docs, clippy::missing_docs_in_private_items)]
+/// Second stage mtt allocator
+mod pgt_alloc;
 
-use bitvec::{array::BitArray, bitarr};
+/// First stage mtt allocator
+mod mr_alloc;
 
-/// Maximum number of entries in the first stage table
-const MR_TABLE_LEN: u32 = 0x1000;
+use std::{
+    io, iter,
+    sync::{
+        atomic::{AtomicU16, Ordering},
+        Arc,
+    },
+};
 
-/// Maximum number of entries in the secodn stage table
-const PGT_LEN: usize = 0x20000;
+use mr_alloc::MrTableAlloc;
+use parking_lot::Mutex;
+use pgt_alloc::{simple::SimplePgtAlloc, PgtAlloc};
 
+use crate::{
+    desc::{
+        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
+        RingBufDescUntyped,
+    },
+    mem::{
+        page::ConscMem,
+        virt_to_phy::{virt_to_phy, virt_to_phy_range},
+        PAGE_SIZE,
+    },
+    queue::cmd_queue::{
+        worker::{CmdId, Registration},
+        CmdQueue, CmdQueueDesc,
+    },
+    ring::SyncDevice,
+};
+
+/// Memory region key
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) struct MrKey(u32);
 
+/// RDMA memory region representation
 pub(crate) struct IbvMr {
+    /// Virtual address of the memory region
     addr: u64,
+    /// Length of the memory region in bytes
     length: u32,
+    /// Access permissions for the memory region
     access: u32,
+    /// Memory region key
     mr_key: MrKey,
+    /// Index in the page table
+    index: usize,
 }
 
-/// First stage table allocator
-struct MrTableAlloc {
-    free_list: Vec<MrKey>,
-}
-
-impl MrTableAlloc {
-    fn new() -> Self {
+impl IbvMr {
+    /// Creates a new `IbvMr`
+    pub(crate) fn new(addr: u64, length: u32, access: u32, mr_key: MrKey, index: usize) -> Self {
         Self {
-            free_list: Self::fill_up_free_list(),
-        }
-    }
-
-    fn fill_up_free_list() -> Vec<MrKey> {
-        (0..MR_TABLE_LEN).map(MrKey).collect()
-    }
-
-    fn alloc_mr_key(&mut self) -> Option<MrKey> {
-        self.free_list.pop()
-    }
-
-    fn dealloc_mr_key(&mut self, key: MrKey) {
-        self.free_list.push(key);
-    }
-}
-
-trait PgtAlloc {
-    fn alloc(&mut self, len: usize) -> Option<usize>;
-    fn dealloc(&mut self, index: usize, len: usize) -> bool;
-}
-
-/// Second stage table allocator
-struct SimplePgtAlloc {
-    free_list: BitArray<[usize; PGT_LEN / 64]>,
-}
-
-impl SimplePgtAlloc {
-    fn new() -> Self {
-        Self {
-            free_list: bitarr![0; PGT_LEN],
+            addr,
+            length,
+            access,
+            mr_key,
+            index,
         }
     }
 }
 
-impl PgtAlloc for SimplePgtAlloc {
-    #[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)] // should never overflow
-    fn alloc(&mut self, len: usize) -> Option<usize> {
-        let mut count = 0;
-        let mut start = 0;
+/// Memory Translation Table implementation
+struct Mtt<PAlloc, Buf, Dev> {
+    /// Table memory allocator
+    alloc: Arc<Mutex<Alloc<PAlloc>>>,
+    /// Command queue for submitting commands to device
+    cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+    /// Registration for getting notifies from the device
+    reg: Arc<Mutex<Registration>>,
+    /// Command ID generator
+    cmd_id: AtomicU16,
+}
 
-        for i in 0..self.free_list.len() {
-            if self.free_list[i] {
-                count = 0;
-            } else {
-                if count == 0 {
-                    start = i;
-                }
-                count += 1;
-                if count == len {
-                    self.free_list[start..start + len].fill(true);
-                    return Some(start);
-                }
+impl<PAlloc, Buf, Dev> Mtt<PAlloc, Buf, Dev>
+where
+    PAlloc: PgtAlloc,
+    Buf: AsMut<[RingBufDescUntyped]>,
+    Dev: SyncDevice,
+{
+    /// Creates a new `Mtt`
+    fn new(
+        alloc: Arc<Mutex<Alloc<PAlloc>>>,
+        cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+        reg: Arc<Mutex<Registration>>,
+    ) -> Self {
+        Self {
+            alloc,
+            cmd_queue,
+            reg,
+            cmd_id: AtomicU16::new(0),
+        }
+    }
+
+    /// Registers a memory region
+    #[allow(clippy::as_conversions)]
+    pub(crate) fn reg_mr(&self, addr: u64, length: usize) -> io::Result<IbvMr> {
+        Self::ensure_valid(addr, length)?;
+        Self::try_pin_pages(addr, length)?;
+        let num_pages = Self::get_num_page(addr, length);
+        let virt_addrs = Self::get_page_start_virt_addrs(addr, length)
+            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        let phy_addrs = virt_to_phy_range(addr, num_pages)?;
+        if phy_addrs.iter().any(Option::is_none) {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "physical address not found",
+            ));
+        }
+        let (mut page, page_start_phy_addr) = Self::alloc_new_page()?;
+        Self::copy_phy_addrs_to_page(phy_addrs.into_iter().flatten(), &mut page)?;
+        let (mr_key, index) = self
+            .alloc
+            .lock()
+            .alloc(num_pages)
+            .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
+
+        let index_u32 = u32::try_from(index)
+            .unwrap_or_else(|_| unreachable!("allocator should not alloc index larger than u32"));
+        let length_u32 =
+            u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
+        let update_mr_table_id = self.new_cmd_id();
+        let update_pgt_id = self.new_cmd_id();
+        let entry_count = u32::try_from(num_pages.saturating_sub(1))
+            .map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
+
+        // TODO: pd_handler and acc_flags
+        let update_mr_table = CmdQueueReqDescUpdateMrTable::new(
+            update_mr_table_id,
+            addr,
+            length_u32,
+            mr_key.0,
+            0,
+            0,
+            index_u32,
+        );
+        let update_pgt = CmdQueueReqDescUpdatePGT::new(
+            update_pgt_id,
+            page_start_phy_addr,
+            index_u32,
+            entry_count,
+        );
+        let descs = vec![
+            CmdQueueDesc::UpdateMrTable(update_mr_table),
+            CmdQueueDesc::UpdatePGT(update_pgt),
+        ];
+
+        let (notify_update_mr_table, notify_update_pgt) = {
+            let mut reg_l = self.reg.lock();
+            let a = reg_l
+                .register(CmdId(update_mr_table_id))
+                .unwrap_or_else(|| unreachable!("id should not be registered"));
+            let b = reg_l
+                .register(CmdId(update_pgt_id))
+                .unwrap_or_else(|| unreachable!("id should not be registered"));
+            (a, b)
+        };
+
+        self.cmd_queue.lock().produce(descs.into_iter());
+
+        loop {
+            if notify_update_mr_table.notified() && notify_update_pgt.notified() {
+                break;
             }
         }
-        None
+
+        Ok(IbvMr::new(addr, length_u32, 0, mr_key, index))
     }
 
-    fn dealloc(&mut self, index: usize, len: usize) -> bool {
-        let Some(end) = index.checked_add(len) else {
-            return false;
-        };
-        if let Some(slice) = self.free_list.get_mut(index..end) {
-            slice.fill(false);
-            return true;
+    /// Deregisters a memory region
+    pub(crate) fn dereg_mr(&self, mr: &IbvMr) -> bool {
+        let update_mr_table_id = self.new_cmd_id();
+        let update_mr_table =
+            CmdQueueReqDescUpdateMrTable::new(update_mr_table_id, 0, 0, mr.mr_key.0, 0, 0, 0);
+        let notify_update_mr_table = self
+            .reg
+            .lock()
+            .register(CmdId(update_mr_table_id))
+            .unwrap_or_else(|| unreachable!("id should not be registered"));
+        self.cmd_queue
+            .lock()
+            .produce(iter::once(CmdQueueDesc::UpdateMrTable(update_mr_table)));
+        loop {
+            if notify_update_mr_table.notified() {
+                break;
+            }
         }
-        false
+        self.alloc.lock().dealloc(mr)
+    }
+
+    /// Generates a new command ID
+    fn new_cmd_id(&self) -> u16 {
+        self.cmd_id.fetch_add(1, Ordering::Relaxed)
+    }
+
+    // TODO: reuse a page for multiple registration
+    /// Allocates a new page and returns a tuple containing the page and its physical address
+    fn alloc_new_page() -> io::Result<(ConscMem, u64)> {
+        let mut page = ConscMem::new(1)?;
+        let start_virt_addr = page.as_ptr();
+        let start_phy_addr = virt_to_phy(Some(start_virt_addr))?
+            .into_iter()
+            .flatten()
+            .next()
+            .ok_or(io::Error::new(
+                io::ErrorKind::NotFound,
+                "physical address not found",
+            ))?;
+        Ok((page, start_phy_addr))
+    }
+
+    /// Pins pages in memory to prevent swapping
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pages could not be locked in memory
+    #[allow(unsafe_code, clippy::as_conversions)]
+    fn try_pin_pages(addr: u64, length: usize) -> io::Result<()> {
+        let result = unsafe { libc::mlock(addr as *const std::ffi::c_void, length) };
+        if result != 0 {
+            return Err(io::Error::new(io::ErrorKind::Other, "failed to lock pages"));
+        }
+        Ok(())
+    }
+
+    /// Validates memory region parameters
+    ///
+    /// # Errors
+    ///
+    /// Returns `InvalidInput` error if:
+    /// - The address + length would overflow u64
+    /// - The length is larger than `u32::MAX`
+    /// - The length is 0
+    #[allow(clippy::arithmetic_side_effects, clippy::as_conversions)]
+    fn ensure_valid(addr: u64, length: usize) -> io::Result<()> {
+        if u64::MAX - addr < length as u64 || length > u32::MAX as usize || length == 0 {
+            return Err(io::ErrorKind::InvalidInput.into());
+        }
+        Ok(())
+    }
+
+    /// Calculates number of pages needed for memory region
+    #[allow(clippy::arithmetic_side_effects)]
+    fn get_num_page(addr: u64, length: usize) -> usize {
+        let num = length / PAGE_SIZE;
+        if length % PAGE_SIZE != 0 {
+            num + 1
+        } else {
+            num
+        }
+    }
+
+    /// Gets starting virtual addresses for each page in memory region
+    ///
+    /// # Returns
+    ///
+    /// * `Some(Vec<u64>)` - Vector of page-aligned virtual addresses
+    /// * `None` - If addr + length would overflow
+    #[allow(clippy::as_conversions)]
+    fn get_page_start_virt_addrs(addr: u64, length: usize) -> Option<Vec<u64>> {
+        addr.checked_add(length as u64)
+            .map(|end| (addr..end).step_by(PAGE_SIZE).collect())
+    }
+
+    /// Copies physical addresses into a page.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the page is too small to hold all addresses.
+    fn copy_phy_addrs_to_page<Addrs: IntoIterator<Item = u64>>(
+        phy_addrs: Addrs,
+        page: &mut ConscMem,
+    ) -> io::Result<()> {
+        let bytes: Vec<u8> = phy_addrs.into_iter().flat_map(u64::to_ne_bytes).collect();
+        page.get_mut(..bytes.len())
+            .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
+            .copy_from_slice(&bytes);
+
+        Ok(())
+    }
+}
+
+/// Table memory allocator for MTT
+struct Alloc<PAlloc> {
+    /// First stage table allocator
+    mr: MrTableAlloc,
+    /// Second stage table allocator
+    pgt: PAlloc,
+}
+
+impl<PAlloc> Alloc<PAlloc> {
+    /// Creates a new allocator instance
+    fn new(pgt: PAlloc) -> Self {
+        Self {
+            mr: MrTableAlloc::new(),
+            pgt,
+        }
+    }
+}
+
+impl Alloc<SimplePgtAlloc> {
+    /// Creates a new allocator with simple page table allocator
+    fn new_simple() -> Self {
+        Self {
+            mr: MrTableAlloc::new(),
+            pgt: SimplePgtAlloc::new(),
+        }
+    }
+}
+
+impl<PAlloc> Alloc<PAlloc>
+where
+    PAlloc: PgtAlloc,
+{
+    /// Allocates memory region and page table entries
+    ///
+    /// # Returns
+    ///
+    /// * `Some((mr_key, page_index))`
+    /// * `None` - If allocation fails
+    fn alloc(&mut self, num_pages: usize) -> Option<(MrKey, usize)> {
+        let mr_key = self.mr.alloc_mr_key()?;
+        let index = self.pgt.alloc(num_pages)?;
+        Some((mr_key, index))
+    }
+
+    /// Deallocates memory region and page table entries
+    ///
+    /// # Returns
+    ///
+    /// `true` if deallocation is successful, `false` otherwise
+    #[allow(clippy::as_conversions)]
+    fn dealloc(&mut self, mr: &IbvMr) -> bool {
+        self.mr.dealloc_mr_key(mr.mr_key);
+        self.pgt.dealloc(mr.index, mr.length as usize)
     }
 }

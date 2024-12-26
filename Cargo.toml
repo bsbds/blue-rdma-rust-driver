@@ -19,6 +19,7 @@ bilge = "0.2.0"
 bitvec = "1.0.1"
 libc = "0.2.168"
 memmap2 = "0.9.5"
+parking_lot = "0.12.3"
 
 [dev-dependencies]
 criterion = "0.5.1"

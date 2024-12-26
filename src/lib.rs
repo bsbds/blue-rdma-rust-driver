@@ -188,4 +188,8 @@ mod ring_worker;
 /// Memory translation table
 mod mtt;
 
+#[allow(unused)]
+/// Queue implementation
+mod queue;
+
 pub mod bench_wrappers;
