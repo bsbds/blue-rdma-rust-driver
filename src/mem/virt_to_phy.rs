@@ -12,6 +12,32 @@ const PFN_MASK: u64 = 0x007f_ffff_ffff_ffff;
 /// Bit indicating if a page is present in memory
 const PAGE_PRESENT_BIT: u8 = 63;
 
+/// Trait for converting a type into a 64-bit virtual address.
+///
+/// This trait allows converting various address types into a 64-bit unsigned integer
+/// that represents a physical memory address.
+pub(crate) trait IntoAddr {
+    /// Converts the implementing type into a 64-bit physical address.
+    ///
+    /// # Returns
+    ///
+    /// A `u64` representing the physical memory address.
+    fn into_u64(self) -> u64;
+}
+
+impl IntoAddr for u64 {
+    fn into_u64(self) -> u64 {
+        self
+    }
+}
+
+impl IntoAddr for *const u8 {
+    #[allow(clippy::as_conversions)] // safe
+    fn into_u64(self) -> u64 {
+        self as u64
+    }
+}
+
 /// Converts a list of virtual addresses to physical addresses
 ///
 /// # Returns
@@ -27,11 +53,12 @@ const PAGE_PRESENT_BIT: u8 = 63;
     clippy::arithmetic_side_effects,
     clippy::host_endian_bytes
 )]
-pub(crate) fn virt_to_phy<Vas>(virt_addrs: Vas) -> io::Result<Vec<Option<u64>>>
+pub(crate) fn virt_to_phy<Va, Vas>(virt_addrs: Vas) -> io::Result<Vec<Option<u64>>>
 where
-    Vas: IntoIterator<Item = *const u8>,
+    Va: IntoAddr,
+    Vas: IntoIterator<Item = Va>,
 {
-    let virt_addrs: Vec<_> = virt_addrs.into_iter().map(|ptr| ptr as u64).collect();
+    let virt_addrs: Vec<_> = virt_addrs.into_iter().map(IntoAddr::into_u64).collect();
     let mut phy_addrs = Vec::with_capacity(virt_addrs.len());
 
     let mut file = File::open("/proc/self/pagemap")?;
@@ -74,13 +101,14 @@ where
     clippy::arithmetic_side_effects,
     clippy::host_endian_bytes
 )]
-pub(crate) fn virt_to_phy_range(
-    start_addr: *const u8,
+pub(crate) fn virt_to_phy_range<Va: IntoAddr>(
+    start_addr: Va,
     num_pages: usize,
 ) -> io::Result<Vec<Option<u64>>> {
+    let start_addr = start_addr.into_u64();
     let mut phy_addrs = Vec::with_capacity(num_pages);
     let mut file = File::open("/proc/self/pagemap")?;
-    let virt_pfn = start_addr as u64 >> PAGE_SIZE_BITS;
+    let virt_pfn = start_addr >> PAGE_SIZE_BITS;
     let offset = PFN_MASK_SIZE as u64 * virt_pfn;
     let _pos = file.seek(io::SeekFrom::Start(offset))?;
     let mut buf = vec![0u8; PFN_MASK_SIZE * num_pages];
@@ -95,7 +123,7 @@ pub(crate) fn virt_to_phy_range(
             continue;
         }
         let phy_pfn = entry & PFN_MASK;
-        let phy_addr = (phy_pfn << PAGE_SIZE_BITS) + (start_addr as u64 & (PAGE_SIZE as u64 - 1));
+        let phy_addr = (phy_pfn << PAGE_SIZE_BITS) + (start_addr & (PAGE_SIZE as u64 - 1));
         phy_addrs.push(Some(phy_addr));
     }
 
@@ -108,22 +136,22 @@ mod test {
 
     #[test]
     fn virt_to_phy_ok() {
-        let null = 0 as *const u8;
+        let null = 0;
         let pas = virt_to_phy(Some(null)).expect("translation failed");
         assert!(pas[0].is_none());
         let a: Vec<_> = (0..0xff).collect();
-        let pas = virt_to_phy(Some(a.as_ptr())).expect("translation failed");
+        let pas = virt_to_phy(Some(a.as_ptr() as u64)).expect("translation failed");
         let ptr = a.as_ptr();
         assert!(pas[0].is_some());
     }
 
     #[test]
     fn virt_to_phy_range_ok() {
-        let null = 0 as *const u8;
+        let null = 0;
         let pas = virt_to_phy_range(null, 1).expect("translation failed");
         assert!(pas[0].is_none());
         let a: Vec<_> = (0..0xff).collect();
-        let pas = virt_to_phy_range(a.as_ptr(), 1).expect("translation failed");
+        let pas = virt_to_phy_range(a.as_ptr() as u64, 1).expect("translation failed");
         let ptr = a.as_ptr();
         assert!(pas[0].is_some());
     }
