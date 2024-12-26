@@ -172,7 +172,17 @@ where
     }
 
     /// Deregisters a memory region
-    pub(crate) fn dereg_mr(&self, mr: &IbvMr) -> bool {
+    ///
+    /// # Returns
+    ///
+    /// - `Ok(true)` if the memory region was successfully deregistered
+    /// - `Ok(false)` if the memory region was not found
+    /// - `Err` if unpinning pages failed
+    #[allow(clippy::as_conversions)] // convert u32 to usize is safe
+    pub(crate) fn dereg_mr(&self, mr: &IbvMr) -> io::Result<bool> {
+        if !self.alloc.lock().dealloc(mr) {
+            return Ok(false);
+        }
         let update_mr_table_id = self.new_cmd_id();
         let update_mr_table =
             CmdQueueReqDescUpdateMrTable::new(update_mr_table_id, 0, 0, mr.mr_key.0, 0, 0, 0);
@@ -184,12 +194,16 @@ where
         self.cmd_queue
             .lock()
             .produce(iter::once(CmdQueueDesc::UpdateMrTable(update_mr_table)));
+
         loop {
             if notify_update_mr_table.notified() {
                 break;
             }
         }
-        self.alloc.lock().dealloc(mr)
+
+        Self::try_unpin_pages(mr.addr, mr.length as usize)?;
+
+        Ok(true)
     }
 
     /// Generates a new command ID
@@ -223,6 +237,23 @@ where
         let result = unsafe { libc::mlock(addr as *const std::ffi::c_void, length) };
         if result != 0 {
             return Err(io::Error::new(io::ErrorKind::Other, "failed to lock pages"));
+        }
+        Ok(())
+    }
+
+    /// Unpins pages
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pages could not be locked in memory
+    #[allow(unsafe_code, clippy::as_conversions)]
+    fn try_unpin_pages(addr: u64, length: usize) -> io::Result<()> {
+        let result = unsafe { libc::munlock(addr as *const std::ffi::c_void, length) };
+        if result != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "failed to unlock pages",
+            ));
         }
         Ok(())
     }
@@ -373,9 +404,9 @@ mod test {
         let mr1 = mtt.reg_mr(vec0.as_ptr() as u64, vec0.len()).unwrap();
         let mr2 = mtt.reg_mr(vec1.as_ptr() as u64, vec1.len()).unwrap();
 
-        assert!(mtt.dereg_mr(&mr0));
-        assert!(mtt.dereg_mr(&mr1));
-        assert!(mtt.dereg_mr(&mr2));
+        assert!(mtt.dereg_mr(&mr0).unwrap());
+        assert!(mtt.dereg_mr(&mr1).unwrap());
+        assert!(mtt.dereg_mr(&mr2).unwrap());
 
         abort_c.store(false, Ordering::Relaxed);
         handle.join();
