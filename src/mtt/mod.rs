@@ -339,3 +339,45 @@ where
         self.pgt.dealloc(mr.index, mr.length as usize)
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::sync::atomic::AtomicBool;
+
+    use crate::ring::new_test_ring;
+
+    use super::*;
+
+    #[test]
+    fn mtt_mr_reg_dereg_ok() {
+        let alloc = Arc::new(Mutex::new(Alloc::new_simple()));
+        let ring = new_test_ring::<RingBufDescUntyped>();
+        let mut queue = Arc::new(Mutex::new(CmdQueue::new(ring)));
+        let mut reg = Arc::new(Mutex::new(Registration::new()));
+        let reg_c = Arc::clone(&reg);
+        let mtt = Mtt::new(alloc, queue, reg);
+
+        let page = ConscMem::new(1).unwrap();
+        let vec0 = vec![0; 128];
+        let vec1 = vec![0; 0x10000];
+
+        let abort = Arc::new(AtomicBool::new(true));
+        let abort_c = Arc::clone(&abort);
+        let handle = std::thread::spawn(move || {
+            while abort.load(Ordering::Relaxed) {
+                reg_c.lock().notify_all();
+            }
+        });
+
+        let mr0 = mtt.reg_mr(page.as_ptr() as u64, page.len()).unwrap();
+        let mr1 = mtt.reg_mr(vec0.as_ptr() as u64, vec0.len()).unwrap();
+        let mr2 = mtt.reg_mr(vec1.as_ptr() as u64, vec1.len()).unwrap();
+
+        assert!(mtt.dereg_mr(&mr0));
+        assert!(mtt.dereg_mr(&mr1));
+        assert!(mtt.dereg_mr(&mr2));
+
+        abort_c.store(false, Ordering::Relaxed);
+        handle.join();
+    }
+}

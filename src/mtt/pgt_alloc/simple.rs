@@ -40,6 +40,7 @@ impl PgtAlloc for SimplePgtAlloc {
         None
     }
 
+    // TODO: track the size of allocated range and check in dealloc
     fn dealloc(&mut self, index: usize, len: usize) -> bool {
         let Some(end) = index.checked_add(len) else {
             return false;
@@ -49,5 +50,19 @@ impl PgtAlloc for SimplePgtAlloc {
             return true;
         }
         false
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn simple_pgt_alloc_dealloc_ok() {
+        let mut alloc = SimplePgtAlloc::new();
+        let index = alloc.alloc(10).unwrap();
+        assert!(alloc.alloc(PGT_LEN).is_none());
+        assert!(alloc.dealloc(index, 10));
+        alloc.alloc(PGT_LEN).unwrap();
     }
 }

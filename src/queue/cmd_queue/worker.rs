@@ -91,6 +91,14 @@ impl Registration {
             notify.notify();
         }
     }
+
+    /// Notifies all command ID
+    #[cfg(test)]
+    pub(crate) fn notify_all(&mut self) {
+        for (_id, notify) in self.inner.drain() {
+            notify.notify();
+        }
+    }
 }
 
 /// Run the command queue worker

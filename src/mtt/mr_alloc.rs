@@ -38,3 +38,21 @@ impl MrTableAlloc {
         (0..MR_TABLE_LEN).map(MrKey).collect()
     }
 }
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn mr_table_alloc_dealloc_ok() {
+        let mut alloc = MrTableAlloc::new();
+        let mr_keys: Vec<_> = std::iter::repeat_with(|| alloc.alloc_mr_key())
+            .take(MR_TABLE_LEN as usize)
+            .flatten()
+            .collect();
+        assert_eq!(mr_keys.len(), MR_TABLE_LEN as usize);
+        assert!(alloc.alloc_mr_key().is_none());
+        alloc.dealloc_mr_key(mr_keys[0]);
+        alloc.alloc_mr_key().unwrap();
+    }
+}
