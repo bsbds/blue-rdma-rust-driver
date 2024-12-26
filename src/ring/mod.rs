@@ -9,6 +9,9 @@ use std::{io, marker::PhantomData, ops::Deref};
 
 use crate::mem::slot_alloc::RcSlot;
 
+#[cfg(test)]
+pub(crate) use test::new_test_ring;
+
 /// A trait for devices that require synchronization of head and tail pointers.
 pub(crate) trait SyncDevice {
     /// Synchronizes the head pointer of the device.

@@ -4,6 +4,12 @@ use crate::mem::{page::ConscMem, slot_alloc::SlotAlloc};
 
 use super::*;
 
+pub(crate) fn new_test_ring<Desc: Default + Clone + Descriptor>() -> Ring<Vec<Desc>, Dummy, Desc> {
+    let slot = vec![Desc::default(); 128];
+    let ring_ctx = RingCtx::new(Dummy);
+    Ring::<_, _, Desc>::new(ring_ctx, slot).unwrap()
+}
+
 #[derive(Default, Clone, Copy)]
 struct TestDesc {
     inner: [u8; 32],
