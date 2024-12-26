@@ -44,7 +44,7 @@ macro_rules! impl_from_bytes {
 }
 
 #[bitsize(16)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
+#[derive(Default, Clone, Copy, DebugBits, FromBits)]
 struct RingBufDescCommonHead {
     has_next: bool,
     reserved0: u7,
@@ -67,6 +67,7 @@ impl RingBufDescCommonHead {
     fn new_with_op_code(op_code: u7) -> Self {
         let mut this: Self = 0.into();
         this.set_op_code(op_code);
+        this.set_valid(true);
         this
     }
 }
@@ -75,11 +76,21 @@ impl RingBufDescCommonHead {
 ///
 /// Should have the exact same memory layout of each descriptor
 #[repr(align(8))]
+#[derive(Default, Clone, Copy)]
 pub(crate) struct RingBufDescUntyped {
     /// Common header fields for the ring buffer descriptor
     head: RingBufDescCommonHead,
     /// Remaining bytes of the descriptor
     rest: [u8; 30],
+}
+
+#[cfg(test)]
+impl RingBufDescUntyped {
+    pub(crate) fn new_valid_default() -> Self {
+        let mut this = Self::default();
+        this.head.set_valid(true);
+        this
+    }
 }
 
 impl Descriptor for RingBufDescUntyped {

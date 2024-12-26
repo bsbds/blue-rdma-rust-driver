@@ -77,8 +77,8 @@ impl CmdQueueReqDescUpdateMrTable {
         let c3 = CmdQueueReqDescUpdateMrTableChunk3::new(
             pd_handler,
             acc_flags,
-            pgt_offset.into(),
-            0u8.into(),
+            u17::from_u32(pgt_offset),
+            u7::from_u8(0),
         );
 
         Self { c0, c1, c2, c3 }
@@ -136,6 +136,22 @@ impl From<CmdQueueReqDescUpdateMrTable> for RingBufDescUntyped {
 }
 
 pub(crate) struct CmdQueueRespDescUpdateMrTable(CmdQueueReqDescUpdateMrTable);
+
+impl CmdQueueRespDescUpdateMrTable {
+    pub(crate) fn new(
+        user_data: u16,
+        mr_base_va: u64,
+        mr_length: u32,
+        mr_key: u32,
+        pd_handler: u32,
+        acc_flags: u8,
+        pgt_offset: u32,
+    ) -> Self {
+        Self(CmdQueueReqDescUpdateMrTable::new(
+            user_data, mr_base_va, mr_length, mr_key, pd_handler, acc_flags, pgt_offset,
+        ))
+    }
+}
 
 impl std::ops::Deref for CmdQueueRespDescUpdateMrTable {
     type Target = CmdQueueReqDescUpdateMrTable;
@@ -228,6 +244,22 @@ impl From<CmdQueueReqDescUpdatePGT> for RingBufDescUntyped {
 }
 
 pub(crate) struct CmdQueueRespDescUpdatePGT(CmdQueueReqDescUpdatePGT);
+
+impl CmdQueueRespDescUpdatePGT {
+    pub(crate) fn new(
+        user_data: u16,
+        dma_addr: u64,
+        start_index: u32,
+        zero_based_entry_count: u32,
+    ) -> Self {
+        Self(CmdQueueReqDescUpdatePGT::new(
+            user_data,
+            dma_addr,
+            start_index,
+            zero_based_entry_count,
+        ))
+    }
+}
 
 impl std::ops::Deref for CmdQueueRespDescUpdatePGT {
     type Target = CmdQueueReqDescUpdatePGT;
