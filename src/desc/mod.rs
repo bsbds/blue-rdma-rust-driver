@@ -1,4 +1,13 @@
+/// Cmd queue pair descriptors
+pub(crate) mod cmd;
+
 use bilge::prelude::*;
+use cmd::{
+    CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT, CmdQueueRespDescUpdateMrTable,
+    CmdQueueRespDescUpdatePGT,
+};
+
+use crate::ring::Descriptor;
 
 /// Size of a descriptor in bytes.
 pub(crate) const DESC_SIZE: usize = 32;
@@ -31,6 +40,81 @@ macro_rules! impl_from_bytes {
                 }
             }
         )*
+    }
+}
+
+#[bitsize(16)]
+#[derive(Clone, Copy, DebugBits, FromBits)]
+struct RingBufDescCommonHead {
+    has_next: bool,
+    reserved0: u7,
+    pub op_code: u7,
+    pub valid: bool,
+}
+
+impl RingBufDescCommonHead {
+    /// Creates a new `CmdQueueReqDescUpdateMrTable` header
+    fn new_cmd_queue_resp_desc_update_mr_table() -> Self {
+        Self::new_with_op_code(u7::from(0u8))
+    }
+
+    /// Creates a new `CmdQueueReqDescUpdatePGT` header
+    fn new_cmd_queue_resp_desc_update_pgt() -> Self {
+        Self::new_with_op_code(u7::from(1u8))
+    }
+
+    /// Creates a new header with given op code
+    fn new_with_op_code(op_code: u7) -> Self {
+        let mut this: Self = 0.into();
+        this.set_op_code(op_code);
+        this
+    }
+}
+
+/// Untyped ring buffer descriptor
+///
+/// Should have the exact same memory layout of each descriptor
+#[repr(align(8))]
+pub(crate) struct RingBufDescUntyped {
+    /// Common header fields for the ring buffer descriptor
+    head: RingBufDescCommonHead,
+    /// Remaining bytes of the descriptor
+    rest: [u8; 30],
+}
+
+impl Descriptor for RingBufDescUntyped {
+    fn try_consume(&mut self) -> bool {
+        let valid = self.head.valid();
+        self.head.set_valid(false);
+        valid
+    }
+
+    fn size() -> usize {
+        DESC_SIZE
+    }
+}
+
+/// Ring buffer decriptor that is send to host
+#[allow(clippy::missing_docs_in_private_items)]
+pub(crate) enum RingBufDescToHost<'a> {
+    CmdQueueRespDescUpdatePGT(&'a CmdQueueRespDescUpdatePGT),
+    CmdQueueRespDescUpdateMrTable(&'a CmdQueueRespDescUpdateMrTable),
+}
+
+#[allow(
+    unsafe_code,
+    clippy::missing_transmute_annotations,
+    clippy::transmute_ptr_to_ptr
+)]
+impl From<&'_ RingBufDescUntyped> for RingBufDescToHost<'_> {
+    fn from(desc: &RingBufDescUntyped) -> Self {
+        unsafe {
+            match desc.head.op_code().value() {
+                0 => Self::CmdQueueRespDescUpdateMrTable(std::mem::transmute(desc)),
+                1 => Self::CmdQueueRespDescUpdatePGT(std::mem::transmute(desc)),
+                _ => unreachable!("invalid op code"),
+            }
+        }
     }
 }
 
