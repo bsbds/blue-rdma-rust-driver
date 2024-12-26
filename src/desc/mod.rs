@@ -55,12 +55,12 @@ struct RingBufDescCommonHead {
 impl RingBufDescCommonHead {
     /// Creates a new `CmdQueueReqDescUpdateMrTable` header
     fn new_cmd_queue_resp_desc_update_mr_table() -> Self {
-        Self::new_with_op_code(u7::from(0u8))
+        Self::new_with_op_code(u7::from_u8(0u8))
     }
 
     /// Creates a new `CmdQueueReqDescUpdatePGT` header
     fn new_cmd_queue_resp_desc_update_pgt() -> Self {
-        Self::new_with_op_code(u7::from(1u8))
+        Self::new_with_op_code(u7::from_u8(1u8))
     }
 
     /// Creates a new header with given op code
@@ -336,3 +336,42 @@ impl SendQueueReqDescSeg0 {
 }
 
 impl_from_bytes!(MetaReportQueueDescBthReth, SendQueueReqDescSeg0);
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn untyped_desc_to_typed() {
+        let head = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
+        let desc = RingBufDescUntyped {
+            head,
+            rest: [0; 30],
+        };
+        assert!(matches!(
+            RingBufDescToHost::from(&desc),
+            RingBufDescToHost::CmdQueueRespDescUpdateMrTable(_)
+        ));
+        let head = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_pgt();
+        let desc = RingBufDescUntyped {
+            head,
+            rest: [0; 30],
+        };
+        assert!(matches!(
+            RingBufDescToHost::from(&desc),
+            RingBufDescToHost::CmdQueueRespDescUpdatePGT(_)
+        ));
+    }
+
+    #[test]
+    fn ring_buf_desc_consume_ok() {
+        let mut head = RingBufDescCommonHead::new_with_op_code(u7::from_u8(0));
+        head.set_valid(true);
+        let mut desc = RingBufDescUntyped {
+            head,
+            rest: [0; 30],
+        };
+        assert!(desc.try_consume());
+        assert!(!desc.head.valid());
+    }
+}
