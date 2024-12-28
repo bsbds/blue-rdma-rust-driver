@@ -57,7 +57,7 @@ pub(crate) trait VirtToPhys<const PAGE_SIZE_BITS: u8> {
 }
 
 #[cfg(emulation)]
-type PhysAddrResolver = PhysAddrResolverEmulated;
+pub(crate) type PhysAddrResolver = PhysAddrResolverEmulated;
 #[cfg(not(emulation))]
 pub(crate) type PhysAddrResolver = PhysAddrResolverLinuxX86;
 

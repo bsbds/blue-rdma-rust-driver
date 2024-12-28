@@ -304,8 +304,8 @@ where
     }
 
     /// Flushes any pending produce operations by synchronizing the head pointer.
-    pub(crate) fn flush_produce(&self) {
-        self.ctx.sync_head_ptr();
+    pub(crate) fn flush_produce(&self) -> io::Result<()> {
+        self.ctx.sync_head_ptr()
     }
 
     /// Flushes any pending consume operations by synchronizing the tail pointer.

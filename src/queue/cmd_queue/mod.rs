@@ -46,6 +46,11 @@ where
         });
         self.inner.produce(descs)
     }
+
+    /// Flush
+    pub(crate) fn flush(&self) -> io::Result<()> {
+        self.inner.flush_produce()
+    }
 }
 
 /// Queue for receiving command responses from the device

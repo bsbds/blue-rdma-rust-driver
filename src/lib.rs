@@ -192,4 +192,10 @@ mod mtt;
 /// Queue implementation
 mod queue;
 
+#[allow(unused)]
+/// Adaptor deivce
+mod device;
+
+pub use device::emulated::EmulatedDevice;
+
 pub mod bench_wrappers;
