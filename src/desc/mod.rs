@@ -1,6 +1,9 @@
 /// Cmd queue pair descriptors
 pub(crate) mod cmd;
 
+/// Simple NIC descriptors
+pub(crate) mod simple_nic;
+
 use bilge::prelude::*;
 use cmd::{
     CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT, CmdQueueRespDescUpdateMrTable,
@@ -46,25 +49,33 @@ macro_rules! impl_from_bytes {
 #[bitsize(16)]
 #[derive(Default, Clone, Copy, DebugBits, FromBits)]
 struct RingBufDescCommonHead {
-    has_next: bool,
-    reserved0: u7,
-    pub op_code: u7,
+    pub op_code: u8,
+    pub is_extended_op_code: bool,
+    reserved0: u5,
+    pub has_next: bool,
     pub valid: bool,
 }
 
 impl RingBufDescCommonHead {
     /// Creates a new `CmdQueueReqDescUpdateMrTable` header
     fn new_cmd_queue_resp_desc_update_mr_table() -> Self {
-        Self::new_with_op_code(u7::from_u8(0u8))
+        Self::new_with_op_code(0)
     }
 
     /// Creates a new `CmdQueueReqDescUpdatePGT` header
     fn new_cmd_queue_resp_desc_update_pgt() -> Self {
-        Self::new_with_op_code(u7::from_u8(1u8))
+        Self::new_with_op_code(1)
+    }
+
+    /// Creates a new `SimpleNicTxQueueDesc` header
+    fn new_simple_nic_tx_queue_desc() -> Self {
+        let mut this = Self::new_with_op_code(0);
+        this.set_is_extended_op_code(true);
+        this
     }
 
     /// Creates a new header with given op code
-    fn new_with_op_code(op_code: u7) -> Self {
+    fn new_with_op_code(op_code: u8) -> Self {
         let mut this: Self = 0.into();
         this.set_op_code(op_code);
         this.set_valid(true);
@@ -376,7 +387,7 @@ mod test {
 
     #[test]
     fn ring_buf_desc_consume_ok() {
-        let mut head = RingBufDescCommonHead::new_with_op_code(u7::from_u8(0));
+        let mut head = RingBufDescCommonHead::new_with_op_code(0);
         head.set_valid(true);
         let mut desc = RingBufDescUntyped {
             head,
