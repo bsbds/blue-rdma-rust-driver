@@ -43,14 +43,14 @@ type DescRingBuffer<Dev> = Ring<RingPageBuf, Dev, RingBufDescUntyped>;
 /// To Host Queue
 pub(crate) trait ToHostQueue {
     /// The descriptor type
-    type Desc: for<'a> From<&'a RingBufDescUntyped>;
+    type Desc: From<RingBufDescUntyped>;
 
     /// Returns the next descriptor from the queue, or None if the queue is empty.
     fn pop(&mut self) -> Option<Self::Desc>;
 }
 
 /// To card queue for submitting descriptors to the device
-pub(super) struct ToCardQueueTyped<Dev, Desc> {
+pub(crate) struct ToCardQueueTyped<Dev, Desc> {
     /// Inner ring buffer
     inner: DescRingBuffer<Dev>,
     /// Descriptor Type
@@ -81,14 +81,14 @@ pub(super) struct ToHostQueueTyped<Dev, Desc> {
     _marker: PhantomData<Desc>,
 }
 
-impl<Dev, Desc> ToHostQueue for ToCardQueueTyped<Dev, Desc>
+impl<Dev, Desc> ToHostQueue for ToHostQueueTyped<Dev, Desc>
 where
     Dev: SyncDevice,
-    Desc: for<'a> From<&'a RingBufDescUntyped>,
+    Desc: From<RingBufDescUntyped>,
 {
     type Desc = Desc;
 
     fn pop(&mut self) -> Option<Self::Desc> {
-        self.inner.try_consume().map(Into::into)
+        self.inner.try_consume().copied().map(Into::into)
     }
 }
