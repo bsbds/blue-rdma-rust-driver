@@ -6,9 +6,11 @@ pub(crate) mod simple_nic;
 
 use std::{io, marker::PhantomData};
 
+use memmap2::MmapMut;
+
 use crate::{
     desc::RingBufDescUntyped,
-    ring::{Ring, SyncDevice},
+    ring::{Card, Ring, SyncDevice},
 };
 
 /// To Card Queue
@@ -25,6 +27,19 @@ pub(crate) trait ToCardQueue {
         -> io::Result<()>;
 }
 
+struct RingPageBuf {
+    inner: MmapMut,
+}
+
+impl AsMut<[RingBufDescUntyped]> for RingPageBuf {
+    #[allow(unsafe_code)]
+    fn as_mut(&mut self) -> &mut [RingBufDescUntyped] {
+        unsafe { std::mem::transmute(self.inner.as_mut()) }
+    }
+}
+
+type DescRingBuffer<Dev> = Ring<RingPageBuf, Dev, RingBufDescUntyped>;
+
 /// To Host Queue
 pub(crate) trait ToHostQueue {
     /// The descriptor type
@@ -35,16 +50,15 @@ pub(crate) trait ToHostQueue {
 }
 
 /// To card queue for submitting descriptors to the device
-pub(super) struct ToCardQueueTyped<Buf, Dev, Desc> {
+pub(super) struct ToCardQueueTyped<Dev, Desc> {
     /// Inner ring buffer
-    inner: Ring<Buf, Dev, RingBufDescUntyped>,
+    inner: DescRingBuffer<Dev>,
     /// Descriptor Type
     _marker: PhantomData<Desc>,
 }
 
-impl<Buf, Dev, Desc> ToCardQueue for ToCardQueueTyped<Buf, Dev, Desc>
+impl<Dev, Desc> ToCardQueue for ToCardQueueTyped<Dev, Desc>
 where
-    Buf: AsMut<[RingBufDescUntyped]>,
     Dev: SyncDevice,
     Desc: Into<RingBufDescUntyped>,
 {
@@ -60,16 +74,15 @@ where
 }
 
 /// To card queue for submitting descriptors to the device
-pub(super) struct ToHostQueueTyped<Buf, Dev, Desc> {
+pub(super) struct ToHostQueueTyped<Dev, Desc> {
     /// Inner ring buffer
-    inner: Ring<Buf, Dev, RingBufDescUntyped>,
+    inner: DescRingBuffer<Dev>,
     /// Descriptor Type
     _marker: PhantomData<Desc>,
 }
 
-impl<Buf, Dev, Desc> ToHostQueue for ToCardQueueTyped<Buf, Dev, Desc>
+impl<Dev, Desc> ToHostQueue for ToCardQueueTyped<Dev, Desc>
 where
-    Buf: AsMut<[RingBufDescUntyped]>,
     Dev: SyncDevice,
     Desc: for<'a> From<&'a RingBufDescUntyped>,
 {

@@ -5,40 +5,40 @@ use crate::desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc};
 use super::{ToCardQueueTyped, ToHostQueueTyped};
 
 /// A transmit queue for the simple NIC device.
-struct SimpleNicTxQueue<Buf, Dev> {
+pub(crate) struct SimpleNicTxQueue<Dev> {
     /// Inner queue
-    inner: ToCardQueueTyped<Buf, Dev, SimpleNicTxQueueDesc>,
+    inner: ToCardQueueTyped<Dev, SimpleNicTxQueueDesc>,
 }
 
-impl<Buf, Dev> Deref for SimpleNicTxQueue<Buf, Dev> {
-    type Target = ToCardQueueTyped<Buf, Dev, SimpleNicTxQueueDesc>;
+impl<Dev> Deref for SimpleNicTxQueue<Dev> {
+    type Target = ToCardQueueTyped<Dev, SimpleNicTxQueueDesc>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<Buf, Dev> DerefMut for SimpleNicTxQueue<Buf, Dev> {
+impl<Dev> DerefMut for SimpleNicTxQueue<Dev> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
 /// A receive queue for the simple NIC device.
-struct SimpleNicRxQueue<Buf, Dev> {
+pub(crate) struct SimpleNicRxQueue<Dev> {
     /// Inner queue
-    inner: ToHostQueueTyped<Buf, Dev, SimpleNicRxQueueDesc>,
+    inner: ToHostQueueTyped<Dev, SimpleNicRxQueueDesc>,
 }
 
-impl<Buf, Dev> Deref for SimpleNicRxQueue<Buf, Dev> {
-    type Target = ToHostQueueTyped<Buf, Dev, SimpleNicRxQueueDesc>;
+impl<Dev> Deref for SimpleNicRxQueue<Dev> {
+    type Target = ToHostQueueTyped<Dev, SimpleNicRxQueueDesc>;
 
     fn deref(&self) -> &Self::Target {
         &self.inner
     }
 }
 
-impl<Buf, Dev> DerefMut for SimpleNicRxQueue<Buf, Dev> {
+impl<Dev> DerefMut for SimpleNicRxQueue<Dev> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
