@@ -196,6 +196,10 @@ mod queue;
 /// Adaptor deivce
 mod device;
 
+#[allow(unused)]
+/// Simple network interface card
+mod simple_nic;
+
 pub use device::emulated::EmulatedDevice;
 
 pub mod bench_wrappers;
