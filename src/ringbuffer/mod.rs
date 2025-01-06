@@ -159,4 +159,14 @@ where
             &buf[tail]
         })
     }
+
+    /// Returns the head pointer
+    pub(crate) fn head(&self) -> u32 {
+        self.ctx.head
+    }
+
+    /// Returns the tail pointer
+    pub(crate) fn tail(&self) -> u32 {
+        self.ctx.tail
+    }
 }

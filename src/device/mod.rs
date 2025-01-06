@@ -3,6 +3,9 @@
 /// Emulated device adaptor
 pub(crate) mod emulated;
 
+/// Dummy device adaptor for testing
+pub(crate) mod dummy;
+
 /// CSR proxy types
 pub(crate) mod proxy;
 

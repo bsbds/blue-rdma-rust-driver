@@ -21,6 +21,7 @@ use crate::{
         cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
         RingBufDescUntyped,
     },
+    device::DeviceAdaptor,
     mem::{
         page::ConscMem,
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
@@ -64,26 +65,27 @@ impl IbvMr {
 }
 
 /// Memory Translation Table implementation
-struct Mtt<PAlloc, Buf> {
+struct Mtt<PAlloc, Buf, Dev> {
     /// Table memory allocator
     alloc: Arc<Mutex<Alloc<PAlloc>>>,
     /// Command queue for submitting commands to device
-    cmd_queue: Arc<Mutex<CmdQueue<Buf>>>,
+    cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
     /// Registration for getting notifies from the device
     reg: Arc<Mutex<Registration>>,
     /// Command ID generator
     cmd_id: AtomicU16,
 }
 
-impl<PAlloc, Buf> Mtt<PAlloc, Buf>
+impl<PAlloc, Buf, Dev> Mtt<PAlloc, Buf, Dev>
 where
     PAlloc: PgtAlloc,
     Buf: AsMut<[RingBufDescUntyped]>,
+    Dev: DeviceAdaptor,
 {
     /// Creates a new `Mtt`
     fn new(
         alloc: Arc<Mutex<Alloc<PAlloc>>>,
-        cmd_queue: Arc<Mutex<CmdQueue<Buf>>>,
+        cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
         reg: Arc<Mutex<Registration>>,
     ) -> Self {
         Self {
@@ -373,7 +375,7 @@ where
 mod test {
     use std::sync::atomic::AtomicBool;
 
-    use crate::ringbuffer::new_test_ring;
+    use crate::{device::dummy::DummyDevice, ringbuffer::new_test_ring};
 
     use super::*;
 
@@ -381,7 +383,7 @@ mod test {
     fn mtt_mr_reg_dereg_ok() {
         let alloc = Arc::new(Mutex::new(Alloc::new_simple()));
         let ring = new_test_ring::<RingBufDescUntyped>();
-        let mut queue = Arc::new(Mutex::new(CmdQueue::new(ring)));
+        let mut queue = Arc::new(Mutex::new(CmdQueue::new(ring, DummyDevice::default())));
         let mut reg = Arc::new(Mutex::new(Registration::new()));
         let reg_c = Arc::clone(&reg);
         let mtt = Mtt::new(alloc, queue, reg);

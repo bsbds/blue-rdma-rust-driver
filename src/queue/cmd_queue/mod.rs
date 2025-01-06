@@ -8,13 +8,19 @@ use crate::{
         cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
         RingBufDescToHost, RingBufDescUntyped,
     },
+    device::{
+        proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
+        CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
+    },
     ringbuffer::{Descriptor, RingBuffer},
 };
 
 /// Command queue for submitting commands to the device
-pub(crate) struct CmdQueue<Buf> {
+pub(crate) struct CmdQueue<Buf, Dev> {
     /// Inner ring buffer
     inner: RingBuffer<Buf, RingBufDescUntyped>,
+    /// The CSR proxy
+    proxy: CmdQueueCsrProxy<Dev>,
 }
 
 /// Command queue descriptor types that can be submitted
@@ -25,13 +31,17 @@ pub(crate) enum CmdQueueDesc {
     UpdatePGT(CmdQueueReqDescUpdatePGT),
 }
 
-impl<Buf> CmdQueue<Buf>
+impl<Buf, Dev> CmdQueue<Buf, Dev>
 where
     Buf: AsMut<[RingBufDescUntyped]>,
+    Dev: DeviceAdaptor,
 {
     /// Creates a new `CmdQueue`
-    pub(crate) fn new(inner: RingBuffer<Buf, RingBufDescUntyped>) -> Self {
-        Self { inner }
+    pub(crate) fn new(inner: RingBuffer<Buf, RingBufDescUntyped>, device: Dev) -> Self {
+        Self {
+            inner,
+            proxy: CmdQueueCsrProxy(device),
+        }
     }
 
     /// Produces command descriptors to the queue
@@ -48,29 +58,39 @@ where
 
     /// Flush
     pub(crate) fn flush(&self) -> io::Result<()> {
-        todo!()
-        //self.inner.flush_push()
+        self.proxy.write_head(self.inner.head())
     }
 }
 
 /// Queue for receiving command responses from the device
-struct CmdRespQueue<Buf> {
+struct CmdRespQueue<Buf, Dev> {
     /// Inner ring buffer
     inner: RingBuffer<Buf, RingBufDescUntyped>,
+    /// The CSR proxy
+    proxy: CmdRespQueueCsrProxy<Dev>,
 }
 
-impl<Buf> CmdRespQueue<Buf>
+impl<Buf, Dev> CmdRespQueue<Buf, Dev>
 where
     Buf: AsMut<[RingBufDescUntyped]>,
+    Dev: DeviceAdaptor,
 {
     /// Creates a new `CmdRespQueue`
-    fn new(inner: RingBuffer<Buf, RingBufDescUntyped>) -> Self {
-        Self { inner }
+    fn new(inner: RingBuffer<Buf, RingBufDescUntyped>, device: Dev) -> Self {
+        Self {
+            inner,
+            proxy: CmdRespQueueCsrProxy(device),
+        }
     }
 
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_consume(&mut self) -> Option<RingBufDescToHost<'_>> {
         self.inner.try_pop().map(Into::into)
+    }
+
+    /// Flush
+    pub(crate) fn flush(&self) -> io::Result<()> {
+        self.proxy.write_tail(self.inner.tail())
     }
 }
 
@@ -78,14 +98,14 @@ where
 mod test {
     use std::iter;
 
-    use crate::ringbuffer::new_test_ring;
+    use crate::{device::dummy::DummyDevice, ringbuffer::new_test_ring};
 
     use super::*;
 
     #[test]
     fn cmd_queue_produce_ok() {
         let ring = new_test_ring::<RingBufDescUntyped>();
-        let mut queue = CmdQueue::new(ring);
+        let mut queue = CmdQueue::new(ring, DummyDevice::default());
         let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
         queue.produce(iter::once(desc)).unwrap();
     }
@@ -95,7 +115,7 @@ mod test {
         let mut ring = new_test_ring::<RingBufDescUntyped>();
         let desc = RingBufDescUntyped::new_valid_default();
         ring.push(iter::once(desc)).unwrap();
-        let mut queue = CmdRespQueue::new(ring);
+        let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
         let desc = queue.try_consume().unwrap();
         assert!(matches!(
             desc,

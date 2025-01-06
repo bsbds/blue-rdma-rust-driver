@@ -8,19 +8,22 @@ use std::{
 
 use parking_lot::Mutex;
 
-use crate::desc::{RingBufDescToHost, RingBufDescUntyped};
+use crate::{
+    desc::{RingBufDescToHost, RingBufDescUntyped},
+    device::DeviceAdaptor,
+};
 
 use super::CmdRespQueue;
 
 /// Worker that processes command responses from the response queue
-struct CmdRespQueueWorker<Buf> {
+struct CmdRespQueueWorker<Buf, Dev> {
     /// The command response queue
-    queue: CmdRespQueue<Buf>,
+    queue: CmdRespQueue<Buf, Dev>,
 }
 
-impl<Buf> CmdRespQueueWorker<Buf> {
+impl<Buf, Dev> CmdRespQueueWorker<Buf, Dev> {
     /// Creates a new `CmdRespQueueWorker`
-    fn new(queue: CmdRespQueue<Buf>) -> Self {
+    fn new(queue: CmdRespQueue<Buf, Dev>) -> Self {
         Self { queue }
     }
 }
@@ -100,9 +103,10 @@ impl Registration {
 
 /// Run the command queue worker
 #[allow(clippy::needless_pass_by_value)] // the Arc should be moved to the current function
-fn run_worker<Buf>(mut worker: CmdRespQueueWorker<Buf>, reg: Arc<Mutex<Registration>>)
+fn run_worker<Buf, Dev>(mut worker: CmdRespQueueWorker<Buf, Dev>, reg: Arc<Mutex<Registration>>)
 where
     Buf: AsMut<[RingBufDescUntyped]>,
+    Dev: DeviceAdaptor,
 {
     loop {
         let Some(desc) = worker.queue.try_consume() else {
@@ -116,6 +120,7 @@ where
                 desc.headers().cmd_queue_common_header().user_data()
             }
         };
+        worker.queue.flush();
         let cmd_id = CmdId(user_data);
         reg.lock().notify(cmd_id);
     }
@@ -127,6 +132,7 @@ mod test {
 
     use crate::{
         desc::cmd::{CmdQueueRespDescUpdateMrTable, CmdQueueRespDescUpdatePGT},
+        device::dummy::DummyDevice,
         ringbuffer::new_test_ring,
     };
 
@@ -159,7 +165,7 @@ mod test {
             ring.push(iter::once(std::mem::transmute(desc0))).unwrap();
             ring.push(iter::once(std::mem::transmute(desc1))).unwrap();
         }
-        let mut queue = CmdRespQueue::new(ring);
+        let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
         let worker = CmdRespQueueWorker::new(queue);
         std::thread::spawn(|| run_worker(worker, reg));
         std::thread::sleep(Duration::from_millis(1));
