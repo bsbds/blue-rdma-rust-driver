@@ -160,7 +160,7 @@ where
             (a, b)
         };
 
-        self.cmd_queue.lock().produce(descs.into_iter());
+        self.cmd_queue.lock().push(descs.into_iter());
 
         loop {
             if notify_update_mr_table.notified() && notify_update_pgt.notified() {
@@ -193,7 +193,7 @@ where
             .unwrap_or_else(|| unreachable!("id should not be registered"));
         self.cmd_queue
             .lock()
-            .produce(iter::once(CmdQueueDesc::UpdateMrTable(update_mr_table)));
+            .push(iter::once(CmdQueueDesc::UpdateMrTable(update_mr_table)));
 
         loop {
             if notify_update_mr_table.notified() {

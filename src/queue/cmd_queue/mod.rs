@@ -45,7 +45,7 @@ where
     }
 
     /// Produces command descriptors to the queue
-    pub(crate) fn produce<Descs>(&mut self, descs: Descs) -> io::Result<()>
+    pub(crate) fn push<Descs>(&mut self, descs: Descs) -> io::Result<()>
     where
         Descs: ExactSizeIterator<Item = CmdQueueDesc>,
     {
@@ -84,7 +84,7 @@ where
     }
 
     /// Tries to poll next valid entry from the queue
-    pub(crate) fn try_consume(&mut self) -> Option<RingBufDescToHost<'_>> {
+    pub(crate) fn try_pop(&mut self) -> Option<RingBufDescToHost<'_>> {
         self.inner.try_pop().map(Into::into)
     }
 
@@ -107,7 +107,7 @@ mod test {
         let ring = new_test_ring::<RingBufDescUntyped>();
         let mut queue = CmdQueue::new(ring, DummyDevice::default());
         let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
-        queue.produce(iter::once(desc)).unwrap();
+        queue.push(iter::once(desc)).unwrap();
     }
 
     #[test]
@@ -116,7 +116,7 @@ mod test {
         let desc = RingBufDescUntyped::new_valid_default();
         ring.push(iter::once(desc)).unwrap();
         let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
-        let desc = queue.try_consume().unwrap();
+        let desc = queue.try_pop().unwrap();
         assert!(matches!(
             desc,
             // correspond to the default op_code

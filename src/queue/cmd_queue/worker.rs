@@ -109,7 +109,7 @@ where
     Dev: DeviceAdaptor,
 {
     loop {
-        let Some(desc) = worker.queue.try_consume() else {
+        let Some(desc) = worker.queue.try_pop() else {
             continue;
         };
         let user_data = match desc {
