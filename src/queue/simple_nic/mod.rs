@@ -16,7 +16,7 @@ pub(crate) struct SimpleNicTxQueue {
 impl ToCardQueue for SimpleNicTxQueue {
     type Desc = SimpleNicTxQueueDesc;
 
-    fn push(&mut self, desc: Self::Desc) -> io::Result<()> {
+    fn push(&mut self, desc: Self::Desc) -> Result<(), Self::Desc> {
         self.inner.push(desc)
     }
 }

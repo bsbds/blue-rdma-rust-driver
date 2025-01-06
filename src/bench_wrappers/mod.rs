@@ -41,7 +41,7 @@ pub fn virt_to_phy_bench_range_wrapper(
     virt_to_phy_range(start_addr, num_pages)
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct BenchDesc {
     inner: [u8; 32],
 }

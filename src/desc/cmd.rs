@@ -51,7 +51,7 @@ struct CmdQueueReqDescUpdateMrTableChunk3 {
     reserved1: u7,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdateMrTable {
     c0: CmdQueueReqDescHeaderChunk,
     c1: CmdQueueReqDescUpdateMrTableChunk1,
@@ -135,6 +135,13 @@ impl From<CmdQueueReqDescUpdateMrTable> for RingBufDescUntyped {
     }
 }
 
+#[allow(unsafe_code)]
+impl From<RingBufDescUntyped> for CmdQueueReqDescUpdateMrTable {
+    fn from(desc: RingBufDescUntyped) -> Self {
+        unsafe { std::mem::transmute(desc) }
+    }
+}
+
 pub(crate) struct CmdQueueRespDescUpdateMrTable(CmdQueueReqDescUpdateMrTable);
 
 impl CmdQueueRespDescUpdateMrTable {
@@ -185,7 +192,7 @@ pub(crate) struct CmdQueueReqDescUpdatePGTChunk3 {
     reserved0: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdatePGT {
     c0: CmdQueueReqDescHeaderChunk,
     c1: CmdQueueReqDescUpdatePGTChunk1,
@@ -239,6 +246,13 @@ impl CmdQueueReqDescUpdatePGT {
 #[allow(unsafe_code)]
 impl From<CmdQueueReqDescUpdatePGT> for RingBufDescUntyped {
     fn from(desc: CmdQueueReqDescUpdatePGT) -> Self {
+        unsafe { std::mem::transmute(desc) }
+    }
+}
+
+#[allow(unsafe_code)]
+impl From<RingBufDescUntyped> for CmdQueueReqDescUpdatePGT {
+    fn from(desc: RingBufDescUntyped) -> Self {
         unsafe { std::mem::transmute(desc) }
     }
 }

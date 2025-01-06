@@ -128,6 +128,13 @@ impl From<SimpleNicTxQueueDesc> for RingBufDescUntyped {
 }
 
 #[allow(unsafe_code)]
+impl From<RingBufDescUntyped> for SimpleNicTxQueueDesc {
+    fn from(desc: RingBufDescUntyped) -> Self {
+        unsafe { std::mem::transmute(desc) }
+    }
+}
+
+#[allow(unsafe_code)]
 impl From<RingBufDescUntyped> for SimpleNicRxQueueDesc {
     fn from(desc: RingBufDescUntyped) -> Self {
         unsafe { std::mem::transmute(desc) }

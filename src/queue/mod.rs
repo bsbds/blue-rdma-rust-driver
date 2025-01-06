@@ -21,14 +21,14 @@ use crate::{
 /// To Card Queue
 pub(crate) trait ToCardQueue {
     /// The descriptor type
-    type Desc: Into<RingBufDescUntyped>;
+    type Desc: Into<RingBufDescUntyped> + From<RingBufDescUntyped>;
 
     /// Pushes descriptors to the queue.
     ///
     /// # Errors
     ///
     /// Returns an I/O error if the queue is full or if there is an error pushing the descriptors.
-    fn push(&mut self, descs: Self::Desc) -> io::Result<()>;
+    fn push(&mut self, descs: Self::Desc) -> Result<(), Self::Desc>;
 }
 
 /// To Host Queue
@@ -98,12 +98,12 @@ pub(crate) struct ToCardQueueTyped<Desc> {
 
 impl<Desc> ToCardQueue for ToCardQueueTyped<Desc>
 where
-    Desc: Into<RingBufDescUntyped>,
+    Desc: Into<RingBufDescUntyped> + From<RingBufDescUntyped>,
 {
     type Desc = Desc;
 
-    fn push(&mut self, desc: Desc) -> io::Result<()> {
-        self.inner.push(desc.into())
+    fn push(&mut self, desc: Desc) -> Result<(), Desc> {
+        self.inner.push(desc.into()).map_err(Into::into)
     }
 }
 

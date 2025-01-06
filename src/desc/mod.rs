@@ -87,7 +87,7 @@ impl RingBufDescCommonHead {
 ///
 /// Should have the exact same memory layout of each descriptor
 #[repr(align(8))]
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct RingBufDescUntyped {
     /// Common header fields for the ring buffer descriptor
     head: RingBufDescCommonHead,

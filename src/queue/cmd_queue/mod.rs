@@ -26,7 +26,7 @@ pub(crate) struct CmdQueue<Dev> {
 }
 
 /// Command queue descriptor types that can be submitted
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) enum CmdQueueDesc {
     /// Update first stage table command
     UpdateMrTable(CmdQueueReqDescUpdateMrTable),
@@ -44,12 +44,19 @@ impl<Dev: DeviceAdaptor> CmdQueue<Dev> {
     }
 
     /// Produces command descriptors to the queue
-    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> io::Result<()> {
-        let desc = match desc {
-            CmdQueueDesc::UpdateMrTable(d) => d.into(),
-            CmdQueueDesc::UpdatePGT(d) => d.into(),
-        };
-        self.inner.push(desc)
+    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> Result<(), CmdQueueDesc> {
+        match desc {
+            CmdQueueDesc::UpdateMrTable(d) => self
+                .inner
+                .push(d.into())
+                .map_err(Into::into)
+                .map_err(CmdQueueDesc::UpdateMrTable),
+            CmdQueueDesc::UpdatePGT(d) => self
+                .inner
+                .push(d.into())
+                .map_err(Into::into)
+                .map_err(CmdQueueDesc::UpdatePGT),
+        }
     }
 
     /// Flush

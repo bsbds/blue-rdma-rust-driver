@@ -119,13 +119,13 @@ impl SimpleNicDevice {
         let handle_tx = std::thread::spawn(move || {
             while !shutdown.load(Ordering::Relaxed) {
                 let n = dev.recv(&mut buf)?;
+                let mut desc = Self::build_desc(&buf[0..n])
+                    .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
                 // if queue is full, retry
                 loop {
-                    let desc = Self::build_desc(&buf[0..n])
-                        .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
-                    // FIXME: return the desc if an error occurred
-                    if tx_queue.push(desc).is_ok() {
-                        break;
+                    match tx_queue.push(desc) {
+                        Ok(()) => break,
+                        Err(d) => desc = d,
                     }
                 }
             }

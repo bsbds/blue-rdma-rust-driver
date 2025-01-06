@@ -11,6 +11,7 @@ use crate::mem::slot_alloc::RcSlot;
 
 #[cfg(test)]
 pub(crate) use test::new_test_ring;
+use thiserror::Error;
 
 /// Number of bits used to represent the length of the ring buffer.
 const RING_BUF_LEN_BITS: u8 = 7;
@@ -116,9 +117,9 @@ where
     }
 
     /// Appends some descriptors to the ring buffer
-    pub(crate) fn push(&mut self, desc: Desc) -> io::Result<()> {
+    pub(crate) fn push(&mut self, desc: Desc) -> Result<(), Desc> {
         if self.ctx.len() == RING_BUF_LEN as usize {
-            return Err(io::ErrorKind::WouldBlock.into());
+            return Err(desc);
         }
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;

@@ -10,7 +10,7 @@ pub(crate) fn new_test_ring<Desc: Default + Clone + Descriptor>() -> RingBuffer<
     RingBuffer::<_, Desc>::new(ring_ctx, slot).unwrap()
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Debug, Default, Clone, Copy)]
 struct TestDesc {
     inner: [u8; 32],
 }
