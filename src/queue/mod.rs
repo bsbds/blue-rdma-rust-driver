@@ -8,10 +8,7 @@ use std::{io, marker::PhantomData};
 
 use memmap2::MmapMut;
 
-use crate::{
-    desc::RingBufDescUntyped,
-    ringbuffer::{Card, RingBuffer, SyncDevice},
-};
+use crate::{desc::RingBufDescUntyped, ringbuffer::RingBuffer};
 
 /// To Card Queue
 pub(crate) trait ToCardQueue {
@@ -38,7 +35,7 @@ impl AsMut<[RingBufDescUntyped]> for RingPageBuf {
     }
 }
 
-type DescRingBuffer<Dev> = RingBuffer<RingPageBuf, Dev, RingBufDescUntyped>;
+type DescRingBuffer = RingBuffer<RingPageBuf, RingBufDescUntyped>;
 
 /// To Host Queue
 pub(crate) trait ToHostQueue {
@@ -50,16 +47,15 @@ pub(crate) trait ToHostQueue {
 }
 
 /// To card queue for submitting descriptors to the device
-pub(crate) struct ToCardQueueTyped<Dev, Desc> {
+pub(crate) struct ToCardQueueTyped<Desc> {
     /// Inner ring buffer
-    inner: DescRingBuffer<Dev>,
+    inner: DescRingBuffer,
     /// Descriptor Type
     _marker: PhantomData<Desc>,
 }
 
-impl<Dev, Desc> ToCardQueue for ToCardQueueTyped<Dev, Desc>
+impl<Desc> ToCardQueue for ToCardQueueTyped<Desc>
 where
-    Dev: SyncDevice,
     Desc: Into<RingBufDescUntyped>,
 {
     type Desc = Desc;
@@ -74,16 +70,15 @@ where
 }
 
 /// To card queue for submitting descriptors to the device
-pub(super) struct ToHostQueueTyped<Dev, Desc> {
+pub(super) struct ToHostQueueTyped<Desc> {
     /// Inner ring buffer
-    inner: DescRingBuffer<Dev>,
+    inner: DescRingBuffer,
     /// Descriptor Type
     _marker: PhantomData<Desc>,
 }
 
-impl<Dev, Desc> ToHostQueue for ToHostQueueTyped<Dev, Desc>
+impl<Desc> ToHostQueue for ToHostQueueTyped<Desc>
 where
-    Dev: SyncDevice,
     Desc: From<RingBufDescUntyped>,
 {
     type Desc = Desc;

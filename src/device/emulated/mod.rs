@@ -18,7 +18,7 @@ use crate::{
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },
     queue::cmd_queue::{CmdQueue, CmdQueueDesc},
-    ringbuffer::{RingBuffer, RingCtx, SyncDevice},
+    ringbuffer::{RingBuffer, RingCtx},
 };
 
 use super::{CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor};

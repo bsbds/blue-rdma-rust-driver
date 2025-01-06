@@ -8,13 +8,13 @@ use crate::{
         cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
         RingBufDescToHost, RingBufDescUntyped,
     },
-    ringbuffer::{Descriptor, RingBuffer, SyncDevice},
+    ringbuffer::{Descriptor, RingBuffer},
 };
 
 /// Command queue for submitting commands to the device
-pub(crate) struct CmdQueue<Buf, Dev> {
+pub(crate) struct CmdQueue<Buf> {
     /// Inner ring buffer
-    inner: RingBuffer<Buf, Dev, RingBufDescUntyped>,
+    inner: RingBuffer<Buf, RingBufDescUntyped>,
 }
 
 /// Command queue descriptor types that can be submitted
@@ -25,13 +25,12 @@ pub(crate) enum CmdQueueDesc {
     UpdatePGT(CmdQueueReqDescUpdatePGT),
 }
 
-impl<Buf, Dev> CmdQueue<Buf, Dev>
+impl<Buf> CmdQueue<Buf>
 where
     Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: SyncDevice,
 {
     /// Creates a new `CmdQueue`
-    pub(crate) fn new(inner: RingBuffer<Buf, Dev, RingBufDescUntyped>) -> Self {
+    pub(crate) fn new(inner: RingBuffer<Buf, RingBufDescUntyped>) -> Self {
         Self { inner }
     }
 
@@ -49,23 +48,23 @@ where
 
     /// Flush
     pub(crate) fn flush(&self) -> io::Result<()> {
-        self.inner.flush_push()
+        todo!()
+        //self.inner.flush_push()
     }
 }
 
 /// Queue for receiving command responses from the device
-struct CmdRespQueue<Buf, Dev> {
+struct CmdRespQueue<Buf> {
     /// Inner ring buffer
-    inner: RingBuffer<Buf, Dev, RingBufDescUntyped>,
+    inner: RingBuffer<Buf, RingBufDescUntyped>,
 }
 
-impl<Buf, Dev> CmdRespQueue<Buf, Dev>
+impl<Buf> CmdRespQueue<Buf>
 where
     Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: SyncDevice,
 {
     /// Creates a new `CmdRespQueue`
-    fn new(inner: RingBuffer<Buf, Dev, RingBufDescUntyped>) -> Self {
+    fn new(inner: RingBuffer<Buf, RingBufDescUntyped>) -> Self {
         Self { inner }
     }
 

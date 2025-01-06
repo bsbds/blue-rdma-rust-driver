@@ -8,22 +8,19 @@ use std::{
 
 use parking_lot::Mutex;
 
-use crate::{
-    desc::{RingBufDescToHost, RingBufDescUntyped},
-    ringbuffer::SyncDevice,
-};
+use crate::desc::{RingBufDescToHost, RingBufDescUntyped};
 
 use super::CmdRespQueue;
 
 /// Worker that processes command responses from the response queue
-struct CmdRespQueueWorker<Buf, Dev> {
+struct CmdRespQueueWorker<Buf> {
     /// The command response queue
-    queue: CmdRespQueue<Buf, Dev>,
+    queue: CmdRespQueue<Buf>,
 }
 
-impl<Buf, Dev> CmdRespQueueWorker<Buf, Dev> {
+impl<Buf> CmdRespQueueWorker<Buf> {
     /// Creates a new `CmdRespQueueWorker`
-    fn new(queue: CmdRespQueue<Buf, Dev>) -> Self {
+    fn new(queue: CmdRespQueue<Buf>) -> Self {
         Self { queue }
     }
 }
@@ -103,10 +100,9 @@ impl Registration {
 
 /// Run the command queue worker
 #[allow(clippy::needless_pass_by_value)] // the Arc should be moved to the current function
-fn run_worker<Buf, Dev>(mut worker: CmdRespQueueWorker<Buf, Dev>, reg: Arc<Mutex<Registration>>)
+fn run_worker<Buf>(mut worker: CmdRespQueueWorker<Buf>, reg: Arc<Mutex<Registration>>)
 where
     Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: SyncDevice,
 {
     loop {
         let Some(desc) = worker.queue.try_consume() else {

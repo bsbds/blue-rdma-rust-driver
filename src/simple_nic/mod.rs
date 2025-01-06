@@ -20,7 +20,6 @@ use crate::{
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         ToCardQueue, ToHostQueue,
     },
-    ringbuffer::SyncDevice,
 };
 
 /// Configuration for the simple NIC device
@@ -33,11 +32,11 @@ struct SimpleNicDeviceConfig {
 }
 
 /// A simple network interface device that uses TUN/TAP for network connectivity
-struct SimpleNicDevice<Dev> {
+struct SimpleNicDevice {
     /// The underlying TUN device used for network I/O
     tun_dev: tun::Device,
     /// Tx queue to submit descriptors
-    queue: SimpleNicTxQueue<Dev>,
+    queue: SimpleNicTxQueue,
 }
 
 /// Handle for managing transmit and receive queue threads of a `SimpleNic`
@@ -71,7 +70,7 @@ impl SimpleNicQueueHandle {
     }
 }
 
-impl<Dev> SimpleNicDevice<Dev> {
+impl SimpleNicDevice {
     /// Creates a TUN device that operates at L2
     #[allow(unused_results)] // ignore the config construction result
     fn create_tun(address: IpAddr, netmask: IpAddr) -> io::Result<tun::Device> {
@@ -99,10 +98,10 @@ impl<Dev> SimpleNicDevice<Dev> {
     }
 
     /// Runs the send/recv
-    fn run<RDMADev: SyncDevice + Send + 'static>(
+    fn run(
         mut dev: tun::Device,
-        mut tx_queue: SimpleNicTxQueue<RDMADev>,
-        mut rx_queue: SimpleNicRxQueue<RDMADev>,
+        mut tx_queue: SimpleNicTxQueue,
+        mut rx_queue: SimpleNicRxQueue,
         rx_buf: ConscMem,
         shutdown: Arc<AtomicBool>,
     ) -> SimpleNicQueueHandle {

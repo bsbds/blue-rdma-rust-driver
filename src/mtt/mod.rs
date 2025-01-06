@@ -30,7 +30,6 @@ use crate::{
         worker::{CmdId, Registration},
         CmdQueue, CmdQueueDesc,
     },
-    ringbuffer::SyncDevice,
 };
 
 /// Memory region key
@@ -65,27 +64,26 @@ impl IbvMr {
 }
 
 /// Memory Translation Table implementation
-struct Mtt<PAlloc, Buf, Dev> {
+struct Mtt<PAlloc, Buf> {
     /// Table memory allocator
     alloc: Arc<Mutex<Alloc<PAlloc>>>,
     /// Command queue for submitting commands to device
-    cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+    cmd_queue: Arc<Mutex<CmdQueue<Buf>>>,
     /// Registration for getting notifies from the device
     reg: Arc<Mutex<Registration>>,
     /// Command ID generator
     cmd_id: AtomicU16,
 }
 
-impl<PAlloc, Buf, Dev> Mtt<PAlloc, Buf, Dev>
+impl<PAlloc, Buf> Mtt<PAlloc, Buf>
 where
     PAlloc: PgtAlloc,
     Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: SyncDevice,
 {
     /// Creates a new `Mtt`
     fn new(
         alloc: Arc<Mutex<Alloc<PAlloc>>>,
-        cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+        cmd_queue: Arc<Mutex<CmdQueue<Buf>>>,
         reg: Arc<Mutex<Registration>>,
     ) -> Self {
         Self {
