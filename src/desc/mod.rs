@@ -105,14 +105,12 @@ impl RingBufDescUntyped {
 }
 
 impl Descriptor for RingBufDescUntyped {
+    const SIZE: usize = 32;
+
     fn try_consume(&mut self) -> bool {
         let valid = self.head.valid();
         self.head.set_valid(false);
         valid
-    }
-
-    fn size() -> usize {
-        DESC_SIZE
     }
 }
 

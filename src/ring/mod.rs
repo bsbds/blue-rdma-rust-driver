@@ -215,16 +215,12 @@ impl<Dev: SyncDevice> RingCtx<Dev> {
 
 /// A trait for descriptors in the ring buffer
 pub(crate) trait Descriptor {
+    /// Size in bytes of the descriptor
+    const SIZE: usize;
+
     /// Returns `true` if the descriptor's valid bit is set, indicating it contains valid data.
     /// If the valid bit is set, it should be cleared to 0 before returning.
     fn try_consume(&mut self) -> bool;
-
-    /// Size in bytes of the descriptor
-    ///
-    /// # Safty
-    ///
-    /// This value should never larger than `usize::MAX / RING_BUF_LEN`
-    fn size() -> usize;
 }
 
 /// A ring buffer for RDMA operations.

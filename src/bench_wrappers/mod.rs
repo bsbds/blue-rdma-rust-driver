@@ -53,15 +53,13 @@ impl BenchDesc {
 }
 
 impl Descriptor for BenchDesc {
+    const SIZE: usize = 24;
+
     fn try_consume(&mut self) -> bool {
         let _valid = self.inner[0] == 1;
         self.inner[0] = 0;
         // ignore the valid bit for benchmark
         true
-    }
-
-    fn size() -> usize {
-        24
     }
 }
 
@@ -89,7 +87,7 @@ struct BenchSlotSize;
 
 impl SlotSize for BenchSlotSize {
     fn size() -> usize {
-        BenchDesc::size() * RING_BUF_LEN as usize
+        BenchDesc::SIZE * RING_BUF_LEN as usize
     }
 }
 
