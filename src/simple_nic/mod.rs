@@ -102,7 +102,7 @@ impl SimpleNicDevice {
         mut dev: tun::Device,
         mut tx_queue: SimpleNicTxQueue,
         mut rx_queue: SimpleNicRxQueue,
-        rx_buf: ContiguousPages,
+        rx_buf: ContiguousPages<1>,
         shutdown: Arc<AtomicBool>,
     ) -> SimpleNicQueueHandle {
         let mut buf = [0; 2048];

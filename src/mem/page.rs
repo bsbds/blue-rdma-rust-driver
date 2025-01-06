@@ -7,17 +7,21 @@ use super::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
 use std::ops::{Deref, DerefMut};
 
 /// A wrapper around mapped memory that ensures physical memory pages are consecutive.
-pub(crate) struct ContiguousPages {
+pub(crate) struct ContiguousPages<const N: usize> {
     /// Mmap handle
     inner: MmapMut,
 }
 
-impl ContiguousPages {
+impl<const N: usize> ContiguousPages<N> {
+    /// TODO: implements allocating multiple consecutive pages
+    const _OK: () = assert!(
+        N == 1,
+        "allocating multiple contiguous pages is currently unsupported"
+    );
+
     /// Creates a new consecutive memory region of the specified number of pages.
-    pub(crate) fn new(num_pages: usize) -> io::Result<Self> {
-        /// TODO: implements allocating multiple consecutive pages
-        assert_eq!(num_pages, 1, "currently only supports allocating one page");
-        let inner = Self::try_reserve_consecutive(num_pages)?;
+    pub(crate) fn new() -> io::Result<Self> {
+        let inner = Self::try_reserve_consecutive(N)?;
         Ok(Self { inner })
     }
 
@@ -73,7 +77,7 @@ impl ContiguousPages {
     }
 }
 
-impl Deref for ContiguousPages {
+impl<const N: usize> Deref for ContiguousPages<N> {
     type Target = MmapMut;
 
     fn deref(&self) -> &Self::Target {
@@ -81,19 +85,19 @@ impl Deref for ContiguousPages {
     }
 }
 
-impl DerefMut for ContiguousPages {
+impl<const N: usize> DerefMut for ContiguousPages<N> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl AsMut<[u8]> for ContiguousPages {
+impl<const N: usize> AsMut<[u8]> for ContiguousPages<N> {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.inner
     }
 }
 
-impl AsRef<[u8]> for ContiguousPages {
+impl<const N: usize> AsRef<[u8]> for ContiguousPages<N> {
     fn as_ref(&self) -> &[u8] {
         &self.inner
     }
@@ -105,6 +109,6 @@ mod test {
 
     #[test]
     fn consc_mem_alloc_succ() {
-        let mem = ContiguousPages::new(1).expect("failed to allocate");
+        let mem = ContiguousPages::<1>::new().expect("failed to allocate");
     }
 }

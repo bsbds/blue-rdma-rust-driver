@@ -43,13 +43,13 @@ pub(crate) trait ToHostQueue {
 /// A buffer backed by contiguous physical pages.
 struct PageBuf {
     /// The underlying contiguous physical pages
-    inner: ContiguousPages,
+    inner: ContiguousPages<1>,
 }
 
 impl PageBuf {
     /// Allocates a new `ContiguousPages` with a size of 1 page.
     fn alloc() -> io::Result<Self> {
-        ContiguousPages::new(1).map(|inner| Self { inner })
+        ContiguousPages::<1>::new().map(|inner| Self { inner })
     }
 }
 
