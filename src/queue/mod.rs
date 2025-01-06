@@ -69,7 +69,7 @@ where
         descs: Descs,
     ) -> io::Result<()> {
         let descs = descs.map(Into::into);
-        self.inner.produce(descs)
+        self.inner.push(descs)
     }
 }
 
@@ -89,6 +89,6 @@ where
     type Desc = Desc;
 
     fn pop(&mut self) -> Option<Self::Desc> {
-        self.inner.try_consume().copied().map(Into::into)
+        self.inner.try_pop().copied().map(Into::into)
     }
 }

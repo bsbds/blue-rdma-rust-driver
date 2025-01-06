@@ -71,15 +71,15 @@ pub struct RingWrapper {
 
 impl RingWrapper {
     pub fn force_produce<Descs: Iterator<Item = BenchDesc>>(&mut self, descs: Descs) {
-        self.inner.force_produce(descs.into_iter());
+        self.inner.force_push(descs.into_iter());
     }
 
     pub fn produce<Descs: ExactSizeIterator<Item = BenchDesc>>(&mut self, descs: Descs) {
-        self.inner.produce(descs.into_iter()).unwrap();
+        self.inner.push(descs.into_iter()).unwrap();
     }
 
     pub fn consume(&mut self) -> Option<&BenchDesc> {
-        self.inner.try_consume()
+        self.inner.try_pop()
     }
 }
 

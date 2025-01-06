@@ -40,13 +40,13 @@ fn ring_produce_consume_is_ok() {
     let round = 10;
     for _ in 0..round {
         for i in 0..128 {
-            ring.produce(iter::once(TestDesc::new_valid())).unwrap();
+            ring.push(iter::once(TestDesc::new_valid())).unwrap();
         }
-        assert!(ring.produce(iter::once(TestDesc::new_valid())).is_err());
+        assert!(ring.push(iter::once(TestDesc::new_valid())).is_err());
         for i in 0..128 {
-            assert!(ring.try_consume().is_some());
+            assert!(ring.try_pop().is_some());
         }
-        assert!(ring.try_consume().is_none());
+        assert!(ring.try_pop().is_none());
     }
 }
 

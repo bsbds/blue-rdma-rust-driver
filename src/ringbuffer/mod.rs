@@ -255,7 +255,7 @@ where
     }
 
     /// Appends some descriptors to the ring buffer
-    pub(crate) fn produce<Descs: ExactSizeIterator<Item = Desc>>(
+    pub(crate) fn push<Descs: ExactSizeIterator<Item = Desc>>(
         &mut self,
         descs: Descs,
     ) -> io::Result<()> {
@@ -280,7 +280,7 @@ where
     /// # Safety
     ///
     /// Caller must ensure there is sufficient space in the ring buffer before calling.
-    pub(crate) fn force_produce<Descs: Iterator<Item = Desc>>(&mut self, descs: Descs) {
+    pub(crate) fn force_push<Descs: Iterator<Item = Desc>>(&mut self, descs: Descs) {
         let buf = self.buf.as_mut();
         for entry in descs {
             buf[self.ctx.head_idx()] = entry;
@@ -289,7 +289,7 @@ where
     }
 
     /// Tries to poll next valid entry from the queue
-    pub(crate) fn try_consume(&mut self) -> Option<&Desc> {
+    pub(crate) fn try_pop(&mut self) -> Option<&Desc> {
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
         let ready = buf[tail].try_consume();
@@ -300,12 +300,12 @@ where
     }
 
     /// Flushes any pending produce operations by synchronizing the head pointer.
-    pub(crate) fn flush_produce(&self) -> io::Result<()> {
+    pub(crate) fn flush_push(&self) -> io::Result<()> {
         self.ctx.sync_head_ptr()
     }
 
     /// Flushes any pending consume operations by synchronizing the tail pointer.
-    pub(crate) fn flush_consume(&self) {
+    pub(crate) fn flush_pop(&self) {
         self.ctx.sync_tail_ptr();
     }
 }

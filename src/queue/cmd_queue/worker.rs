@@ -160,10 +160,8 @@ mod test {
         let n1 = reg.lock().register(CmdId(id1)).unwrap();
         unsafe {
             // assume hardware produce two descriptor
-            ring.produce(iter::once(std::mem::transmute(desc0)))
-                .unwrap();
-            ring.produce(iter::once(std::mem::transmute(desc1)))
-                .unwrap();
+            ring.push(iter::once(std::mem::transmute(desc0))).unwrap();
+            ring.push(iter::once(std::mem::transmute(desc1))).unwrap();
         }
         let mut queue = CmdRespQueue::new(ring);
         let worker = CmdRespQueueWorker::new(queue);

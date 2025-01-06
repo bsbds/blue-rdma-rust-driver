@@ -44,12 +44,12 @@ where
             CmdQueueDesc::UpdateMrTable(d) => d.into(),
             CmdQueueDesc::UpdatePGT(d) => d.into(),
         });
-        self.inner.produce(descs)
+        self.inner.push(descs)
     }
 
     /// Flush
     pub(crate) fn flush(&self) -> io::Result<()> {
-        self.inner.flush_produce()
+        self.inner.flush_push()
     }
 }
 
@@ -71,7 +71,7 @@ where
 
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_consume(&mut self) -> Option<RingBufDescToHost<'_>> {
-        self.inner.try_consume().map(Into::into)
+        self.inner.try_pop().map(Into::into)
     }
 }
 
@@ -95,7 +95,7 @@ mod test {
     fn cmd_resp_queue_consume_ok() {
         let mut ring = new_test_ring::<RingBufDescUntyped>();
         let desc = RingBufDescUntyped::new_valid_default();
-        ring.produce(iter::once(desc)).unwrap();
+        ring.push(iter::once(desc)).unwrap();
         let mut queue = CmdRespQueue::new(ring);
         let desc = queue.try_consume().unwrap();
         assert!(matches!(
