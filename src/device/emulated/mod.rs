@@ -12,7 +12,7 @@ use crate::{
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },
     queue::cmd_queue::{CmdQueue, CmdQueueDesc},
-    ring::{Ring, RingCtx, SyncDevice},
+    ringbuffer::{RingBuffer, RingCtx, SyncDevice},
 };
 
 use super::{CsrReaderAdaptor, CsrWriterAdaptor};
@@ -65,9 +65,9 @@ impl EmulatedDevice {
 
         let ring_ctx_cmd_queue = RingCtx::new(proxy_cmd_queue);
         let ring_ctx_resp_queue = RingCtx::new(proxy_resp_queue);
-        let ring = Ring::<_, _, RingBufDescUntyped>::new(ring_ctx_cmd_queue, mem0)
+        let ring = RingBuffer::<_, _, RingBufDescUntyped>::new(ring_ctx_cmd_queue, mem0)
             .unwrap_or_else(|| unreachable!());
-        let mut ring1 = Ring::<_, _, RingBufDescUntyped>::new(ring_ctx_resp_queue, mem1)
+        let mut ring1 = RingBuffer::<_, _, RingBufDescUntyped>::new(ring_ctx_resp_queue, mem1)
             .unwrap_or_else(|| unreachable!());
 
         let mut cmd_queue = CmdQueue::new(ring);

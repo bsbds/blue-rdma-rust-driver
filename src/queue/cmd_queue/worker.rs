@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 
 use crate::{
     desc::{RingBufDescToHost, RingBufDescUntyped},
-    ring::SyncDevice,
+    ringbuffer::SyncDevice,
 };
 
 use super::CmdRespQueue;
@@ -131,7 +131,7 @@ mod test {
 
     use crate::{
         desc::cmd::{CmdQueueRespDescUpdateMrTable, CmdQueueRespDescUpdatePGT},
-        ring::new_test_ring,
+        ringbuffer::new_test_ring,
     };
 
     use super::*;

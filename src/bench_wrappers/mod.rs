@@ -22,7 +22,7 @@ use crate::{
         slot_alloc::{RcSlot, SlotAlloc, SlotSize},
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
     },
-    ring::{Descriptor, Dummy, Ring, RingCtx, RING_BUF_LEN},
+    ringbuffer::{Descriptor, Dummy, RingBuffer, RingCtx, RING_BUF_LEN},
 };
 
 #[inline]
@@ -66,7 +66,7 @@ impl Descriptor for BenchDesc {
 type BenchBuf = RcSlot<ConscMem, BenchSlotSize>;
 
 pub struct RingWrapper {
-    inner: Ring<BenchBuf, Dummy, BenchDesc>,
+    inner: RingBuffer<BenchBuf, Dummy, BenchDesc>,
 }
 
 impl RingWrapper {
@@ -103,6 +103,6 @@ pub fn create_ring_wrapper() -> RingWrapper {
     let mut alloc = SlotAlloc::<_, BenchSlotSize>::new(mem);
     let slot = alloc.alloc_one().unwrap();
     let ring_ctx = RingCtx::new(Dummy);
-    let ring = Ring::<_, _, BenchDesc>::new(ring_ctx, slot).unwrap();
+    let ring = RingBuffer::<_, _, BenchDesc>::new(ring_ctx, slot).unwrap();
     RingWrapper { inner: ring }
 }

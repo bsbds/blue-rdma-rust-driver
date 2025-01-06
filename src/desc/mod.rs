@@ -10,7 +10,7 @@ use cmd::{
     CmdQueueRespDescUpdatePGT,
 };
 
-use crate::ring::Descriptor;
+use crate::ringbuffer::Descriptor;
 
 /// Size of a descriptor in bytes.
 pub(crate) const DESC_SIZE: usize = 32;

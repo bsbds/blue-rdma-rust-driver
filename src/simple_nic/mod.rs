@@ -20,7 +20,7 @@ use crate::{
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         ToCardQueue, ToHostQueue,
     },
-    ring::SyncDevice,
+    ringbuffer::SyncDevice,
 };
 
 /// Configuration for the simple NIC device

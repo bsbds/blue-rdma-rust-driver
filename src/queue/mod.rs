@@ -10,7 +10,7 @@ use memmap2::MmapMut;
 
 use crate::{
     desc::RingBufDescUntyped,
-    ring::{Card, Ring, SyncDevice},
+    ringbuffer::{Card, RingBuffer, SyncDevice},
 };
 
 /// To Card Queue
@@ -38,7 +38,7 @@ impl AsMut<[RingBufDescUntyped]> for RingPageBuf {
     }
 }
 
-type DescRingBuffer<Dev> = Ring<RingPageBuf, Dev, RingBufDescUntyped>;
+type DescRingBuffer<Dev> = RingBuffer<RingPageBuf, Dev, RingBufDescUntyped>;
 
 /// To Host Queue
 pub(crate) trait ToHostQueue {

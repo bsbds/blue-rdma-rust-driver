@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
     desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
-    ring::SyncDevice,
+    ringbuffer::SyncDevice,
 };
 
 use super::{ToCardQueue, ToCardQueueTyped, ToHostQueue, ToHostQueueTyped};

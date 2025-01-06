@@ -230,7 +230,7 @@ pub(crate) trait Descriptor {
 /// * `Buf` - The underlying buffer type
 /// * `Dev` - The device type
 /// * `Desc` - The descriptor type used for operations
-pub(crate) struct Ring<Buf, Dev, Desc> {
+pub(crate) struct RingBuffer<Buf, Dev, Desc> {
     /// Context of the ring buffer
     ctx: RingCtx<Dev>,
     /// The underlying buffer
@@ -239,7 +239,7 @@ pub(crate) struct Ring<Buf, Dev, Desc> {
     _marker: PhantomData<Desc>,
 }
 
-impl<Buf, Dev, Desc> Ring<Buf, Dev, Desc>
+impl<Buf, Dev, Desc> RingBuffer<Buf, Dev, Desc>
 where
     Buf: AsMut<[Desc]>,
     Dev: SyncDevice,

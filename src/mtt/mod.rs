@@ -30,7 +30,7 @@ use crate::{
         worker::{CmdId, Registration},
         CmdQueue, CmdQueueDesc,
     },
-    ring::SyncDevice,
+    ringbuffer::SyncDevice,
 };
 
 /// Memory region key
@@ -375,7 +375,7 @@ where
 mod test {
     use std::sync::atomic::AtomicBool;
 
-    use crate::ring::new_test_ring;
+    use crate::ringbuffer::new_test_ring;
 
     use super::*;
 

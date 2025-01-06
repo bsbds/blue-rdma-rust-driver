@@ -178,7 +178,7 @@ mod desc;
 
 #[allow(unused)]
 /// RDMA ring buffer implementation
-mod ring;
+mod ringbuffer;
 
 #[allow(unused)]
 /// Memory translation table

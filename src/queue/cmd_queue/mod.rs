@@ -8,13 +8,13 @@ use crate::{
         cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
         RingBufDescToHost, RingBufDescUntyped,
     },
-    ring::{Descriptor, Ring, SyncDevice},
+    ringbuffer::{Descriptor, RingBuffer, SyncDevice},
 };
 
 /// Command queue for submitting commands to the device
 pub(crate) struct CmdQueue<Buf, Dev> {
     /// Inner ring buffer
-    inner: Ring<Buf, Dev, RingBufDescUntyped>,
+    inner: RingBuffer<Buf, Dev, RingBufDescUntyped>,
 }
 
 /// Command queue descriptor types that can be submitted
@@ -31,7 +31,7 @@ where
     Dev: SyncDevice,
 {
     /// Creates a new `CmdQueue`
-    pub(crate) fn new(inner: Ring<Buf, Dev, RingBufDescUntyped>) -> Self {
+    pub(crate) fn new(inner: RingBuffer<Buf, Dev, RingBufDescUntyped>) -> Self {
         Self { inner }
     }
 
@@ -56,7 +56,7 @@ where
 /// Queue for receiving command responses from the device
 struct CmdRespQueue<Buf, Dev> {
     /// Inner ring buffer
-    inner: Ring<Buf, Dev, RingBufDescUntyped>,
+    inner: RingBuffer<Buf, Dev, RingBufDescUntyped>,
 }
 
 impl<Buf, Dev> CmdRespQueue<Buf, Dev>
@@ -65,7 +65,7 @@ where
     Dev: SyncDevice,
 {
     /// Creates a new `CmdRespQueue`
-    fn new(inner: Ring<Buf, Dev, RingBufDescUntyped>) -> Self {
+    fn new(inner: RingBuffer<Buf, Dev, RingBufDescUntyped>) -> Self {
         Self { inner }
     }
 
@@ -79,7 +79,7 @@ where
 mod test {
     use std::iter;
 
-    use crate::ring::new_test_ring;
+    use crate::ringbuffer::new_test_ring;
 
     use super::*;
 

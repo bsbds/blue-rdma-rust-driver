@@ -4,10 +4,11 @@ use crate::mem::{page::ConscMem, slot_alloc::SlotAlloc};
 
 use super::*;
 
-pub(crate) fn new_test_ring<Desc: Default + Clone + Descriptor>() -> Ring<Vec<Desc>, Dummy, Desc> {
+pub(crate) fn new_test_ring<Desc: Default + Clone + Descriptor>(
+) -> RingBuffer<Vec<Desc>, Dummy, Desc> {
     let slot = vec![Desc::default(); 128];
     let ring_ctx = RingCtx::new(Dummy);
-    Ring::<_, _, Desc>::new(ring_ctx, slot).unwrap()
+    RingBuffer::<_, _, Desc>::new(ring_ctx, slot).unwrap()
 }
 
 #[derive(Default, Clone, Copy)]
@@ -35,7 +36,7 @@ impl Descriptor for TestDesc {
 fn ring_produce_consume_is_ok() {
     let slot = vec![TestDesc::default(); 128];
     let ring_ctx = RingCtx::new(Dummy);
-    let mut ring = Ring::<_, _, TestDesc>::new(ring_ctx, slot).unwrap();
+    let mut ring = RingBuffer::<_, _, TestDesc>::new(ring_ctx, slot).unwrap();
     let round = 10;
     for _ in 0..round {
         for i in 0..128 {
@@ -53,5 +54,5 @@ fn ring_produce_consume_is_ok() {
 fn build_ring_buffer_should_reject_insufficient_buf_size() {
     let slot = vec![TestDesc::default(); 127];
     let ring_ctx = RingCtx::new(Dummy);
-    assert!(Ring::<_, _, TestDesc>::new(ring_ctx, slot).is_none());
+    assert!(RingBuffer::<_, _, TestDesc>::new(ring_ctx, slot).is_none());
 }
