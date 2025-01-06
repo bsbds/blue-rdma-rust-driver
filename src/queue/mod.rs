@@ -20,8 +20,7 @@ pub(crate) trait ToCardQueue {
     /// # Errors
     ///
     /// Returns an I/O error if the queue is full or if there is an error pushing the descriptors.
-    fn push<Descs: ExactSizeIterator<Item = Self::Desc>>(&mut self, descs: Descs)
-        -> io::Result<()>;
+    fn push(&mut self, descs: Self::Desc) -> io::Result<()>;
 }
 
 struct RingPageBuf {
@@ -60,12 +59,8 @@ where
 {
     type Desc = Desc;
 
-    fn push<Descs: ExactSizeIterator<Item = Self::Desc>>(
-        &mut self,
-        descs: Descs,
-    ) -> io::Result<()> {
-        let descs = descs.map(Into::into);
-        self.inner.push(descs)
+    fn push(&mut self, desc: Desc) -> io::Result<()> {
+        self.inner.push(desc.into())
     }
 }
 

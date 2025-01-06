@@ -24,6 +24,7 @@ pub(crate) struct CmdQueue<Buf, Dev> {
 }
 
 /// Command queue descriptor types that can be submitted
+#[derive(Clone, Copy)]
 pub(crate) enum CmdQueueDesc {
     /// Update first stage table command
     UpdateMrTable(CmdQueueReqDescUpdateMrTable),
@@ -45,15 +46,12 @@ where
     }
 
     /// Produces command descriptors to the queue
-    pub(crate) fn push<Descs>(&mut self, descs: Descs) -> io::Result<()>
-    where
-        Descs: ExactSizeIterator<Item = CmdQueueDesc>,
-    {
-        let descs = descs.map(|x| match x {
+    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> io::Result<()> {
+        let desc = match desc {
             CmdQueueDesc::UpdateMrTable(d) => d.into(),
             CmdQueueDesc::UpdatePGT(d) => d.into(),
-        });
-        self.inner.push(descs)
+        };
+        self.inner.push(desc)
     }
 
     /// Flush
@@ -107,14 +105,14 @@ mod test {
         let ring = new_test_ring::<RingBufDescUntyped>();
         let mut queue = CmdQueue::new(ring, DummyDevice::default());
         let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
-        queue.push(iter::once(desc)).unwrap();
+        queue.push(desc).unwrap();
     }
 
     #[test]
     fn cmd_resp_queue_consume_ok() {
         let mut ring = new_test_ring::<RingBufDescUntyped>();
         let desc = RingBufDescUntyped::new_valid_default();
-        ring.push(iter::once(desc)).unwrap();
+        ring.push(desc).unwrap();
         let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
         let desc = queue.try_pop().unwrap();
         assert!(matches!(

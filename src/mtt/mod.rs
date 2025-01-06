@@ -144,10 +144,6 @@ where
             index_u32,
             entry_count,
         );
-        let descs = vec![
-            CmdQueueDesc::UpdateMrTable(update_mr_table),
-            CmdQueueDesc::UpdatePGT(update_pgt),
-        ];
 
         let (notify_update_mr_table, notify_update_pgt) = {
             let mut reg_l = self.reg.lock();
@@ -160,7 +156,11 @@ where
             (a, b)
         };
 
-        self.cmd_queue.lock().push(descs.into_iter());
+        {
+            let mut cmd_queue_l = self.cmd_queue.lock();
+            cmd_queue_l.push(CmdQueueDesc::UpdateMrTable(update_mr_table));
+            cmd_queue_l.push(CmdQueueDesc::UpdatePGT(update_pgt));
+        }
 
         loop {
             if notify_update_mr_table.notified() && notify_update_pgt.notified() {
@@ -193,7 +193,7 @@ where
             .unwrap_or_else(|| unreachable!("id should not be registered"));
         self.cmd_queue
             .lock()
-            .push(iter::once(CmdQueueDesc::UpdateMrTable(update_mr_table)));
+            .push(CmdQueueDesc::UpdateMrTable(update_mr_table));
 
         loop {
             if notify_update_mr_table.notified() {

@@ -4,9 +4,9 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 #[allow(clippy::unit_arg)]
 fn benchmark_ring_buffer_produce(c: &mut Criterion) {
     let mut ring = create_ring_wrapper();
-    let descs = Some(BenchDesc::new([1; 32]));
+    let desc = BenchDesc::new([1; 32]);
     c.bench_function("ring produce", |b| {
-        b.iter(|| black_box(ring.force_produce(descs.into_iter())))
+        b.iter(|| black_box(ring.force_produce(desc)))
     });
 }
 
@@ -23,11 +23,11 @@ fn benchmark_ring_buffer_consume(c: &mut Criterion) {
 #[allow(clippy::unit_arg)]
 fn benchmark_ring_buffer_produce_consume(c: &mut Criterion) {
     let mut ring = create_ring_wrapper();
-    let descs = Some(BenchDesc::new([1; 32]));
+    let desc = BenchDesc::new([1; 32]);
     c.bench_function("ring produce", |b| {
         b.iter(|| {
             for _ in 0..128 {
-                black_box(ring.produce(descs.into_iter()));
+                black_box(ring.produce(desc));
                 let _ignore = black_box(ring.consume());
             }
         })

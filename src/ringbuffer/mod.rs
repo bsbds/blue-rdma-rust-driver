@@ -116,22 +116,13 @@ where
     }
 
     /// Appends some descriptors to the ring buffer
-    pub(crate) fn push<Descs: ExactSizeIterator<Item = Desc>>(
-        &mut self,
-        descs: Descs,
-    ) -> io::Result<()> {
-        if descs
-            .len()
-            .checked_add(self.ctx.len())
-            .is_none_or(|len| len > RING_BUF_LEN as usize)
-        {
+    pub(crate) fn push(&mut self, desc: Desc) -> io::Result<()> {
+        if self.ctx.len() == RING_BUF_LEN as usize {
             return Err(io::ErrorKind::WouldBlock.into());
         }
         let buf = self.buf.as_mut();
-        for entry in descs {
-            buf[self.ctx.head_idx()] = entry;
-            self.ctx.inc_head();
-        }
+        buf[self.ctx.head_idx()] = desc;
+        self.ctx.inc_head();
 
         Ok(())
     }
@@ -141,12 +132,10 @@ where
     /// # Safety
     ///
     /// Caller must ensure there is sufficient space in the ring buffer before calling.
-    pub(crate) fn force_push<Descs: Iterator<Item = Desc>>(&mut self, descs: Descs) {
+    pub(crate) fn force_push(&mut self, desc: Desc) {
         let buf = self.buf.as_mut();
-        for entry in descs {
-            buf[self.ctx.head_idx()] = entry;
-            self.ctx.inc_head();
-        }
+        buf[self.ctx.head_idx()] = desc;
+        self.ctx.inc_head();
     }
 
     /// Tries to poll next valid entry from the queue

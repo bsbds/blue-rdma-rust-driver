@@ -39,9 +39,9 @@ fn ring_produce_consume_is_ok() {
     let round = 10;
     for _ in 0..round {
         for i in 0..128 {
-            ring.push(iter::once(TestDesc::new_valid())).unwrap();
+            ring.push(TestDesc::new_valid()).unwrap();
         }
-        assert!(ring.push(iter::once(TestDesc::new_valid())).is_err());
+        assert!(ring.push(TestDesc::new_valid()).is_err());
         for i in 0..128 {
             assert!(ring.try_pop().is_some());
         }

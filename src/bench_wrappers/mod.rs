@@ -70,12 +70,12 @@ pub struct RingWrapper {
 }
 
 impl RingWrapper {
-    pub fn force_produce<Descs: Iterator<Item = BenchDesc>>(&mut self, descs: Descs) {
-        self.inner.force_push(descs.into_iter());
+    pub fn force_produce(&mut self, desc: BenchDesc) {
+        self.inner.force_push(desc);
     }
 
-    pub fn produce<Descs: ExactSizeIterator<Item = BenchDesc>>(&mut self, descs: Descs) {
-        self.inner.push(descs.into_iter()).unwrap();
+    pub fn produce(&mut self, desc: BenchDesc) {
+        self.inner.push(desc).unwrap();
     }
 
     pub fn consume(&mut self) -> Option<&BenchDesc> {
