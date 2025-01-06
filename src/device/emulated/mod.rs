@@ -44,7 +44,7 @@ impl EmulatedDevice {
         let cli = RpcClient::new(rpc_server_addr)?;
         let dev = Self(cli);
         let proxy_cmd_queue = CmdQueueCsrProxy(dev.clone());
-        let proxy_resp_queue = CmdRespQueueCsrProxy(dev);
+        let proxy_resp_queue = CmdRespQueueCsrProxy(dev.clone());
         let mem0 = vec![RingBufDescUntyped::default(); 128];
         let mem1 = vec![RingBufDescUntyped::default(); 128];
         let resolver =
@@ -56,27 +56,25 @@ impl EmulatedDevice {
         proxy_cmd_queue.write_base_addr(phy_addr0)?;
         proxy_resp_queue.write_base_addr(phy_addr1)?;
 
-        //let ring_ctx_cmd_queue = RingCtx::new(proxy_cmd_queue);
-        //let ring_ctx_resp_queue = RingCtx::new(proxy_resp_queue);
-        //let ring = RingBuffer::<_, _, RingBufDescUntyped>::new(ring_ctx_cmd_queue, mem0)
-        //    .unwrap_or_else(|| unreachable!());
-        //let mut ring1 = RingBuffer::<_, _, RingBufDescUntyped>::new(ring_ctx_resp_queue, mem1)
-        //    .unwrap_or_else(|| unreachable!());
-        //
-        //let mut cmd_queue = CmdQueue::new(ring);
-        //let desc =
-        //    CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 0, 0, 0, 0, 0, 0));
-        //
-        ////cmd_queue.produce(std::iter::once(desc))?;
-        //cmd_queue.flush()?;
-        //
-        //loop {
-        //    println!("check");
-        //    if let Some(t) = ring1.try_consume() {
-        //        break;
-        //    }
-        //    std::thread::sleep(Duration::from_secs(1));
-        //}
+        let ring_ctx_cmd_queue = RingCtx::new();
+        let ring_ctx_resp_queue = RingCtx::new();
+        let ring = RingBuffer::<_, RingBufDescUntyped>::new(ring_ctx_cmd_queue, mem0)
+            .unwrap_or_else(|| unreachable!());
+        let mut ring1 = RingBuffer::<_, RingBufDescUntyped>::new(ring_ctx_resp_queue, mem1)
+            .unwrap_or_else(|| unreachable!());
+
+        let mut cmd_queue = CmdQueue::new(ring, dev);
+        let desc =
+            CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 0, 0, 0, 0, 0, 0));
+
+        cmd_queue.flush()?;
+
+        loop {
+            if let Some(t) = ring1.try_pop() {
+                break;
+            }
+            std::thread::sleep(Duration::from_secs(1));
+        }
 
         Ok(())
     }
