@@ -181,10 +181,6 @@ mod desc;
 mod ring;
 
 #[allow(unused)]
-/// Worker implementation
-mod ring_worker;
-
-#[allow(unused)]
 /// Memory translation table
 mod mtt;
 
