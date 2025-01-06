@@ -15,10 +15,12 @@ use crate::{
     ringbuffer::{Descriptor, RingBuffer},
 };
 
+use super::DescRingBuffer;
+
 /// Command queue for submitting commands to the device
-pub(crate) struct CmdQueue<Buf, Dev> {
+pub(crate) struct CmdQueue<Dev> {
     /// Inner ring buffer
-    inner: RingBuffer<Buf, RingBufDescUntyped>,
+    inner: DescRingBuffer,
     /// The CSR proxy
     proxy: CmdQueueCsrProxy<Dev>,
 }
@@ -32,17 +34,13 @@ pub(crate) enum CmdQueueDesc {
     UpdatePGT(CmdQueueReqDescUpdatePGT),
 }
 
-impl<Buf, Dev> CmdQueue<Buf, Dev>
-where
-    Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: DeviceAdaptor,
-{
+impl<Dev: DeviceAdaptor> CmdQueue<Dev> {
     /// Creates a new `CmdQueue`
-    pub(crate) fn new(inner: RingBuffer<Buf, RingBufDescUntyped>, device: Dev) -> Self {
-        Self {
-            inner,
+    pub(crate) fn new(device: Dev) -> io::Result<Self> {
+        Ok(Self {
+            inner: DescRingBuffer::alloc()?,
             proxy: CmdQueueCsrProxy(device),
-        }
+        })
     }
 
     /// Produces command descriptors to the queue
@@ -61,24 +59,20 @@ where
 }
 
 /// Queue for receiving command responses from the device
-struct CmdRespQueue<Buf, Dev> {
+struct CmdRespQueue<Dev> {
     /// Inner ring buffer
-    inner: RingBuffer<Buf, RingBufDescUntyped>,
+    inner: DescRingBuffer,
     /// The CSR proxy
     proxy: CmdRespQueueCsrProxy<Dev>,
 }
 
-impl<Buf, Dev> CmdRespQueue<Buf, Dev>
-where
-    Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: DeviceAdaptor,
-{
+impl<Dev: DeviceAdaptor> CmdRespQueue<Dev> {
     /// Creates a new `CmdRespQueue`
-    fn new(inner: RingBuffer<Buf, RingBufDescUntyped>, device: Dev) -> Self {
-        Self {
-            inner,
+    fn new(device: Dev) -> io::Result<Self> {
+        Ok(Self {
+            inner: DescRingBuffer::alloc()?,
             proxy: CmdRespQueueCsrProxy(device),
-        }
+        })
     }
 
     /// Tries to poll next valid entry from the queue
@@ -103,7 +97,7 @@ mod test {
     #[test]
     fn cmd_queue_produce_ok() {
         let ring = new_test_ring::<RingBufDescUntyped>();
-        let mut queue = CmdQueue::new(ring, DummyDevice::default());
+        let mut queue = CmdQueue::new(DummyDevice::default()).unwrap();
         let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
         queue.push(desc).unwrap();
     }
@@ -113,7 +107,7 @@ mod test {
         let mut ring = new_test_ring::<RingBufDescUntyped>();
         let desc = RingBufDescUntyped::new_valid_default();
         ring.push(desc).unwrap();
-        let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
+        let mut queue = CmdRespQueue::new(DummyDevice::default()).unwrap();
         let desc = queue.try_pop().unwrap();
         assert!(matches!(
             desc,

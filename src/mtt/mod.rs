@@ -65,27 +65,26 @@ impl IbvMr {
 }
 
 /// Memory Translation Table implementation
-struct Mtt<PAlloc, Buf, Dev> {
+struct Mtt<PAlloc, Dev> {
     /// Table memory allocator
     alloc: Arc<Mutex<Alloc<PAlloc>>>,
     /// Command queue for submitting commands to device
-    cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+    cmd_queue: Arc<Mutex<CmdQueue<Dev>>>,
     /// Registration for getting notifies from the device
     reg: Arc<Mutex<Registration>>,
     /// Command ID generator
     cmd_id: AtomicU16,
 }
 
-impl<PAlloc, Buf, Dev> Mtt<PAlloc, Buf, Dev>
+impl<PAlloc, Dev> Mtt<PAlloc, Dev>
 where
     PAlloc: PgtAlloc,
-    Buf: AsMut<[RingBufDescUntyped]>,
     Dev: DeviceAdaptor,
 {
     /// Creates a new `Mtt`
     fn new(
         alloc: Arc<Mutex<Alloc<PAlloc>>>,
-        cmd_queue: Arc<Mutex<CmdQueue<Buf, Dev>>>,
+        cmd_queue: Arc<Mutex<CmdQueue<Dev>>>,
         reg: Arc<Mutex<Registration>>,
     ) -> Self {
         Self {
@@ -383,7 +382,7 @@ mod test {
     fn mtt_mr_reg_dereg_ok() {
         let alloc = Arc::new(Mutex::new(Alloc::new_simple()));
         let ring = new_test_ring::<RingBufDescUntyped>();
-        let mut queue = Arc::new(Mutex::new(CmdQueue::new(ring, DummyDevice::default())));
+        let mut queue = Arc::new(Mutex::new(CmdQueue::new(DummyDevice::default()).unwrap()));
         let mut reg = Arc::new(Mutex::new(Registration::new()));
         let reg_c = Arc::clone(&reg);
         let mtt = Mtt::new(alloc, queue, reg);

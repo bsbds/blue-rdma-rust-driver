@@ -16,14 +16,14 @@ use crate::{
 use super::CmdRespQueue;
 
 /// Worker that processes command responses from the response queue
-struct CmdRespQueueWorker<Buf, Dev> {
+struct CmdRespQueueWorker<Dev> {
     /// The command response queue
-    queue: CmdRespQueue<Buf, Dev>,
+    queue: CmdRespQueue<Dev>,
 }
 
-impl<Buf, Dev> CmdRespQueueWorker<Buf, Dev> {
+impl<Dev> CmdRespQueueWorker<Dev> {
     /// Creates a new `CmdRespQueueWorker`
-    fn new(queue: CmdRespQueue<Buf, Dev>) -> Self {
+    fn new(queue: CmdRespQueue<Dev>) -> Self {
         Self { queue }
     }
 }
@@ -103,11 +103,10 @@ impl Registration {
 
 /// Run the command queue worker
 #[allow(clippy::needless_pass_by_value)] // the Arc should be moved to the current function
-fn run_worker<Buf, Dev>(mut worker: CmdRespQueueWorker<Buf, Dev>, reg: Arc<Mutex<Registration>>)
-where
-    Buf: AsMut<[RingBufDescUntyped]>,
-    Dev: DeviceAdaptor,
-{
+fn run_worker<Dev: DeviceAdaptor>(
+    mut worker: CmdRespQueueWorker<Dev>,
+    reg: Arc<Mutex<Registration>>,
+) {
     loop {
         let Some(desc) = worker.queue.try_pop() else {
             continue;
@@ -165,7 +164,7 @@ mod test {
             ring.push(std::mem::transmute(desc0)).unwrap();
             ring.push(std::mem::transmute(desc1)).unwrap();
         }
-        let mut queue = CmdRespQueue::new(ring, DummyDevice::default());
+        let mut queue = CmdRespQueue::new(DummyDevice::default()).unwrap();
         let worker = CmdRespQueueWorker::new(queue);
         std::thread::spawn(|| run_worker(worker, reg));
         std::thread::sleep(Duration::from_millis(1));

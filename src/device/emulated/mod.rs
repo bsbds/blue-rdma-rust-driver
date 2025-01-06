@@ -63,7 +63,7 @@ impl EmulatedDevice {
         let mut ring1 = RingBuffer::<_, RingBufDescUntyped>::new(ring_ctx_resp_queue, mem1)
             .unwrap_or_else(|| unreachable!());
 
-        let mut cmd_queue = CmdQueue::new(ring, dev);
+        let mut cmd_queue = CmdQueue::new(dev).unwrap_or_else(|_| unreachable!());
         let desc =
             CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 0, 0, 0, 0, 0, 0));
 

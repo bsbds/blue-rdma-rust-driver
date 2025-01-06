@@ -4,11 +4,19 @@ pub(crate) mod cmd_queue;
 /// Simple NIC tx queue implementation
 pub(crate) mod simple_nic;
 
-use std::{io, marker::PhantomData};
+use std::{
+    io,
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use memmap2::MmapMut;
 
-use crate::{desc::RingBufDescUntyped, ringbuffer::RingBuffer};
+use crate::{
+    desc::RingBufDescUntyped,
+    mem::page::ContiguousPages,
+    ringbuffer::{RingBuffer, RingCtx},
+};
 
 /// To Card Queue
 pub(crate) trait ToCardQueue {
@@ -23,19 +31,6 @@ pub(crate) trait ToCardQueue {
     fn push(&mut self, descs: Self::Desc) -> io::Result<()>;
 }
 
-struct RingPageBuf {
-    inner: MmapMut,
-}
-
-impl AsMut<[RingBufDescUntyped]> for RingPageBuf {
-    #[allow(unsafe_code)]
-    fn as_mut(&mut self) -> &mut [RingBufDescUntyped] {
-        unsafe { std::mem::transmute(self.inner.as_mut()) }
-    }
-}
-
-type DescRingBuffer = RingBuffer<RingPageBuf, RingBufDescUntyped>;
-
 /// To Host Queue
 pub(crate) trait ToHostQueue {
     /// The descriptor type
@@ -43,6 +38,54 @@ pub(crate) trait ToHostQueue {
 
     /// Returns the next descriptor from the queue, or None if the queue is empty.
     fn pop(&mut self) -> Option<Self::Desc>;
+}
+
+/// A buffer backed by contiguous physical pages.
+struct PageBuf {
+    /// The underlying contiguous physical pages
+    inner: ContiguousPages,
+}
+
+impl PageBuf {
+    /// Allocates a new `ContiguousPages` with a size of 1 page.
+    fn alloc() -> io::Result<Self> {
+        ContiguousPages::new(1).map(|inner| Self { inner })
+    }
+}
+
+impl AsMut<[RingBufDescUntyped]> for PageBuf {
+    #[allow(unsafe_code, clippy::transmute_ptr_to_ptr)]
+    fn as_mut(&mut self) -> &mut [RingBufDescUntyped] {
+        unsafe { std::mem::transmute(self.inner.as_mut()) }
+    }
+}
+
+/// Ring buffer storing RDMA descriptors
+struct DescRingBuffer(RingBuffer<PageBuf, RingBufDescUntyped>);
+
+impl DescRingBuffer {
+    /// Allocates a new `DescRingBuffer`
+    fn alloc() -> io::Result<Self> {
+        let buf = PageBuf::alloc()?;
+        let ctx = RingCtx::new();
+        let rb = RingBuffer::new(ctx, buf)
+            .unwrap_or_else(|| unreachable!("ringbuffer creation should never fail"));
+        Ok(Self(rb))
+    }
+}
+
+impl Deref for DescRingBuffer {
+    type Target = RingBuffer<PageBuf, RingBufDescUntyped>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for DescRingBuffer {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
 }
 
 /// To card queue for submitting descriptors to the device
