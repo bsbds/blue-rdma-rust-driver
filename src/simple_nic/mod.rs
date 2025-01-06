@@ -1,3 +1,7 @@
+/// Routing table configurations
+#[allow(unused)]
+mod route;
+
 use std::{
     io::{self, Read},
     iter,
