@@ -13,6 +13,8 @@ use std::{
     thread::JoinHandle,
 };
 
+use ipnetwork::IpNetwork;
+
 use crate::{
     desc::simple_nic::SimpleNicTxQueueDesc,
     mem::page::ContiguousPages,
@@ -25,18 +27,16 @@ use crate::{
 /// Configuration for the simple NIC device
 #[derive(Debug)]
 struct SimpleNicDeviceConfig {
-    /// IP address assigned to the NIC
-    address: IpAddr,
-    /// Network mask for the NIC's subnet
-    netmask: IpAddr,
+    /// IP network assigned to the NIC
+    network: IpNetwork,
 }
 
 /// A simple network interface device that uses TUN/TAP for network connectivity
 struct SimpleNicDevice {
     /// The underlying TUN device used for network I/O
     tun_dev: tun::Device,
-    /// Tx queue to submit descriptors
-    queue: SimpleNicTxQueue,
+    /// Config of the device
+    config: SimpleNicDeviceConfig,
 }
 
 /// Handle for managing transmit and receive queue threads of a `SimpleNic`
@@ -71,14 +71,20 @@ impl SimpleNicQueueHandle {
 }
 
 impl SimpleNicDevice {
+    /// Creates a new `SimpleNicDevice`
+    fn new(config: SimpleNicDeviceConfig) -> io::Result<Self> {
+        let tun_dev = Self::create_tun(config.network)?;
+        Ok(Self { tun_dev, config })
+    }
+
     /// Creates a TUN device that operates at L2
     #[allow(unused_results)] // ignore the config construction result
-    fn create_tun(address: IpAddr, netmask: IpAddr) -> io::Result<tun::Device> {
+    fn create_tun(network: IpNetwork) -> io::Result<tun::Device> {
         let mut config = tun::Configuration::default();
         config
             .layer(tun::Layer::L2)
-            .address(address)
-            .netmask(netmask)
+            .address(network.network())
+            .netmask(network.mask())
             .up();
 
         #[cfg(target_os = "linux")]
