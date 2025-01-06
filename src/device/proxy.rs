@@ -10,14 +10,12 @@ use crate::device::{
     CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, RingBufferCsrAddr, ToCard, ToHost,
 };
 
-use super::EmulatedDevice;
-
 #[derive(Debug)]
-pub(crate) struct CmdQueueCsrProxy(pub(crate) EmulatedDevice);
+pub(crate) struct CmdQueueCsrProxy<Dev>(pub(crate) Dev);
 
-impl ToCard for CmdQueueCsrProxy {}
+impl<Dev> ToCard for CmdQueueCsrProxy<Dev> {}
 
-impl RingBufferCsrAddr for CmdQueueCsrProxy {
+impl<Dev> RingBufferCsrAddr for CmdQueueCsrProxy<Dev> {
     const HEAD: usize = CSR_ADDR_CMD_REQ_QUEUE_HEAD;
     const TAIL: usize = CSR_ADDR_CMD_REQ_QUEUE_TAIL;
     const BASE_ADDR_LOW: usize = CSR_ADDR_CMD_REQ_QUEUE_ADDR_LOW;
@@ -25,11 +23,11 @@ impl RingBufferCsrAddr for CmdQueueCsrProxy {
 }
 
 #[derive(Debug)]
-pub(crate) struct CmdRespQueueCsrProxy(pub(crate) EmulatedDevice);
+pub(crate) struct CmdRespQueueCsrProxy<Dev>(pub(crate) Dev);
 
-impl ToHost for CmdRespQueueCsrProxy {}
+impl<Dev> ToHost for CmdRespQueueCsrProxy<Dev> {}
 
-impl RingBufferCsrAddr for CmdRespQueueCsrProxy {
+impl<Dev> RingBufferCsrAddr for CmdRespQueueCsrProxy<Dev> {
     const HEAD: usize = CSR_ADDR_CMD_RESP_QUEUE_HEAD;
     const TAIL: usize = CSR_ADDR_CMD_RESP_QUEUE_TAIL;
     const BASE_ADDR_LOW: usize = CSR_ADDR_CMD_RESP_QUEUE_ADDR_LOW;
@@ -37,9 +35,9 @@ impl RingBufferCsrAddr for CmdRespQueueCsrProxy {
 }
 
 macro_rules! impl_device_adaptor_proxy {
-    ($($proxy:ty),+) => {
+    ($($proxy:ty),*) => {
         $(
-            impl DeviceAdaptor for $proxy {
+            impl<Dev> DeviceAdaptor for $proxy where Dev: DeviceAdaptor {
                 fn read_csr(&self, addr: usize) -> io::Result<u32> {
                     self.0.read_csr(addr)
                 }
@@ -48,8 +46,8 @@ macro_rules! impl_device_adaptor_proxy {
                     self.0.write_csr(addr, data)
                 }
             }
-        )+
+        )*
     };
 }
 
-impl_device_adaptor_proxy!(CmdQueueCsrProxy, CmdRespQueueCsrProxy);
+impl_device_adaptor_proxy!(CmdQueueCsrProxy<Dev>, CmdRespQueueCsrProxy<Dev>);

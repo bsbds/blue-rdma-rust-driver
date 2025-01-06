@@ -3,6 +3,9 @@
 /// Emulated device adaptor
 pub(crate) mod emulated;
 
+/// CSR proxy types
+pub(crate) mod proxy;
+
 /// Memory-mapped I/O addresses of device registers
 mod constants;
 

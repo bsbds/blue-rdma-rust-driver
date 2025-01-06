@@ -3,12 +3,9 @@
 /// Crs client implementation
 mod csr;
 
-mod proxy;
-
 use std::{io, net::SocketAddr, time::Duration};
 
 use csr::RpcClient;
-use proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy};
 
 use crate::{
     desc::{cmd::CmdQueueReqDescUpdateMrTable, RingBufDescUntyped},
@@ -21,7 +18,10 @@ use crate::{
     ringbuffer::{RingBuffer, RingCtx},
 };
 
-use super::{CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor};
+use super::{
+    proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
+    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
+};
 
 #[non_exhaustive]
 #[derive(Clone, Debug)]
