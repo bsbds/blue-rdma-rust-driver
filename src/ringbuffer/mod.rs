@@ -220,7 +220,7 @@ pub(crate) trait Descriptor {
 
     /// Returns `true` if the descriptor's valid bit is set, indicating it contains valid data.
     /// If the valid bit is set, it should be cleared to 0 before returning.
-    fn try_consume(&mut self) -> bool;
+    fn take_valid(&mut self) -> bool;
 }
 
 /// A ring buffer for RDMA operations.
@@ -292,7 +292,7 @@ where
     pub(crate) fn try_pop(&mut self) -> Option<&Desc> {
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
-        let ready = buf[tail].try_consume();
+        let ready = buf[tail].take_valid();
         ready.then(|| {
             self.ctx.inc_tail();
             &buf[tail]

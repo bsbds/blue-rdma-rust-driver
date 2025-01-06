@@ -107,7 +107,7 @@ impl RingBufDescUntyped {
 impl Descriptor for RingBufDescUntyped {
     const SIZE: usize = 32;
 
-    fn try_consume(&mut self) -> bool {
+    fn take_valid(&mut self) -> bool {
         let valid = self.head.valid();
         self.head.set_valid(false);
         valid
@@ -391,7 +391,7 @@ mod test {
             head,
             rest: [0; 30],
         };
-        assert!(desc.try_consume());
+        assert!(desc.take_valid());
         assert!(!desc.head.valid());
     }
 }

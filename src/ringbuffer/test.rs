@@ -25,7 +25,7 @@ impl TestDesc {
 impl Descriptor for TestDesc {
     const SIZE: usize = 32;
 
-    fn try_consume(&mut self) -> bool {
+    fn take_valid(&mut self) -> bool {
         let valid = self.inner[0] == 1;
         self.inner[0] = 0;
         valid
