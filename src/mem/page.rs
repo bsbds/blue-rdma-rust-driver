@@ -7,12 +7,12 @@ use super::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
 use std::ops::{Deref, DerefMut};
 
 /// A wrapper around mapped memory that ensures physical memory pages are consecutive.
-pub(crate) struct ConscMem {
+pub(crate) struct ContiguousPages {
     /// Mmap handle
     inner: MmapMut,
 }
 
-impl ConscMem {
+impl ContiguousPages {
     /// Creates a new consecutive memory region of the specified number of pages.
     pub(crate) fn new(num_pages: usize) -> io::Result<Self> {
         /// TODO: implements allocating multiple consecutive pages
@@ -73,7 +73,7 @@ impl ConscMem {
     }
 }
 
-impl Deref for ConscMem {
+impl Deref for ContiguousPages {
     type Target = MmapMut;
 
     fn deref(&self) -> &Self::Target {
@@ -81,19 +81,19 @@ impl Deref for ConscMem {
     }
 }
 
-impl DerefMut for ConscMem {
+impl DerefMut for ContiguousPages {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.inner
     }
 }
 
-impl AsMut<[u8]> for ConscMem {
+impl AsMut<[u8]> for ContiguousPages {
     fn as_mut(&mut self) -> &mut [u8] {
         &mut self.inner
     }
 }
 
-impl AsRef<[u8]> for ConscMem {
+impl AsRef<[u8]> for ContiguousPages {
     fn as_ref(&self) -> &[u8] {
         &self.inner
     }
@@ -105,6 +105,6 @@ mod test {
 
     #[test]
     fn consc_mem_alloc_succ() {
-        let mem = ConscMem::new(1).expect("failed to allocate");
+        let mem = ContiguousPages::new(1).expect("failed to allocate");
     }
 }

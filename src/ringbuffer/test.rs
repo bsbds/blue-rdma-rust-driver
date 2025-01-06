@@ -1,6 +1,6 @@
 use std::iter;
 
-use crate::mem::{page::ConscMem, slot_alloc::SlotAlloc};
+use crate::mem::{page::ContiguousPages, slot_alloc::SlotAlloc};
 
 use super::*;
 

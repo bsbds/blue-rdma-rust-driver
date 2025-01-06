@@ -10,7 +10,7 @@ use csr::RpcClient;
 use crate::{
     desc::{cmd::CmdQueueReqDescUpdateMrTable, RingBufDescUntyped},
     mem::{
-        page::ConscMem,
+        page::ContiguousPages,
         slot_alloc::SlotAlloc,
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },

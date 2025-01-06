@@ -23,7 +23,7 @@ use crate::{
     },
     device::DeviceAdaptor,
     mem::{
-        page::ConscMem,
+        page::ContiguousPages,
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
         PAGE_SIZE,
     },
@@ -213,8 +213,8 @@ where
 
     // TODO: reuse a page for multiple registration
     /// Allocates a new page and returns a tuple containing the page and its physical address
-    fn alloc_new_page() -> io::Result<(ConscMem, u64)> {
-        let mut page = ConscMem::new(1)?;
+    fn alloc_new_page() -> io::Result<(ContiguousPages, u64)> {
+        let mut page = ContiguousPages::new(1)?;
         let start_virt_addr = page.as_ptr();
         let start_phy_addr = virt_to_phy(Some(start_virt_addr))?
             .into_iter()
@@ -304,7 +304,7 @@ where
     /// Returns an error if the page is too small to hold all addresses.
     fn copy_phy_addrs_to_page<Addrs: IntoIterator<Item = u64>>(
         phy_addrs: Addrs,
-        page: &mut ConscMem,
+        page: &mut ContiguousPages,
     ) -> io::Result<()> {
         let bytes: Vec<u8> = phy_addrs.into_iter().flat_map(u64::to_ne_bytes).collect();
         page.get_mut(..bytes.len())
@@ -388,7 +388,7 @@ mod test {
         let reg_c = Arc::clone(&reg);
         let mtt = Mtt::new(alloc, queue, reg);
 
-        let page = ConscMem::new(1).unwrap();
+        let page = ContiguousPages::new(1).unwrap();
         let vec0 = vec![0; 128];
         let vec1 = vec![0; 0x10000];
 

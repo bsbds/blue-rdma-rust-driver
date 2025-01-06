@@ -15,7 +15,7 @@ use std::{
 
 use crate::{
     desc::simple_nic::SimpleNicTxQueueDesc,
-    mem::page::ConscMem,
+    mem::page::ContiguousPages,
     queue::{
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         ToCardQueue, ToHostQueue,
@@ -102,7 +102,7 @@ impl SimpleNicDevice {
         mut dev: tun::Device,
         mut tx_queue: SimpleNicTxQueue,
         mut rx_queue: SimpleNicRxQueue,
-        rx_buf: ConscMem,
+        rx_buf: ContiguousPages,
         shutdown: Arc<AtomicBool>,
     ) -> SimpleNicQueueHandle {
         let mut buf = [0; 2048];

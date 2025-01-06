@@ -18,7 +18,7 @@ use std::io;
 
 use crate::{
     mem::{
-        page::ConscMem,
+        page::ContiguousPages,
         slot_alloc::{RcSlot, SlotAlloc, SlotSize},
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
     },
@@ -63,7 +63,7 @@ impl Descriptor for BenchDesc {
     }
 }
 
-type BenchBuf = RcSlot<ConscMem, BenchSlotSize>;
+type BenchBuf = RcSlot<ContiguousPages, BenchSlotSize>;
 
 pub struct RingWrapper {
     inner: RingBuffer<BenchBuf, BenchDesc>,
@@ -99,7 +99,7 @@ impl AsMut<[BenchDesc]> for BenchBuf {
 }
 
 pub fn create_ring_wrapper() -> RingWrapper {
-    let mem = ConscMem::new(1).unwrap();
+    let mem = ContiguousPages::new(1).unwrap();
     let mut alloc = SlotAlloc::<_, BenchSlotSize>::new(mem);
     let slot = alloc.alloc_one().unwrap();
     let ring_ctx = RingCtx::new();
