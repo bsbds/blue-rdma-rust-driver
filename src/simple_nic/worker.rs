@@ -23,34 +23,104 @@ use super::SimpleNicDevice;
 /// A buffer slot size for a single frame
 const FRAME_SLOT_SIZE: usize = 2048;
 
-/// Worker that handles transmitting frames from the network device to the NIC
-struct TxWorker {
-    /// The network device to transmit frames from
-    dev: Arc<tun::Device>,
-    /// Queue for transmitting frames to the NIC
-    tx_queue: SimpleNicTxQueue,
-    /// Flag to signal worker shutdown
-    shutdown: Arc<AtomicBool>,
+/// Trait for transmitting frames
+pub(crate) trait FrameTx: Send + 'static {
+    /// Send a buffer of bytes as a frame
+    fn send(&mut self, buf: &[u8]) -> io::Result<()>;
 }
 
-/// Worker that handles receiving frames from the NIC and sending to the network device
-struct RxWorker {
-    /// The network device to send received frames to
-    dev: Arc<tun::Device>,
+/// Trait for receiving frames
+pub(crate) trait FrameRx: Send + 'static {
+    /// Try to receive a frame, returning immediately if none available
+    fn try_recv(&mut self) -> io::Result<Option<&[u8]>>;
+}
+
+/// Send frame through `SimpleNicTxQueue`
+pub(crate) struct FrameTxQueue {
+    /// Inner
+    inner: SimpleNicTxQueue,
+}
+
+impl FrameTxQueue {
+    /// Creates a new `FrameTxQueue`
+    pub(crate) fn new(inner: SimpleNicTxQueue) -> Self {
+        Self { inner }
+    }
+
+    /// Build the descriptor from the given buffer
+    #[allow(clippy::as_conversions)] // convert *const u8 to u64 is safe
+    fn build_desc(buf: &[u8]) -> Option<SimpleNicTxQueueDesc> {
+        let len: u32 = buf.len().try_into().ok()?;
+        Some(SimpleNicTxQueueDesc::new(buf.as_ptr() as u64, len))
+    }
+}
+
+impl FrameTx for FrameTxQueue {
+    fn send(&mut self, buf: &[u8]) -> io::Result<()> {
+        let mut desc = Self::build_desc(buf)
+            .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
+        // retry until success
+        while let Err(d) = self.inner.push(desc) {
+            desc = d;
+            thread::yield_now();
+        }
+
+        Ok(())
+    }
+}
+
+/// Receive frame from `SimpleNicRxQueue`
+pub(crate) struct FrameRxQueue {
     /// Queue for receiving frames from the NIC
     rx_queue: SimpleNicRxQueue,
     /// Buffer for storing received frames
     rx_buf: ContiguousPages<1>,
+}
+
+impl FrameRxQueue {
+    /// Creates a new `FrameRxQueue`
+    pub(crate) fn new(rx_queue: SimpleNicRxQueue, rx_buf: ContiguousPages<1>) -> Self {
+        Self { rx_queue, rx_buf }
+    }
+}
+
+impl FrameRx for FrameRxQueue {
+    #[allow(clippy::arithmetic_side_effects)]
+    #[allow(clippy::as_conversions)] // converting u32 to usize
+    fn try_recv(&mut self) -> io::Result<Option<&[u8]>> {
+        let Some(desc) = self.rx_queue.pop() else {
+            return Ok(None);
+        };
+        let pos = (desc.slot_idx() as usize)
+            .checked_mul(FRAME_SLOT_SIZE)
+            .unwrap_or_else(|| unreachable!("invalid index"));
+
+        let len = desc.len() as usize;
+        let frame = self
+            .rx_buf
+            .get(pos..pos + len)
+            .unwrap_or_else(|| unreachable!("invalid len"));
+
+        Ok(Some(frame))
+    }
+}
+
+/// Worker that handles transmitting frames from the network device to the NIC
+struct TxWorker<Tx> {
+    /// The network device to transmit frames from
+    dev: Arc<tun::Device>,
+    /// Tx for transmitting frames to remote
+    frame_tx: Tx,
     /// Flag to signal worker shutdown
     shutdown: Arc<AtomicBool>,
 }
 
-impl TxWorker {
+impl<Tx: FrameTx> TxWorker<Tx> {
     /// Creates a new `TxWorker`
-    fn new(dev: Arc<tun::Device>, tx_queue: SimpleNicTxQueue, shutdown: Arc<AtomicBool>) -> Self {
+    fn new(dev: Arc<tun::Device>, frame_tx: Tx, shutdown: Arc<AtomicBool>) -> Self {
         Self {
             dev,
-            tx_queue,
+            frame_tx,
             shutdown,
         }
     }
@@ -66,14 +136,7 @@ impl TxWorker {
     #[allow(clippy::indexing_slicing)] // safe for indexing the buffer
     fn process_frame(&mut self, buf: &mut [u8]) -> io::Result<()> {
         let n = self.dev.recv(buf)?;
-        let mut desc = Self::build_desc(&buf[..n])
-            .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
-        // retry until success
-        while let Err(d) = self.tx_queue.push(desc) {
-            desc = d;
-            thread::yield_now();
-        }
-        Ok(())
+        self.frame_tx.send(&buf[..n])
     }
 
     /// Spawns the worker thread and returns its handle
@@ -94,38 +157,24 @@ impl TxWorker {
     }
 }
 
-impl RxWorker {
+/// Worker that handles receiving frames from the NIC and sending to the network device
+struct RxWorker<Rx> {
+    /// The network device to send received frames to
+    dev: Arc<tun::Device>,
+    /// Rx for receiving frames from remote
+    frame_rx: Rx,
+    /// Flag to signal worker shutdown
+    shutdown: Arc<AtomicBool>,
+}
+
+impl<Rx: FrameRx> RxWorker<Rx> {
     /// Creates a new `RxWorker`
-    fn new(
-        dev: Arc<tun::Device>,
-        rx_queue: SimpleNicRxQueue,
-        rx_buf: ContiguousPages<1>,
-        shutdown: Arc<AtomicBool>,
-    ) -> Self {
+    fn new(dev: Arc<tun::Device>, frame_rx: Rx, shutdown: Arc<AtomicBool>) -> Self {
         Self {
             dev,
-            rx_queue,
-            rx_buf,
+            frame_rx,
             shutdown,
         }
-    }
-
-    /// Process a single received frame by sending it to the network device
-    #[allow(clippy::arithmetic_side_effects)]
-    #[allow(clippy::as_conversions)] // converting u32 to usize
-    fn process_frame(&self, desc: SimpleNicRxQueueDesc) -> io::Result<()> {
-        let pos = (desc.slot_idx() as usize)
-            .checked_mul(FRAME_SLOT_SIZE)
-            .unwrap_or_else(|| unreachable!("invalid index"));
-
-        let len = desc.len() as usize;
-        let frame = self
-            .rx_buf
-            .get(pos..pos + len)
-            .unwrap_or_else(|| unreachable!("invalid len"));
-        let _n = self.dev.send(frame)?;
-
-        Ok(())
     }
 
     /// Spawns the worker thread and returns its handle
@@ -134,13 +183,21 @@ impl RxWorker {
             .name("simple-nic-rx-worker".into())
             .spawn(move || {
                 while !self.shutdown.load(Ordering::Relaxed) {
-                    if let Some(desc) = self.rx_queue.pop() {
-                        if let Err(err) = self.process_frame(desc) {
+                    let frame = match self.frame_rx.try_recv() {
+                        Ok(Some(frame)) => frame,
+                        Ok(None) => {
+                            thread::yield_now();
+                            continue;
+                        }
+                        Err(err) => {
                             tracing::error!("Rx processing error: {err}");
                             return Err(err);
                         }
-                    } else {
-                        thread::yield_now();
+                    };
+
+                    if let Err(err) = self.dev.send(frame) {
+                        tracing::error!("Rx processing error: {err}");
+                        return Err(err);
                     }
                 }
                 Ok(())
@@ -150,33 +207,38 @@ impl RxWorker {
 }
 
 /// Main worker that manages the TX and RX queues for the simple NIC
-pub(crate) struct SimpleNicWorker {
+pub(crate) struct SimpleNicWorker<Tx, Rx> {
     /// The network device
     dev: SimpleNicDevice,
-    /// Queue for transmitting frames to the NIC
-    tx_queue: SimpleNicTxQueue,
-    /// Queue for receiving frames from the NIC
-    rx_queue: SimpleNicRxQueue,
-    /// Buffer for storing received frames
-    rx_buf: ContiguousPages<1>,
+    /// Tx for transmitting frames to remote
+    frame_tx: Tx,
+    /// Rx for receiving frames from remote
+    frame_rx: Rx,
+    ///// Queue for transmitting frames to the NIC
+    //tx_queue: SimpleNicTxQueue,
+    ///// Queue for receiving frames from the NIC
+    //rx_queue: SimpleNicRxQueue,
+    ///// Buffer for storing received frames
+    //rx_buf: ContiguousPages<1>,
     /// Flag to signal worker shutdown
     shutdown: Arc<AtomicBool>,
 }
 
-impl SimpleNicWorker {
+impl<Tx: FrameTx, Rx: FrameRx> SimpleNicWorker<Tx, Rx> {
     /// Creates a new `SimpleNicWorker`
     pub(crate) fn new(
         dev: SimpleNicDevice,
-        tx_queue: SimpleNicTxQueue,
-        rx_queue: SimpleNicRxQueue,
-        rx_buf: ContiguousPages<1>,
+        frame_tx: Tx,
+        frame_rx: Rx,
+        //tx_queue: SimpleNicTxQueue,
+        //rx_queue: SimpleNicRxQueue,
+        //rx_buf: ContiguousPages<1>,
         shutdown: Arc<AtomicBool>,
     ) -> Self {
         Self {
             dev,
-            tx_queue,
-            rx_queue,
-            rx_buf,
+            frame_tx,
+            frame_rx,
             shutdown,
         }
     }
@@ -185,15 +247,10 @@ impl SimpleNicWorker {
     pub(crate) fn run(self) -> SimpleNicQueueHandle {
         let tx_worker = TxWorker::new(
             Arc::clone(&self.dev.tun_dev),
-            self.tx_queue,
+            self.frame_tx,
             Arc::clone(&self.shutdown),
         );
-        let rx_worker = RxWorker::new(
-            Arc::clone(&self.dev.tun_dev),
-            self.rx_queue,
-            self.rx_buf,
-            self.shutdown,
-        );
+        let rx_worker = RxWorker::new(Arc::clone(&self.dev.tun_dev), self.frame_rx, self.shutdown);
 
         SimpleNicQueueHandle {
             tx: tx_worker.spawn(),
