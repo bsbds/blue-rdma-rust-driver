@@ -4,6 +4,9 @@ mod route;
 /// worker handling NIC frames
 mod worker;
 
+#[cfg(test)]
+mod tests;
+
 use std::{
     io::{self},
     sync::Arc,
@@ -11,11 +14,21 @@ use std::{
 
 use ipnetwork::IpNetwork;
 
+#[allow(clippy::module_name_repetitions)]
 /// Configuration for the simple NIC device
-#[derive(Debug)]
-struct SimpleNicDeviceConfig {
+#[derive(Debug, Clone, Copy)]
+pub struct SimpleNicDeviceConfig {
     /// IP network assigned to the NIC
     network: IpNetwork,
+}
+
+impl SimpleNicDeviceConfig {
+    /// Creates a new `SimpleNicDeviceConfig`
+    #[inline]
+    #[must_use]
+    pub fn new(network: IpNetwork) -> Self {
+        Self { network }
+    }
 }
 
 /// A simple network interface device that uses TUN/TAP for network connectivity

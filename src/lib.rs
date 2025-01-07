@@ -198,4 +198,6 @@ mod simple_nic;
 
 pub use device::emulated::EmulatedDevice;
 
+pub use simple_nic::SimpleNicDeviceConfig;
+
 pub mod bench_wrappers;
