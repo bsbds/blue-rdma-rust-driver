@@ -142,37 +142,6 @@ impl From<RingBufDescUntyped> for CmdQueueReqDescUpdateMrTable {
     }
 }
 
-pub(crate) struct CmdQueueRespDescUpdateMrTable(CmdQueueReqDescUpdateMrTable);
-
-impl CmdQueueRespDescUpdateMrTable {
-    pub(crate) fn new(
-        user_data: u16,
-        mr_base_va: u64,
-        mr_length: u32,
-        mr_key: u32,
-        pd_handler: u32,
-        acc_flags: u8,
-        pgt_offset: u32,
-    ) -> Self {
-        Self(CmdQueueReqDescUpdateMrTable::new(
-            user_data, mr_base_va, mr_length, mr_key, pd_handler, acc_flags, pgt_offset,
-        ))
-    }
-}
-
-impl std::ops::Deref for CmdQueueRespDescUpdateMrTable {
-    type Target = CmdQueueReqDescUpdateMrTable;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for CmdQueueRespDescUpdateMrTable {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 pub(crate) struct CmdQueueReqDescUpdatePGTChunk1 {
@@ -257,33 +226,50 @@ impl From<RingBufDescUntyped> for CmdQueueReqDescUpdatePGT {
     }
 }
 
-pub(crate) struct CmdQueueRespDescUpdatePGT(CmdQueueReqDescUpdatePGT);
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CmdQueueRespDescOnlyCommonHeader {
+    header: CmdQueueReqDescHeaderChunk,
+    rest: [u64; 3],
+}
 
-impl CmdQueueRespDescUpdatePGT {
-    pub(crate) fn new(
-        user_data: u16,
-        dma_addr: u64,
-        start_index: u32,
-        zero_based_entry_count: u32,
-    ) -> Self {
-        Self(CmdQueueReqDescUpdatePGT::new(
-            user_data,
-            dma_addr,
-            start_index,
-            zero_based_entry_count,
-        ))
+impl CmdQueueRespDescOnlyCommonHeader {
+    /// Creates a new `CmdQueueReqDescUpdateMrTable` response
+    pub(crate) fn new_cmd_queue_resp_desc_update_mr_table(user_data: u16) -> Self {
+        let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
+        let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
+        let header = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        Self {
+            header,
+            rest: [0; 3],
+        }
+    }
+
+    /// Creates a new `CmdQueueReqDescUpdatePGT` response
+    pub(crate) fn new_cmd_queue_resp_desc_update_pgt(user_data: u16) -> Self {
+        let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_pgt();
+        let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
+        let header = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        Self {
+            header,
+            rest: [0; 3],
+        }
+    }
+
+    pub(crate) fn headers(&self) -> CmdQueueReqDescHeaderChunk {
+        self.header
     }
 }
 
-impl std::ops::Deref for CmdQueueRespDescUpdatePGT {
-    type Target = CmdQueueReqDescUpdatePGT;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
+#[allow(unsafe_code)]
+impl From<RingBufDescUntyped> for CmdQueueRespDescOnlyCommonHeader {
+    fn from(desc: RingBufDescUntyped) -> Self {
+        unsafe { std::mem::transmute(desc) }
     }
 }
-impl std::ops::DerefMut for CmdQueueRespDescUpdatePGT {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+
+#[allow(unsafe_code)]
+impl From<CmdQueueRespDescOnlyCommonHeader> for RingBufDescUntyped {
+    fn from(desc: CmdQueueRespDescOnlyCommonHeader) -> Self {
+        unsafe { std::mem::transmute(desc) }
     }
 }

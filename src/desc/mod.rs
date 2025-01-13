@@ -5,10 +5,7 @@ pub(crate) mod cmd;
 pub(crate) mod simple_nic;
 
 use bilge::prelude::*;
-use cmd::{
-    CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT, CmdQueueRespDescUpdateMrTable,
-    CmdQueueRespDescUpdatePGT,
-};
+use cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT};
 
 use crate::ringbuffer::Descriptor;
 
@@ -111,30 +108,6 @@ impl Descriptor for RingBufDescUntyped {
         let valid = self.head.valid();
         self.head.set_valid(false);
         valid
-    }
-}
-
-/// Ring buffer decriptor that is send to host
-#[allow(clippy::missing_docs_in_private_items)]
-pub(crate) enum RingBufDescToHost<'a> {
-    CmdQueueRespDescUpdatePGT(&'a CmdQueueRespDescUpdatePGT),
-    CmdQueueRespDescUpdateMrTable(&'a CmdQueueRespDescUpdateMrTable),
-}
-
-#[allow(
-    unsafe_code,
-    clippy::missing_transmute_annotations,
-    clippy::transmute_ptr_to_ptr
-)]
-impl From<&'_ RingBufDescUntyped> for RingBufDescToHost<'_> {
-    fn from(desc: &RingBufDescUntyped) -> Self {
-        unsafe {
-            match desc.head.op_code().value() {
-                0 => Self::CmdQueueRespDescUpdateMrTable(std::mem::transmute(desc)),
-                1 => Self::CmdQueueRespDescUpdatePGT(std::mem::transmute(desc)),
-                _ => unreachable!("invalid op code"),
-            }
-        }
     }
 }
 
@@ -360,28 +333,6 @@ impl_from_bytes!(MetaReportQueueDescBthReth, SendQueueReqDescSeg0);
 #[cfg(test)]
 mod test {
     use super::*;
-
-    #[test]
-    fn untyped_desc_to_typed() {
-        let head = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
-        let desc = RingBufDescUntyped {
-            head,
-            rest: [0; 30],
-        };
-        assert!(matches!(
-            RingBufDescToHost::from(&desc),
-            RingBufDescToHost::CmdQueueRespDescUpdateMrTable(_)
-        ));
-        let head = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_pgt();
-        let desc = RingBufDescUntyped {
-            head,
-            rest: [0; 30],
-        };
-        assert!(matches!(
-            RingBufDescToHost::from(&desc),
-            RingBufDescToHost::CmdQueueRespDescUpdatePGT(_)
-        ));
-    }
 
     #[test]
     fn ring_buf_desc_consume_ok() {

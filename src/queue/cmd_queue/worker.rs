@@ -8,10 +8,7 @@ use std::{
 
 use parking_lot::Mutex;
 
-use crate::{
-    desc::{RingBufDescToHost, RingBufDescUntyped},
-    device::DeviceAdaptor,
-};
+use crate::{desc::RingBufDescUntyped, device::DeviceAdaptor};
 
 use super::CmdRespQueue;
 
@@ -111,14 +108,7 @@ fn run_worker<Dev: DeviceAdaptor>(
         let Some(desc) = worker.queue.try_pop() else {
             continue;
         };
-        let user_data = match desc {
-            RingBufDescToHost::CmdQueueRespDescUpdatePGT(desc) => {
-                desc.headers().cmd_queue_common_header().user_data()
-            }
-            RingBufDescToHost::CmdQueueRespDescUpdateMrTable(desc) => {
-                desc.headers().cmd_queue_common_header().user_data()
-            }
-        };
+        let user_data = desc.headers().cmd_queue_common_header().user_data();
         worker.queue.flush();
         let cmd_id = CmdId(user_data);
         reg.lock().notify(cmd_id);
@@ -130,10 +120,8 @@ mod test {
     use std::{iter, time::Duration};
 
     use crate::{
-        desc::cmd::{CmdQueueRespDescUpdateMrTable, CmdQueueRespDescUpdatePGT},
-        device::dummy::DummyDevice,
-        queue::DescRingBufferAllocator,
-        ringbuffer::new_test_ring,
+        desc::cmd::CmdQueueRespDescOnlyCommonHeader, device::dummy::DummyDevice,
+        queue::DescRingBufferAllocator, ringbuffer::new_test_ring,
     };
 
     use super::*;
@@ -156,8 +144,8 @@ mod test {
         let mut ring = new_test_ring::<RingBufDescUntyped>();
         let id0 = 0;
         let id1 = 1;
-        let desc0 = CmdQueueRespDescUpdateMrTable::new(id0, 0, 0, 0, 0, 0, 0);
-        let desc1 = CmdQueueRespDescUpdateMrTable::new(id1, 0, 0, 0, 0, 0, 0);
+        let desc0 = CmdQueueRespDescOnlyCommonHeader::new_cmd_queue_resp_desc_update_mr_table(id0);
+        let desc1 = CmdQueueRespDescOnlyCommonHeader::new_cmd_queue_resp_desc_update_mr_table(id1);
         let n0 = reg.lock().register(CmdId(id0)).unwrap();
         let n1 = reg.lock().register(CmdId(id1)).unwrap();
         unsafe {

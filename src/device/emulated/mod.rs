@@ -8,7 +8,10 @@ use std::{io, net::SocketAddr, time::Duration};
 use csr::RpcClient;
 
 use crate::{
-    desc::{cmd::CmdQueueReqDescUpdateMrTable, RingBufDescUntyped},
+    desc::{
+        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
+        RingBufDescUntyped,
+    },
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator},
         slot_alloc::SlotAlloc,
@@ -48,7 +51,7 @@ impl EmulatedDevice {
         let dev = Self(cli);
         let proxy_cmd_queue = CmdQueueCsrProxy(dev.clone());
         let proxy_resp_queue = CmdRespQueueCsrProxy(dev.clone());
-        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::heap_start_addr() as u64);
+        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let ring_ctx_cmd_queue = RingCtx::new();
         let ring_ctx_resp_queue = RingCtx::new();
         let page_allocator = EmulatedPageAllocator::new(
@@ -56,25 +59,22 @@ impl EmulatedDevice {
         );
         let mut allocator = DescRingBufferAllocator::new(page_allocator);
         let buffer0 = allocator.alloc().unwrap_or_else(|_| unreachable!());
-        let buffer1 = allocator.alloc().unwrap_or_else(|_| unreachable!());
+        let mut buffer1 = allocator.alloc().unwrap_or_else(|_| unreachable!());
         let phy_addr0 = resolver.virt_to_phys(buffer0.base_addr())?.unwrap_or(0);
         let phy_addr1 = resolver.virt_to_phys(buffer1.base_addr())?.unwrap_or(0);
         proxy_cmd_queue.write_base_addr(phy_addr0)?;
         proxy_resp_queue.write_base_addr(phy_addr1)?;
-
         let mut cmd_queue = CmdQueue::new(dev, buffer0);
-        let desc =
-            CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 0, 0, 0, 0, 0, 0));
-
-        cmd_queue.push(desc).unwrap_or_else(|_| unreachable!());
+        let desc0 =
+            CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 1, 1, 1, 1, 1, 1));
+        let desc1 = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(7, 1, 1, 1));
+        cmd_queue.push(desc0).unwrap_or_else(|_| unreachable!());
+        cmd_queue.push(desc1).unwrap_or_else(|_| unreachable!());
         cmd_queue.flush()?;
-
-        //loop {
-        //    //if let Some(t) = ring1.try_pop() {
-        //    //    break;
-        //    //}
-        //    std::thread::sleep(Duration::from_secs(1));
-        //}
+        let resps: Vec<_> = std::iter::repeat_with(|| buffer1.try_pop().copied())
+            .flatten()
+            .take(2)
+            .collect();
 
         Ok(())
     }

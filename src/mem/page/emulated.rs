@@ -21,7 +21,7 @@ impl<const N: usize> EmulatedPageAllocator<N> {
     /// Creates a new `EmulatedPageAllocator`
     #[allow(clippy::as_conversions)] // usize to *mut c_void is safe
     pub(crate) fn new(addr_range: Range<usize>) -> Self {
-        let inner = addr_range
+        let inner: Vec<_> = addr_range
             .step_by(PAGE_SIZE)
             .map(|addr| MmapMut::new(addr as *mut c_void, PAGE_SIZE))
             .collect();

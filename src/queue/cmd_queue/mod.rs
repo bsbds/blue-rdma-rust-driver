@@ -5,8 +5,11 @@ use std::io;
 
 use crate::{
     desc::{
-        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
-        RingBufDescToHost, RingBufDescUntyped,
+        cmd::{
+            CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
+            CmdQueueRespDescOnlyCommonHeader,
+        },
+        RingBufDescUntyped,
     },
     device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
@@ -65,6 +68,18 @@ impl<Dev: DeviceAdaptor> CmdQueue<Dev> {
     }
 }
 
+/// Command queue response descriptor type
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CmdRespQueueDesc(CmdQueueRespDescOnlyCommonHeader);
+
+impl std::ops::Deref for CmdRespQueueDesc {
+    type Target = CmdQueueRespDescOnlyCommonHeader;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
 /// Queue for receiving command responses from the device
 struct CmdRespQueue<Dev> {
     /// Inner ring buffer
@@ -83,8 +98,12 @@ impl<Dev: DeviceAdaptor> CmdRespQueue<Dev> {
     }
 
     /// Tries to poll next valid entry from the queue
-    pub(crate) fn try_pop(&mut self) -> Option<RingBufDescToHost<'_>> {
-        self.inner.try_pop().map(Into::into)
+    pub(crate) fn try_pop(&mut self) -> Option<CmdRespQueueDesc> {
+        self.inner
+            .try_pop()
+            .copied()
+            .map(Into::into)
+            .map(CmdRespQueueDesc)
     }
 
     /// Flush
@@ -125,10 +144,5 @@ mod test {
         ring.push(desc).unwrap();
         let mut queue = CmdRespQueue::new(DummyDevice::default(), buffer);
         let desc = queue.try_pop().unwrap();
-        assert!(matches!(
-            desc,
-            // correspond to the default op_code
-            RingBufDescToHost::CmdQueueRespDescUpdateMrTable(_)
-        ));
     }
 }
