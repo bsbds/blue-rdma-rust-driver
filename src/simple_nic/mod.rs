@@ -52,7 +52,7 @@ impl SimpleNicDevice {
         let mut config = tun::Configuration::default();
         config
             .layer(tun::Layer::L2)
-            .address(network.network())
+            .address(network.ip())
             .netmask(network.mask())
             .up();
 
