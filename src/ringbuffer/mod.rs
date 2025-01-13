@@ -160,3 +160,13 @@ where
         self.ctx.tail
     }
 }
+
+impl<Buf, Desc> RingBuffer<Buf, Desc>
+where
+    Buf: AsRef<[Desc]>,
+{
+    /// Returns the base address of the buffer
+    pub(crate) fn base_addr(&self) -> u64 {
+        self.buf.as_ref().as_ptr() as u64
+    }
+}

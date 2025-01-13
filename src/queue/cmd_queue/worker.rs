@@ -132,6 +132,7 @@ mod test {
     use crate::{
         desc::cmd::{CmdQueueRespDescUpdateMrTable, CmdQueueRespDescUpdatePGT},
         device::dummy::DummyDevice,
+        queue::DescRingBufferAllocator,
         ringbuffer::new_test_ring,
     };
 
@@ -164,7 +165,10 @@ mod test {
             ring.push(std::mem::transmute(desc0)).unwrap();
             ring.push(std::mem::transmute(desc1)).unwrap();
         }
-        let mut queue = CmdRespQueue::new(DummyDevice::default()).unwrap();
+        let buffer = DescRingBufferAllocator::new_host_allocator()
+            .alloc()
+            .unwrap();
+        let mut queue = CmdRespQueue::new(DummyDevice::default(), buffer);
         let worker = CmdRespQueueWorker::new(queue);
         std::thread::spawn(|| run_worker(worker, reg));
         std::thread::sleep(Duration::from_millis(1));

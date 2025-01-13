@@ -1,28 +1,32 @@
-use std::{io, marker::PhantomData, sync::Arc};
-
-use memmap2::{MmapMut, MmapOptions};
-
-use super::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
+use std::{ffi::c_void, io, marker::PhantomData, sync::Arc};
 
 use std::ops::{Deref, DerefMut};
 
-/// A wrapper around mapped memory that ensures physical memory pages are consecutive.
-pub(crate) struct ContiguousPages<const N: usize> {
-    /// Mmap handle
-    inner: MmapMut,
+use crate::mem::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
+
+use super::{ContiguousPages, MmapMut, PageAllocator};
+
+/// A page allocator for allocating pages of host memory
+#[derive(Debug, Default, Clone, Copy)]
+pub(crate) struct HostPageAllocator<const N: usize>;
+
+impl<const N: usize> PageAllocator<N> for HostPageAllocator<N> {
+    fn alloc(&mut self) -> io::Result<ContiguousPages<N>> {
+        let inner = Self::try_reserve_consecutive(N)?;
+        Ok(ContiguousPages { inner })
+    }
 }
 
-impl<const N: usize> ContiguousPages<N> {
+impl<const N: usize> HostPageAllocator<N> {
     /// TODO: implements allocating multiple consecutive pages
     const _OK: () = assert!(
         N == 1,
         "allocating multiple contiguous pages is currently unsupported"
     );
 
-    /// Creates a new consecutive memory region of the specified number of pages.
-    pub(crate) fn new() -> io::Result<Self> {
-        let inner = Self::try_reserve_consecutive(N)?;
-        Ok(Self { inner })
+    /// Creates a new `HostPageAllocator`
+    pub(crate) fn new() -> Self {
+        Self
     }
 
     /// Attempts to reserve consecutive physical memory pages.
@@ -36,6 +40,7 @@ impl<const N: usize> ContiguousPages<N> {
     }
 
     /// Reserves memory pages using mmap.
+    #[allow(unsafe_code)]
     fn reserve(num_pages: usize) -> io::Result<MmapMut> {
         /// Number of bits representing a 4K page size
         const PAGE_SIZE_4K_BITS: u8 = 12;
@@ -48,11 +53,28 @@ impl<const N: usize> ContiguousPages<N> {
             .huge(Some(PAGE_SIZE_BITS))
             .map_anon()?;
         #[cfg(feature = "page_size_4k")]
-        let mmap = MmapOptions::new().len(len).map_anon()?;
+        let ptr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                len,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_PRIVATE | libc::MAP_ANON,
+                -1,
+                0,
+            )
+        };
 
-        mmap.lock()?;
+        if ptr == libc::MAP_FAILED {
+            return Err(io::Error::last_os_error());
+        }
 
-        Ok(mmap)
+        unsafe {
+            if libc::mlock(ptr, len) != 0 {
+                return Err(io::Error::last_os_error());
+            }
+        }
+
+        Ok(MmapMut::new(ptr, len))
     }
 
     /// Checks if the physical pages backing the memory mapping are consecutive.
@@ -77,38 +99,14 @@ impl<const N: usize> ContiguousPages<N> {
     }
 }
 
-impl<const N: usize> Deref for ContiguousPages<N> {
-    type Target = MmapMut;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<const N: usize> DerefMut for ContiguousPages<N> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl<const N: usize> AsMut<[u8]> for ContiguousPages<N> {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
-    }
-}
-
-impl<const N: usize> AsRef<[u8]> for ContiguousPages<N> {
-    fn as_ref(&self) -> &[u8] {
-        &self.inner
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
 
     #[test]
     fn consc_mem_alloc_succ() {
-        let mem = ContiguousPages::<1>::new().expect("failed to allocate");
+        let mem = HostPageAllocator::<1>::new()
+            .alloc()
+            .expect("failed to allocate");
     }
 }

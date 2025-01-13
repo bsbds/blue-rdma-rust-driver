@@ -23,7 +23,7 @@ use crate::{
     },
     device::DeviceAdaptor,
     mem::{
-        page::ContiguousPages,
+        page::{ContiguousPages, HostPageAllocator, PageAllocator},
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
         PAGE_SIZE,
     },
@@ -213,7 +213,7 @@ where
     // TODO: reuse a page for multiple registration
     /// Allocates a new page and returns a tuple containing the page and its physical address
     fn alloc_new_page() -> io::Result<(ContiguousPages<1>, u64)> {
-        let mut page = ContiguousPages::new()?;
+        let mut page = HostPageAllocator::new().alloc()?;
         let start_virt_addr = page.as_ptr();
         let start_phy_addr = virt_to_phy(Some(start_virt_addr))?
             .into_iter()
@@ -374,7 +374,9 @@ where
 mod test {
     use std::sync::atomic::AtomicBool;
 
-    use crate::{device::dummy::DummyDevice, ringbuffer::new_test_ring};
+    use crate::{
+        device::dummy::DummyDevice, queue::DescRingBufferAllocator, ringbuffer::new_test_ring,
+    };
 
     use super::*;
 
@@ -382,12 +384,15 @@ mod test {
     fn mtt_mr_reg_dereg_ok() {
         let alloc = Arc::new(Mutex::new(Alloc::new_simple()));
         let ring = new_test_ring::<RingBufDescUntyped>();
-        let mut queue = Arc::new(Mutex::new(CmdQueue::new(DummyDevice::default()).unwrap()));
+        let buffer = DescRingBufferAllocator::new_host_allocator()
+            .alloc()
+            .unwrap();
+        let mut queue = Arc::new(Mutex::new(CmdQueue::new(DummyDevice::default(), buffer)));
         let mut reg = Arc::new(Mutex::new(Registration::new()));
         let reg_c = Arc::clone(&reg);
         let mtt = Mtt::new(alloc, queue, reg);
 
-        let page = ContiguousPages::<1>::new().unwrap();
+        let page = HostPageAllocator::<1>::new().alloc().unwrap();
         let vec0 = vec![0; 128];
         let vec1 = vec![0; 0x10000];
 
