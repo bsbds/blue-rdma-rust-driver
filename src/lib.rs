@@ -204,6 +204,10 @@ mod workers;
 /// Packet retransmission implementations
 mod retransmission;
 
+#[allow(unused)]
+/// Network implementations
+pub mod net;
+
 pub use device::emulated::EmulatedDevice;
 
 pub use simple_nic::SimpleNicDeviceConfig;
