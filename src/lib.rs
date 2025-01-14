@@ -186,7 +186,7 @@ mod mtt;
 
 #[allow(unused)]
 /// Queue implementation
-mod queue;
+pub(crate) mod queue;
 
 #[allow(unused)]
 /// Adaptor deivce
@@ -195,6 +195,10 @@ mod device;
 #[allow(unused)]
 /// Simple network interface card
 mod simple_nic;
+
+#[allow(unused)]
+/// Device Queue Workers
+mod workers;
 
 pub use device::emulated::EmulatedDevice;
 
