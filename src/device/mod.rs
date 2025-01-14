@@ -1,4 +1,8 @@
 #![allow(missing_docs, clippy::missing_docs_in_private_items)]
+#![allow(clippy::todo)] // FIXME: implement
+
+/// Hardware device adaptor
+pub(crate) mod hardware;
 
 /// Emulated device adaptor
 pub(crate) mod emulated;
@@ -12,7 +16,7 @@ pub(crate) mod proxy;
 /// Memory-mapped I/O addresses of device registers
 mod constants;
 
-use std::io;
+use std::{io, marker::PhantomData};
 
 /// A trait for interacting with device hardware through CSR operations.
 pub(crate) trait DeviceAdaptor {
@@ -123,5 +127,68 @@ where
     fn write_base_addr(&self, phys_addr: u64) -> io::Result<()> {
         self.write_csr(Self::BASE_ADDR_LOW, (phys_addr & 0xFFFF_FFFF) as u32)?;
         self.write_csr(Self::BASE_ADDR_HIGH, (phys_addr >> 32) as u32)
+    }
+}
+
+pub(crate) mod state {
+    pub(crate) struct Uninitialized;
+    pub(crate) struct CsrInitialized;
+    pub(crate) struct NetworkInitialized;
+    pub(crate) struct Ready;
+}
+
+pub(crate) struct CsrConfig;
+
+pub(crate) struct NetworkConfig;
+
+pub(crate) struct RecvBufferConfig;
+
+pub(crate) trait DeviceOperations {
+    fn initialize_csr(&mut self, config: CsrConfig) -> io::Result<()>;
+    fn initialize_network(&mut self, config: NetworkConfig) -> io::Result<()>;
+    fn initialize_recv_buffer(&mut self, config: RecvBufferConfig) -> io::Result<()>;
+}
+
+pub(crate) struct Device<Inner, S> {
+    inner: Inner,
+    _state: PhantomData<S>,
+}
+
+impl<Inner: DeviceOperations> Device<Inner, state::Uninitialized> {
+    pub(crate) fn new(inner: Inner) -> Self {
+        Self {
+            inner,
+            _state: PhantomData,
+        }
+    }
+
+    pub(crate) fn initialize_csr(
+        mut self,
+        config: CsrConfig,
+    ) -> io::Result<Device<Inner, state::CsrInitialized>> {
+        self.inner.initialize_csr(config)?;
+        todo!();
+    }
+}
+
+impl<Inner: DeviceOperations> Device<Inner, state::CsrInitialized> {
+    pub(crate) fn initialize_network(
+        mut self,
+        config: NetworkConfig,
+    ) -> io::Result<Device<Inner, state::NetworkInitialized>> {
+        self.inner.initialize_network(config)?;
+
+        todo!()
+    }
+}
+
+impl<Inner: DeviceOperations> Device<Inner, state::Ready> {
+    pub(crate) fn initialize_recv_buffer(
+        mut self,
+        config: RecvBufferConfig,
+    ) -> io::Result<Device<Inner, state::Ready>> {
+        self.inner.initialize_recv_buffer(config)?;
+
+        todo!()
     }
 }
