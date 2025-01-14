@@ -5,26 +5,18 @@ use std::{io, net::IpAddr};
 use ipnetwork::IpNetwork;
 
 /// Trait for network devices that can provide MAC address and DHCP resolution
-pub trait NetworkDevice: Send + Sync + 'static {
-    /// Get the MAC address of this network device
-    ///
-    /// # Errors
-    /// Returns an error if unable to retrieve the MAC address from the device
-    fn mac_addr(&self) -> io::Result<MacAddress>;
-
+pub trait NetworkResolver: Send + Sync + 'static {
     /// Resolve network configuration using DHCP
     ///
-    /// # Arguments
-    /// * `static_mac` - Optional MAC address to use instead of device's MAC
-    ///
     /// # Errors
-    /// Returns an error if DHCP discovery fails
-    fn resolve_dhcp(&self, static_mac: Option<MacAddress>) -> io::Result<NetworkConfig>;
+    /// Returns an error if dynamic discovery fails
+    fn resolve_dynamic(&self) -> io::Result<NetworkConfig>;
 }
 
 /// MAC address represented as 6 bytes
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MacAddress([u8; 6]);
+#[non_exhaustive]
+pub struct MacAddress(pub [u8; 6]);
 
 /// Static network configuration containing IP network, gateway and MAC address
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,12 +35,10 @@ pub struct NetworkConfig {
 pub enum NetworkMode {
     /// Static network configuration
     Static(NetworkConfig),
-    /// DHCP configuration with optional MAC override
-    Dhcp {
-        /// Network device to use for DHCP
-        device: Box<dyn NetworkDevice>,
-        /// Optional MAC address override
-        mac: Option<MacAddress>,
+    /// Dynamic network configuration
+    Dynamic {
+        /// Network device to use for dynamic resolution
+        device: Box<dyn NetworkResolver>,
     },
 }
 
@@ -64,7 +54,7 @@ impl NetworkMode {
                 gateway: config.gateway,
                 mac: config.mac,
             }),
-            NetworkMode::Dhcp { ref device, mac } => device.resolve_dhcp(mac),
+            NetworkMode::Dynamic { ref device } => device.resolve_dynamic(),
         }
     }
 }
@@ -74,7 +64,7 @@ impl std::fmt::Debug for NetworkMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match *self {
             NetworkMode::Static(ref config) => f.debug_tuple("Static").field(config).finish(),
-            NetworkMode::Dhcp { ref mac, .. } => f.debug_struct("DHCP").field("mac", mac).finish(),
+            NetworkMode::Dynamic { .. } => f.debug_struct("DHCP").finish(),
         }
     }
 }
@@ -85,25 +75,20 @@ mod tests {
 
     struct MockDevice;
 
-    impl NetworkDevice for MockDevice {
-        fn resolve_dhcp(&self, static_mac: Option<MacAddress>) -> io::Result<NetworkConfig> {
+    impl NetworkResolver for MockDevice {
+        fn resolve_dynamic(&self) -> io::Result<NetworkConfig> {
             Ok(NetworkConfig {
                 ip_network: IpNetwork::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
                 gateway: "10.0.0.1".parse().unwrap(),
-                mac: static_mac.unwrap_or(MacAddress([0; 6])),
+                mac: MacAddress([0; 6]),
             })
-        }
-
-        fn mac_addr(&self) -> io::Result<MacAddress> {
-            Ok(MacAddress([0; 6]))
         }
     }
 
     fn dhcp_resolution_ok() {
         let device = MockDevice;
-        let mode = NetworkMode::Dhcp {
+        let mode = NetworkMode::Dynamic {
             device: Box::new(device),
-            mac: None,
         };
         let result = mode.resolve();
         assert!(result.is_ok());
