@@ -4,6 +4,9 @@ pub(crate) mod cmd_queue;
 /// Simple NIC tx queue implementation
 pub(crate) mod simple_nic;
 
+/// Abstract queue definitions
+pub(crate) mod abstr;
+
 use std::{
     io,
     marker::PhantomData,
