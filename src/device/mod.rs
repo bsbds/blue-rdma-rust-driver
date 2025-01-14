@@ -133,7 +133,7 @@ where
 pub(crate) mod state {
     pub(crate) struct Uninitialized;
     pub(crate) struct CsrInitialized;
-    pub(crate) struct NetworkInitialized;
+    pub(crate) struct BufferInitialized;
     pub(crate) struct Ready;
 }
 
@@ -141,12 +141,12 @@ pub(crate) struct CsrConfig;
 
 pub(crate) struct NetworkConfig;
 
-pub(crate) struct RecvBufferConfig;
+pub(crate) struct BufferConfig;
 
 pub(crate) trait DeviceOperations {
     fn initialize_csr(&mut self, config: CsrConfig) -> io::Result<()>;
     fn initialize_network(&mut self, config: NetworkConfig) -> io::Result<()>;
-    fn initialize_recv_buffer(&mut self, config: RecvBufferConfig) -> io::Result<()>;
+    fn initialize_recv_buffer(&mut self, config: BufferConfig) -> io::Result<()>;
 }
 
 pub(crate) struct Device<Inner, S> {
@@ -172,22 +172,22 @@ impl<Inner: DeviceOperations> Device<Inner, state::Uninitialized> {
 }
 
 impl<Inner: DeviceOperations> Device<Inner, state::CsrInitialized> {
-    pub(crate) fn initialize_network(
+    pub(crate) fn initialize_buffer(
         mut self,
-        config: NetworkConfig,
-    ) -> io::Result<Device<Inner, state::NetworkInitialized>> {
-        self.inner.initialize_network(config)?;
+        config: BufferConfig,
+    ) -> io::Result<Device<Inner, state::BufferInitialized>> {
+        self.inner.initialize_recv_buffer(config)?;
 
         todo!()
     }
 }
 
 impl<Inner: DeviceOperations> Device<Inner, state::Ready> {
-    pub(crate) fn initialize_recv_buffer(
+    pub(crate) fn initialize_network(
         mut self,
-        config: RecvBufferConfig,
+        config: NetworkConfig,
     ) -> io::Result<Device<Inner, state::Ready>> {
-        self.inner.initialize_recv_buffer(config)?;
+        self.inner.initialize_network(config)?;
 
         todo!()
     }
