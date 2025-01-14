@@ -200,6 +200,10 @@ mod simple_nic;
 /// Device Queue Workers
 mod workers;
 
+#[allow(unused)]
+/// Packet retransmission implementations
+mod retransmission;
+
 pub use device::emulated::EmulatedDevice;
 
 pub use simple_nic::SimpleNicDeviceConfig;
