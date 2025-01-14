@@ -9,7 +9,10 @@ use csr::RpcClient;
 
 use crate::{
     desc::{
-        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
+        cmd::{
+            CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
+            CmdQueueRespDescOnlyCommonHeader,
+        },
         RingBufDescUntyped,
     },
     mem::{
@@ -44,7 +47,13 @@ impl DeviceAdaptor for EmulatedDevice {
 }
 
 impl EmulatedDevice {
-    #[allow(clippy::as_conversions, unsafe_code, clippy::missing_errors_doc)]
+    #[allow(
+        clippy::as_conversions,
+        unsafe_code,
+        clippy::missing_errors_doc,
+        clippy::indexing_slicing,
+        clippy::missing_panics_doc
+    )]
     #[inline]
     pub fn run(rpc_server_addr: SocketAddr) -> io::Result<()> {
         let cli = RpcClient::new(rpc_server_addr)?;
@@ -67,14 +76,29 @@ impl EmulatedDevice {
         let mut cmd_queue = CmdQueue::new(dev, buffer0);
         let desc0 =
             CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 1, 1, 1, 1, 1, 1));
-        let desc1 = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(7, 1, 1, 1));
+        let desc1 = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(8, 1, 1, 1));
         cmd_queue.push(desc0).unwrap_or_else(|_| unreachable!());
         cmd_queue.push(desc1).unwrap_or_else(|_| unreachable!());
         cmd_queue.flush()?;
-        let resps: Vec<_> = std::iter::repeat_with(|| buffer1.try_pop().copied())
-            .flatten()
-            .take(2)
-            .collect();
+        std::thread::sleep(Duration::from_secs(1));
+
+        let resps: Vec<CmdQueueRespDescOnlyCommonHeader> =
+            std::iter::repeat_with(|| buffer1.try_pop().copied())
+                .flatten()
+                .take(2)
+                .map(Into::into)
+                .collect();
+
+        assert_eq!(
+            resps[0].headers().cmd_queue_common_header().user_data(),
+            7,
+            "user data not match"
+        );
+        assert_eq!(
+            resps[1].headers().cmd_queue_common_header().user_data(),
+            8,
+            "user data not match"
+        );
 
         Ok(())
     }
