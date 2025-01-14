@@ -7,7 +7,7 @@ mod mr_alloc;
 use std::{
     io, iter,
     sync::{
-        atomic::{AtomicU16, Ordering},
+        atomic::{AtomicU8, Ordering},
         Arc,
     },
 };
@@ -73,7 +73,7 @@ struct Mtt<PAlloc, Dev> {
     /// Registration for getting notifies from the device
     reg: Arc<Mutex<Registration>>,
     /// Command ID generator
-    cmd_id: AtomicU16,
+    cmd_id: AtomicU8,
 }
 
 impl<PAlloc, Dev> Mtt<PAlloc, Dev>
@@ -91,7 +91,7 @@ where
             alloc,
             cmd_queue,
             reg,
-            cmd_id: AtomicU16::new(0),
+            cmd_id: AtomicU8::new(0),
         }
     }
 
@@ -206,7 +206,7 @@ where
     }
 
     /// Generates a new command ID
-    fn new_cmd_id(&self) -> u16 {
+    fn new_cmd_id(&self) -> u8 {
         self.cmd_id.fetch_add(1, Ordering::Relaxed)
     }
 

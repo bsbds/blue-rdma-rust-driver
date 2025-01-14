@@ -6,27 +6,34 @@ use crate::desc::RingBufDescCommonHead;
 
 use super::RingBufDescUntyped;
 
-#[bitsize(48)]
+#[bitsize(16)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 pub(crate) struct RingbufDescCmdQueueCommonHead {
-    pub user_data: u16,
+    pub user_data: u8,
     pub is_success: bool,
-    reserved1: u31,
+    reserved1: u7,
 }
 
 impl RingbufDescCmdQueueCommonHead {
-    fn new_with_user_data(user_data: u16) -> Self {
-        let mut this: Self = u48::from_u64(0).into();
+    fn new_with_user_data(user_data: u8) -> Self {
+        let mut this: Self = 0u16.into();
         this.set_user_data(user_data);
         this
     }
 }
 
-#[bitsize(64)]
+#[bitsize(32)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 pub(crate) struct CmdQueueReqDescHeaderChunk {
     pub common_header: RingBufDescCommonHead,
     pub cmd_queue_common_header: RingbufDescCmdQueueCommonHead,
+}
+
+#[bitsize(64)]
+#[derive(Clone, Copy, DebugBits, FromBits)]
+struct CmdQueueReqDescUpdateMrTableChunk0 {
+    headers: CmdQueueReqDescHeaderChunk,
+    reserved0: u32,
 }
 
 #[bitsize(64)]
@@ -53,7 +60,7 @@ struct CmdQueueReqDescUpdateMrTableChunk3 {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdateMrTable {
-    c0: CmdQueueReqDescHeaderChunk,
+    c0: CmdQueueReqDescUpdateMrTableChunk0,
     c1: CmdQueueReqDescUpdateMrTableChunk1,
     c2: CmdQueueReqDescUpdateMrTableChunk2,
     c3: CmdQueueReqDescUpdateMrTableChunk3,
@@ -61,7 +68,7 @@ pub(crate) struct CmdQueueReqDescUpdateMrTable {
 
 impl CmdQueueReqDescUpdateMrTable {
     pub(crate) fn new(
-        user_data: u16,
+        user_data: u8,
         mr_base_va: u64,
         mr_length: u32,
         mr_key: u32,
@@ -71,7 +78,8 @@ impl CmdQueueReqDescUpdateMrTable {
     ) -> Self {
         let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
         let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
-        let c0 = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        let header = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        let c0 = CmdQueueReqDescUpdateMrTableChunk0::new(header, 0);
         let c1 = CmdQueueReqDescUpdateMrTableChunk1::new(mr_base_va);
         let c2 = CmdQueueReqDescUpdateMrTableChunk2::new(mr_length, mr_key);
         let c3 = CmdQueueReqDescUpdateMrTableChunk3::new(
@@ -85,10 +93,10 @@ impl CmdQueueReqDescUpdateMrTable {
     }
 
     pub(crate) fn headers(&self) -> CmdQueueReqDescHeaderChunk {
-        self.c0
+        self.c0.headers()
     }
     pub(crate) fn set_headers(&mut self, headers: CmdQueueReqDescHeaderChunk) {
-        self.c0 = headers;
+        self.c0.set_headers(headers);
     }
     pub(crate) fn mr_base_va(&self) -> u64 {
         self.c1.mr_base_va()
@@ -144,6 +152,13 @@ impl From<RingBufDescUntyped> for CmdQueueReqDescUpdateMrTable {
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
+pub(crate) struct CmdQueueReqDescUpdatePGTChunk0 {
+    headers: CmdQueueReqDescHeaderChunk,
+    reserved0: u32,
+}
+
+#[bitsize(64)]
+#[derive(Clone, Copy, DebugBits, FromBits)]
 pub(crate) struct CmdQueueReqDescUpdatePGTChunk1 {
     dma_addr: u64,
 }
@@ -163,7 +178,7 @@ pub(crate) struct CmdQueueReqDescUpdatePGTChunk3 {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdatePGT {
-    c0: CmdQueueReqDescHeaderChunk,
+    c0: CmdQueueReqDescUpdatePGTChunk0,
     c1: CmdQueueReqDescUpdatePGTChunk1,
     c2: CmdQueueReqDescUpdatePGTChunk2,
     c3: CmdQueueReqDescUpdatePGTChunk3,
@@ -171,14 +186,15 @@ pub(crate) struct CmdQueueReqDescUpdatePGT {
 
 impl CmdQueueReqDescUpdatePGT {
     pub(crate) fn new(
-        user_data: u16,
+        user_data: u8,
         dma_addr: u64,
         start_index: u32,
         zero_based_entry_count: u32,
     ) -> Self {
         let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
         let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
-        let c0 = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        let headers = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
+        let c0 = CmdQueueReqDescUpdatePGTChunk0::new(headers, 0);
         let c1 = CmdQueueReqDescUpdatePGTChunk1::new(dma_addr);
         let c2 = CmdQueueReqDescUpdatePGTChunk2::new(start_index, zero_based_entry_count);
         let c3 = CmdQueueReqDescUpdatePGTChunk3::new(0);
@@ -187,10 +203,10 @@ impl CmdQueueReqDescUpdatePGT {
     }
 
     pub(crate) fn headers(&self) -> CmdQueueReqDescHeaderChunk {
-        self.c0
+        self.c0.headers()
     }
     pub(crate) fn set_headers(&mut self, headers: CmdQueueReqDescHeaderChunk) {
-        self.c0 = headers;
+        self.c0.set_headers(headers);
     }
     pub(crate) fn dma_addr(&self) -> u64 {
         self.c1.dma_addr()
@@ -229,29 +245,29 @@ impl From<RingBufDescUntyped> for CmdQueueReqDescUpdatePGT {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueRespDescOnlyCommonHeader {
     header: CmdQueueReqDescHeaderChunk,
-    rest: [u64; 3],
+    rest: [u8; 28],
 }
 
 impl CmdQueueRespDescOnlyCommonHeader {
     /// Creates a new `CmdQueueReqDescUpdateMrTable` response
-    pub(crate) fn new_cmd_queue_resp_desc_update_mr_table(user_data: u16) -> Self {
+    pub(crate) fn new_cmd_queue_resp_desc_update_mr_table(user_data: u8) -> Self {
         let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_mr_table();
         let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
         let header = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
         Self {
             header,
-            rest: [0; 3],
+            rest: [0; 28],
         }
     }
 
     /// Creates a new `CmdQueueReqDescUpdatePGT` response
-    pub(crate) fn new_cmd_queue_resp_desc_update_pgt(user_data: u16) -> Self {
+    pub(crate) fn new_cmd_queue_resp_desc_update_pgt(user_data: u8) -> Self {
         let common_header = RingBufDescCommonHead::new_cmd_queue_resp_desc_update_pgt();
         let cmd_queue_common_header = RingbufDescCmdQueueCommonHead::new_with_user_data(user_data);
         let header = CmdQueueReqDescHeaderChunk::new(common_header, cmd_queue_common_header);
         Self {
             header,
-            rest: [0; 3],
+            rest: [0; 28],
         }
     }
 

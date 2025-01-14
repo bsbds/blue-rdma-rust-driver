@@ -27,7 +27,7 @@ impl<Dev> CmdRespQueueWorker<Dev> {
 
 /// Unique identifier for a command
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
-pub(crate) struct CmdId(pub u16);
+pub(crate) struct CmdId(pub u8);
 
 /// Notification mechanism using atomic boolean
 #[derive(Clone)]
