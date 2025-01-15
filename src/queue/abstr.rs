@@ -69,6 +69,7 @@ pub(crate) struct RecvBufferMeta {
 }
 
 impl RecvBufferMeta {
+    /// Creates a new `RecvBufferMeta`
     pub(crate) fn new(phys_addr: u64) -> Self {
         Self { phys_addr }
     }

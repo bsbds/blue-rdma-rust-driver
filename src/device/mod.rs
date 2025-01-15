@@ -204,6 +204,7 @@ where
         })
     }
 
+    #[allow(clippy::needless_pass_by_value)] // FIXME: Remove the clippy
     fn launch_backgroud(
         meta_report: Inner::MetaReport,
         simple_nic: Inner::SimpleNic,

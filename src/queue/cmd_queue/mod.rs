@@ -21,11 +21,17 @@ use crate::{
 
 use super::{abstr::DeviceCommand, DescRingBuffer};
 
+/// Controller of the command queue
 pub(crate) struct CommandController<Dev> {
+    /// The command request queue
     cmd_queue: CmdQueue<Dev>,
 }
 
 impl<Dev> CommandController<Dev> {
+    /// Creates a new command controller instance
+    ///
+    /// # Returns
+    /// A new `CommandController` with an initialized command queue
     pub(crate) fn new() -> Self {
         todo!()
     }

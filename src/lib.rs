@@ -165,6 +165,7 @@
         dead_code
     )
 )]
+#![allow(clippy::todo)] // FIXME: implement all
 
 // FIXME: removed clippy unused
 
