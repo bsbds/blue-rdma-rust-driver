@@ -14,7 +14,7 @@ const PFN_MASK: u64 = 0x007f_ffff_ffff_ffff;
 /// Bit indicating if a page is present in memory
 const PAGE_PRESENT_BIT: u8 = 63;
 
-pub(crate) trait VirtToPhys<const PAGE_SIZE_BITS: u8> {
+pub(crate) trait VirtToPhys<const PAGE_SIZE_BITS: u8 = { super::PAGE_SIZE_BITS }> {
     /// Converts a list of virtual addresses to physical addresses
     ///
     /// # Returns

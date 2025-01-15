@@ -19,11 +19,11 @@ mod constants;
 use std::{io, marker::PhantomData};
 
 use crate::{
-    mem::page::PageAllocator,
+    mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::config::NetworkConfig,
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RDMASend, RDMASendOp, RecvBuffer,
-        SimpleNicTunnel,
+        RecvBufferMeta, SimpleNicTunnel,
     },
 };
 
@@ -171,16 +171,25 @@ where
     Inner::MetaReport: MetaReport,
     Inner::SimpleNic: SimpleNicTunnel,
 {
-    pub(crate) fn init<Allocator: PageAllocator<1>>(
+    pub(crate) fn init<Allocator, Resolver>(
         inner: Inner,
         network: NetworkConfig,
         mut allocator: Allocator,
-    ) -> io::Result<Device<Inner, Initialized<Inner>>> {
+        phys_addr_resolver: &Resolver,
+    ) -> io::Result<Device<Inner, Initialized<Inner>>>
+    where
+        Allocator: PageAllocator<1>,
+        Resolver: VirtToPhys,
+    {
         let (cmd, send, meta_report, simple_nic) = Inner::initialize();
         let page = allocator.alloc()?;
         let recv_buffer = RecvBuffer::new(page);
+        let phys_addr = phys_addr_resolver
+            .virt_to_phys(recv_buffer.addr())?
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+        let meta = RecvBufferMeta::new(phys_addr);
         cmd.set_network(network)?;
-        cmd.set_raw_packet_recv_buffer(recv_buffer.meta())?;
+        cmd.set_raw_packet_recv_buffer(meta)?;
         Self::launch_backgroud(meta_report, simple_nic, recv_buffer);
 
         Ok(Device {

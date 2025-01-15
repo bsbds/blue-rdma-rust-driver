@@ -65,7 +65,13 @@ pub(crate) struct RecvBuffer {
 /// Metadata about a receive buffer
 pub(crate) struct RecvBufferMeta {
     /// Physical address of the receive buffer
-    addr: u64,
+    phys_addr: u64,
+}
+
+impl RecvBufferMeta {
+    pub(crate) fn new(phys_addr: u64) -> Self {
+        Self { phys_addr }
+    }
 }
 
 impl RecvBuffer {
@@ -74,11 +80,9 @@ impl RecvBuffer {
         Self { inner }
     }
 
-    /// Gets metadata about this receive buffer
-    pub(crate) fn meta(&self) -> RecvBufferMeta {
-        RecvBufferMeta {
-            addr: self.inner.addr(),
-        }
+    /// Gets start address about this receive buffer
+    pub(crate) fn addr(&self) -> u64 {
+        self.inner.addr()
     }
 }
 
