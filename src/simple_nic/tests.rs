@@ -46,6 +46,6 @@ fn worker_loopback() {
         socket: socket_rx,
     };
     let shutdown = Arc::new(AtomicBool::new(false));
-    let worker = SimpleNicWorker::new(dev, frame_tx, frame_rx, Arc::clone(&shutdown));
+    let worker = SimpleNicWorker::new(dev.tun_dev, frame_tx, frame_rx, Arc::clone(&shutdown));
     let handle = worker.run();
 }

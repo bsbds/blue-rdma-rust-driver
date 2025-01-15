@@ -198,7 +198,7 @@ impl<Rx: FrameRx> RxWorker<Rx> {
 /// Main worker that manages the TX and RX queues for the simple NIC
 pub(crate) struct SimpleNicWorker<Tx, Rx> {
     /// The network device
-    dev: SimpleNicDevice,
+    dev: Arc<tun::Device>,
     /// Tx for transmitting frames to remote
     frame_tx: Tx,
     /// Rx for receiving frames from remote
@@ -216,12 +216,9 @@ pub(crate) struct SimpleNicWorker<Tx, Rx> {
 impl<Tx: FrameTx, Rx: FrameRx> SimpleNicWorker<Tx, Rx> {
     /// Creates a new `SimpleNicWorker`
     pub(crate) fn new(
-        dev: SimpleNicDevice,
+        dev: Arc<tun::Device>,
         frame_tx: Tx,
         frame_rx: Rx,
-        //tx_queue: SimpleNicTxQueue,
-        //rx_queue: SimpleNicRxQueue,
-        //rx_buf: ContiguousPages<1>,
         shutdown: Arc<AtomicBool>,
     ) -> Self {
         Self {
@@ -235,11 +232,11 @@ impl<Tx: FrameTx, Rx: FrameRx> SimpleNicWorker<Tx, Rx> {
     /// Starts the worker threads and returns their handles
     pub(crate) fn run(self) -> SimpleNicQueueHandle {
         let tx_worker = TxWorker::new(
-            Arc::clone(&self.dev.tun_dev),
+            Arc::clone(&self.dev),
             self.frame_tx,
             Arc::clone(&self.shutdown),
         );
-        let rx_worker = RxWorker::new(Arc::clone(&self.dev.tun_dev), self.frame_rx, self.shutdown);
+        let rx_worker = RxWorker::new(Arc::clone(&self.dev), self.frame_rx, self.shutdown);
 
         SimpleNicQueueHandle {
             tx: tx_worker.spawn(),

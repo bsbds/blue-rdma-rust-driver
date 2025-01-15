@@ -15,7 +15,10 @@ use std::{
 use ipnetwork::IpNetwork;
 use worker::SimpleNicWorker;
 
-use crate::queue::abstr::{FrameRx, FrameTx, SimpleNicTunnel};
+use crate::{
+    net::tap::TapDevice,
+    queue::abstr::{FrameRx, FrameTx, SimpleNicTunnel},
+};
 
 #[allow(clippy::module_name_repetitions)]
 /// Configuration for the simple NIC device
@@ -74,22 +77,20 @@ impl SimpleNicDevice {
 struct Launch<Tunnel> {
     /// Abstract Tunnel
     inner: Tunnel,
+    /// Tap device
+    tap_dev: TapDevice,
 }
 
 impl<Tunnel: SimpleNicTunnel> Launch<Tunnel> {
     /// Creates a new `Launch`
-    fn new(inner: Tunnel) -> Self {
-        Self { inner }
+    fn new(inner: Tunnel, tap_dev: TapDevice) -> Self {
+        Self { inner, tap_dev }
     }
 
     /// Launches the worker thread that handles communication between the NIC device and tunnel
-    fn launch(
-        self,
-        dev: SimpleNicDevice,
-        is_shutdown: Arc<AtomicBool>,
-    ) -> worker::SimpleNicQueueHandle {
+    fn launch(self, is_shutdown: Arc<AtomicBool>) -> worker::SimpleNicQueueHandle {
         let (frame_tx, frame_rx) = self.inner.into_split();
-        let worker = SimpleNicWorker::new(dev, frame_tx, frame_rx, is_shutdown);
+        let worker = SimpleNicWorker::new(self.tap_dev.inner(), frame_tx, frame_rx, is_shutdown);
         worker.run()
     }
 }

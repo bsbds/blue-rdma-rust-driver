@@ -26,6 +26,11 @@ impl std::fmt::Debug for TapDevice {
 }
 
 impl TapDevice {
+    /// Returns the inner tap device
+    pub(crate) fn inner(&self) -> Arc<tun::Device> {
+        Arc::clone(&self.inner)
+    }
+
     /// Creates a TUN device that operates at L2
     #[allow(unused_results)] // ignore the config construction result
     fn create(mac_addr: Option<MacAddress>, network: Option<IpNetwork>) -> io::Result<Self> {
