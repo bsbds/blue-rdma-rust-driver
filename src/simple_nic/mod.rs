@@ -9,10 +9,13 @@ mod tests;
 
 use std::{
     io::{self},
-    sync::Arc,
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use ipnetwork::IpNetwork;
+use worker::SimpleNicWorker;
+
+use crate::queue::abstr::{FrameRx, FrameTx, SimpleNicTunnel};
 
 #[allow(clippy::module_name_repetitions)]
 /// Configuration for the simple NIC device
@@ -63,5 +66,30 @@ impl SimpleNicDevice {
         });
 
         tun::create(&config).map_err(Into::into)
+    }
+}
+
+/// A launcher for the `SimpleNic` worker thread that handles communication between
+/// the NIC device and tunnel.
+struct Launch<Tunnel> {
+    /// Abstract Tunnel
+    inner: Tunnel,
+}
+
+impl<Tunnel: SimpleNicTunnel> Launch<Tunnel> {
+    /// Creates a new `Launch`
+    fn new(inner: Tunnel) -> Self {
+        Self { inner }
+    }
+
+    /// Launches the worker thread that handles communication between the NIC device and tunnel
+    fn launch(
+        self,
+        dev: SimpleNicDevice,
+        is_shutdown: Arc<AtomicBool>,
+    ) -> worker::SimpleNicQueueHandle {
+        let (frame_tx, frame_rx) = self.inner.into_split();
+        let worker = SimpleNicWorker::new(dev, frame_tx, frame_rx, is_shutdown);
+        worker.run()
     }
 }

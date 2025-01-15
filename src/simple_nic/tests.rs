@@ -5,10 +5,9 @@ use std::{
 
 use ipnetwork::IpNetwork;
 
-use super::{
-    worker::{FrameRx, FrameTx, SimpleNicWorker},
-    SimpleNicDevice, SimpleNicDeviceConfig,
-};
+use crate::queue::abstr::{FrameRx, FrameTx};
+
+use super::{worker::SimpleNicWorker, SimpleNicDevice, SimpleNicDeviceConfig};
 
 struct FrameTxSocket(UdpSocket);
 
@@ -24,11 +23,11 @@ struct FrameRxSocket {
 }
 
 impl FrameRx for FrameRxSocket {
-    fn try_recv(&mut self) -> std::io::Result<Option<&[u8]>> {
+    fn recv_nonblocking(&mut self) -> std::io::Result<&[u8]> {
         let len = self.buffer.len();
         self.buffer.resize(len + 2048, 0);
         let n = self.socket.recv(&mut self.buffer[len..])?;
-        Ok(Some(&self.buffer[len..len + n]))
+        Ok(&self.buffer[len..len + n])
     }
 }
 
@@ -40,6 +39,7 @@ fn worker_loopback() {
     let socket_tx = UdpSocket::bind("127.0.0.1:0").unwrap();
     let socket_rx = UdpSocket::bind("127.0.0.1:0").unwrap();
     socket_tx.connect(socket_rx.local_addr().unwrap()).unwrap();
+    socket_rx.set_nonblocking(true);
     let frame_tx = FrameTxSocket(socket_tx);
     let frame_rx = FrameRxSocket {
         buffer: Vec::new(),

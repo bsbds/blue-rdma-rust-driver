@@ -13,6 +13,7 @@ use crate::{
     desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
     mem::page::ContiguousPages,
     queue::{
+        abstr::{FrameRx, FrameTx},
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         ToCardQueue, ToHostQueue,
     },
@@ -22,18 +23,6 @@ use super::SimpleNicDevice;
 
 /// A buffer slot size for a single frame
 const FRAME_SLOT_SIZE: usize = 2048;
-
-/// Trait for transmitting frames
-pub(crate) trait FrameTx: Send + 'static {
-    /// Send a buffer of bytes as a frame
-    fn send(&mut self, buf: &[u8]) -> io::Result<()>;
-}
-
-/// Trait for receiving frames
-pub(crate) trait FrameRx: Send + 'static {
-    /// Try to receive a frame, returning immediately if none available
-    fn try_recv(&mut self) -> io::Result<Option<&[u8]>>;
-}
 
 /// Send frame through `SimpleNicTxQueue`
 pub(crate) struct FrameTxQueue {
@@ -87,9 +76,9 @@ impl FrameRxQueue {
 impl FrameRx for FrameRxQueue {
     #[allow(clippy::arithmetic_side_effects)]
     #[allow(clippy::as_conversions)] // converting u32 to usize
-    fn try_recv(&mut self) -> io::Result<Option<&[u8]>> {
+    fn recv_nonblocking(&mut self) -> io::Result<&[u8]> {
         let Some(desc) = self.rx_queue.pop() else {
-            return Ok(None);
+            return Err(io::ErrorKind::WouldBlock.into());
         };
         let pos = (desc.slot_idx() as usize)
             .checked_mul(FRAME_SLOT_SIZE)
@@ -101,7 +90,7 @@ impl FrameRx for FrameRxQueue {
             .get(pos..pos + len)
             .unwrap_or_else(|| unreachable!("invalid len"));
 
-        Ok(Some(frame))
+        Ok(frame)
     }
 }
 
@@ -183,9 +172,9 @@ impl<Rx: FrameRx> RxWorker<Rx> {
             .name("simple-nic-rx-worker".into())
             .spawn(move || {
                 while !self.shutdown.load(Ordering::Relaxed) {
-                    let frame = match self.frame_rx.try_recv() {
-                        Ok(Some(frame)) => frame,
-                        Ok(None) => {
+                    let frame = match self.frame_rx.recv_nonblocking() {
+                        Ok(frame) => frame,
+                        Err(err) if matches!(err.kind(), io::ErrorKind::WouldBlock) => {
                             thread::yield_now();
                             continue;
                         }
@@ -290,4 +279,3 @@ impl SimpleNicQueueHandle {
         self.rx.is_finished()
     }
 }
-

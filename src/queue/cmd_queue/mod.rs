@@ -15,6 +15,7 @@ use crate::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
+    net::config::NetworkConfig,
     ringbuffer::{Descriptor, RingBuffer},
 };
 
@@ -39,13 +40,13 @@ impl<Dev> DeviceCommand for CommandController<Dev> {
         todo!()
     }
 
-    fn set_network(&self, param: crate::queue::abstr::NetworkParam) -> io::Result<()> {
+    fn set_network(&self, param: NetworkConfig) -> io::Result<()> {
         todo!()
     }
 
     fn set_raw_packet_recv_buffer(
         &self,
-        buffer: crate::queue::abstr::RecvBuffer,
+        buffer: crate::queue::abstr::RecvBufferMeta,
     ) -> io::Result<()> {
         todo!()
     }
