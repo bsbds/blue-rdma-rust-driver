@@ -1,10 +1,6 @@
-#![allow(clippy::missing_docs_in_private_items)]
-
 use bilge::prelude::*;
 
 use crate::desc::RingBufDescCommonHead;
-
-use super::RingBufDescUntyped;
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]

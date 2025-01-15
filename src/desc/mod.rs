@@ -1,4 +1,5 @@
 #![allow(clippy::missing_docs_in_private_items)]
+#![allow(clippy::too_many_arguments, clippy::fn_params_excessive_bools)] // FIXME: use builder
 
 /// Cmd queue pair descriptors
 pub(crate) mod cmd;
@@ -9,8 +10,12 @@ pub(crate) mod simple_nic;
 /// Meta report queue descriptors
 pub(crate) mod meta_report;
 
+/// Send queue descriptors
+pub(crate) mod send;
+
 pub(crate) use cmd::*;
 pub(crate) use meta_report::*;
+pub(crate) use send::*;
 pub(crate) use simple_nic::*;
 
 use bilge::prelude::*;
@@ -84,24 +89,18 @@ struct RingBufDescCommonHead {
     pub valid: bool,
 }
 
+#[allow(clippy::as_conversions)] // converting `repr(u8)` enum variants to u8
 impl RingBufDescCommonHead {
-    /// Creates a new `CmdQueueReqDescUpdateMrTable` header
-    fn new_cmd_queue_resp_desc_update_mr_table() -> Self {
+    fn new_cmd_desc(operator: CmdQueueDescOperators) -> Self {
+        Self::new_with_op_code(operator as u8)
+    }
+    fn new_send_desc(opcode: WorkReqOpCode) -> Self {
+        Self::new_with_op_code(opcode as u8)
+    }
+    /// Creates a new `SimpleNicTxQueueDesc` header
+    fn new_simple_nic_desc() -> Self {
         Self::new_with_op_code(0)
     }
-
-    /// Creates a new `CmdQueueReqDescUpdatePGT` header
-    fn new_cmd_queue_resp_desc_update_pgt() -> Self {
-        Self::new_with_op_code(1)
-    }
-
-    /// Creates a new `SimpleNicTxQueueDesc` header
-    fn new_simple_nic_tx_queue_desc() -> Self {
-        let mut this = Self::new_with_op_code(0);
-        this.set_is_extended_op_code(true);
-        this
-    }
-
     /// Creates a new header with given op code
     fn new_with_op_code(op_code: u8) -> Self {
         let mut this: Self = 0.into();
@@ -146,6 +145,11 @@ impl_desc_conversion_untyped!(
     CmdQueueRespDescOnlyCommonHeader,
     CmdQueueReqDescUpdateMrTable,
     CmdQueueReqDescUpdatePGT,
+    CmdQueueReqDescQpManagement,
+    CmdQueueReqDescSetNetworkParam,
+    CmdQueueReqDescSetRawPacketReceiveMeta,
+    SendQueueReqDescSeg0,
+    SendQueueReqDescSeg1,
     SimpleNicTxQueueDesc,
     SimpleNicRxQueueDesc,
     MetaReportQueuePacketBasicInfoDesc,
@@ -289,85 +293,6 @@ impl MetaReportQueueDescBthReth {
     }
     pub(crate) fn set_can_auto_ack(&mut self, val: bool) {
         self.c3.set_can_auto_ack(val);
-    }
-}
-
-#[bitsize(64)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
-struct SendQueueReqDescSeg0Chunk0 {
-    pub reserved1: u48,
-    pub pkey: u16,
-}
-
-#[bitsize(64)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
-struct SendQueueReqDescSeg0Chunk1 {
-    pub dqp_ip: u32,
-    pub rkey: u32,
-}
-
-#[bitsize(64)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
-struct SendQueueReqDescSeg0Chunk2 {
-    pub raddr: u64,
-}
-
-#[bitsize(64)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
-struct SendQueueReqDescSeg0Chunk3 {
-    pub common_header: u64,
-}
-
-#[allow(clippy::missing_docs_in_private_items)]
-pub(crate) struct SendQueueReqDescSeg0 {
-    c0: SendQueueReqDescSeg0Chunk0,
-    c1: SendQueueReqDescSeg0Chunk1,
-    c2: SendQueueReqDescSeg0Chunk2,
-    c3: SendQueueReqDescSeg0Chunk3,
-}
-
-#[allow(missing_docs, clippy::missing_docs_in_private_items)] // method delegations
-impl SendQueueReqDescSeg0 {
-    pub(crate) fn reserved1(&self) -> u64 {
-        self.c0.reserved1().into()
-    }
-    pub(crate) fn set_reserved1(&mut self, val: u64) {
-        self.c0.set_reserved1(val.into());
-    }
-
-    pub(crate) fn pkey(&self) -> u16 {
-        self.c0.pkey()
-    }
-    pub(crate) fn set_pkey(&mut self, val: u16) {
-        self.c0.set_pkey(val);
-    }
-
-    pub(crate) fn dqp_ip(&self) -> u32 {
-        self.c1.dqp_ip()
-    }
-    pub(crate) fn set_dqp_ip(&mut self, val: u32) {
-        self.c1.set_dqp_ip(val);
-    }
-
-    pub(crate) fn rkey(&self) -> u32 {
-        self.c1.rkey()
-    }
-    pub(crate) fn set_rkey(&mut self, val: u32) {
-        self.c1.set_rkey(val);
-    }
-
-    pub(crate) fn raddr(&self) -> u64 {
-        self.c2.raddr()
-    }
-    pub(crate) fn set_raddr(&mut self, val: u64) {
-        self.c2.set_raddr(val);
-    }
-
-    pub(crate) fn common_header(&self) -> u64 {
-        self.c3.common_header()
-    }
-    pub(crate) fn set_common_header(&mut self, val: u64) {
-        self.c3.set_common_header(val);
     }
 }
 

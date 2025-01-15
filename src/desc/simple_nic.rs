@@ -2,8 +2,6 @@ use bilge::prelude::*;
 
 use crate::desc::RingBufDescCommonHead;
 
-use super::RingBufDescUntyped;
-
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct SimpleNicTxQueueDescChunk0 {
@@ -40,7 +38,7 @@ pub(crate) struct SimpleNicTxQueueDesc {
 
 impl SimpleNicTxQueueDesc {
     pub(crate) fn new(addr: u64, len: u32) -> Self {
-        let common_header = RingBufDescCommonHead::new_simple_nic_tx_queue_desc();
+        let common_header = RingBufDescCommonHead::new_simple_nic_desc();
         let c0 = SimpleNicTxQueueDescChunk0::new(common_header, 0, len);
         let c1 = SimpleNicTxQueueDescChunk1::new(addr);
         let c2 = SimpleNicTxQueueDescChunk2::new(0);
