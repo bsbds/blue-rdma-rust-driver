@@ -17,7 +17,7 @@ use worker::SimpleNicWorker;
 
 use crate::{
     net::tap::TapDevice,
-    queue::abstr::{FrameRx, FrameTx, SimpleNicTunnel},
+    queue::abstr::{FrameRx, FrameTx, RecvBuffer, SimpleNicTunnel},
 };
 
 #[allow(clippy::module_name_repetitions)]
@@ -74,22 +74,28 @@ impl SimpleNicDevice {
 
 /// A launcher for the `SimpleNic` worker thread that handles communication between
 /// the NIC device and tunnel.
-struct Launch<Tunnel> {
+pub(crate) struct Launch<Tunnel> {
     /// Abstract Tunnel
     inner: Tunnel,
     /// Tap device
     tap_dev: TapDevice,
+    /// tunnel receive buffer
+    recv_buffer: RecvBuffer,
 }
 
 impl<Tunnel: SimpleNicTunnel> Launch<Tunnel> {
     /// Creates a new `Launch`
-    fn new(inner: Tunnel, tap_dev: TapDevice) -> Self {
-        Self { inner, tap_dev }
+    pub(crate) fn new(inner: Tunnel, tap_dev: TapDevice, recv_buffer: RecvBuffer) -> Self {
+        Self {
+            inner,
+            tap_dev,
+            recv_buffer,
+        }
     }
 
     /// Launches the worker thread that handles communication between the NIC device and tunnel
-    fn launch(self, is_shutdown: Arc<AtomicBool>) -> worker::SimpleNicQueueHandle {
-        let (frame_tx, frame_rx) = self.inner.into_split();
+    pub(crate) fn launch(self, is_shutdown: Arc<AtomicBool>) -> worker::SimpleNicQueueHandle {
+        let (frame_tx, frame_rx) = self.inner.into_split(self.recv_buffer);
         let worker = SimpleNicWorker::new(self.tap_dev.inner(), frame_tx, frame_rx, is_shutdown);
         worker.run()
     }

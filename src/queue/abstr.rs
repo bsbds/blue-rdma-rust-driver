@@ -36,7 +36,7 @@ pub(crate) trait SimpleNicTunnel: Send + Sync + 'static {
     type Receiver: FrameRx;
 
     /// Splits into send half and recv half
-    fn into_split(self) -> (Self::Sender, Self::Receiver);
+    fn into_split(self, recv_buffer: RecvBuffer) -> (Self::Sender, Self::Receiver);
 }
 
 /// Trait for transmitting frames

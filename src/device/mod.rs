@@ -16,15 +16,20 @@ pub(crate) mod proxy;
 /// Memory-mapped I/O addresses of device registers
 mod constants;
 
-use std::{io, marker::PhantomData};
+use std::{
+    io,
+    marker::PhantomData,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use crate::{
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
-    net::config::NetworkConfig,
+    net::{config::NetworkConfig, tap::TapDevice},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RDMASend, RDMASendOp, RecvBuffer,
         RecvBufferMeta, SimpleNicTunnel,
     },
+    simple_nic,
 };
 
 /// A trait for interacting with device hardware through CSR operations.
@@ -182,6 +187,7 @@ where
         Resolver: VirtToPhys,
     {
         let (cmd, send, meta_report, simple_nic) = Inner::initialize();
+        let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
         let page = allocator.alloc()?;
         let recv_buffer = RecvBuffer::new(page);
         let phys_addr = phys_addr_resolver
@@ -190,7 +196,7 @@ where
         let meta = RecvBufferMeta::new(phys_addr);
         cmd.set_network(network)?;
         cmd.set_raw_packet_recv_buffer(meta)?;
-        Self::launch_backgroud(meta_report, simple_nic, recv_buffer);
+        Self::launch_backgroud(meta_report, simple_nic, tap_dev, recv_buffer);
 
         Ok(Device {
             inner,
@@ -201,8 +207,12 @@ where
     fn launch_backgroud(
         meta_report: Inner::MetaReport,
         simple_nic: Inner::SimpleNic,
+        tap_dev: TapDevice,
         recv_buffer: RecvBuffer,
     ) {
+        let is_shutdown = Arc::new(AtomicBool::new(false));
+        let launch = simple_nic::Launch::new(simple_nic, tap_dev, recv_buffer);
+        let _handle = launch.launch(Arc::clone(&is_shutdown));
         /// spwan the workers
         todo!()
     }

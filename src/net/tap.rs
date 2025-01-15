@@ -33,7 +33,10 @@ impl TapDevice {
 
     /// Creates a TUN device that operates at L2
     #[allow(unused_results)] // ignore the config construction result
-    fn create(mac_addr: Option<MacAddress>, network: Option<IpNetwork>) -> io::Result<Self> {
+    pub(crate) fn create(
+        mac_addr: Option<MacAddress>,
+        network: Option<IpNetwork>,
+    ) -> io::Result<Self> {
         let mut config = tun::Configuration::default();
         config.layer(tun::Layer::L2);
         if let Some(network) = network {
