@@ -112,6 +112,8 @@ pub(crate) enum MetaReportOpHeader {
     Write,
     /// Read operation header
     Read,
+    /// Congestion Notification Packet
+    Cnp,
 }
 
 /// Operation acknowledgment types
