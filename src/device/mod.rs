@@ -18,6 +18,8 @@ mod constants;
 
 use std::{io, marker::PhantomData};
 
+use crate::queue::abstr::DeviceCommand;
+
 /// A trait for interacting with device hardware through CSR operations.
 pub(crate) trait DeviceAdaptor {
     /// Reads from a CSR at the specified address.
@@ -132,63 +134,59 @@ where
 
 pub(crate) mod state {
     pub(crate) struct Uninitialized;
-    pub(crate) struct CsrInitialized;
+    pub(crate) struct QueueInitialized<Cmd, Send, MetaReport, SimpleNic> {
+        pub(crate) cmd: Cmd,
+        pub(crate) send: Send,
+        pub(crate) meta_report: MetaReport,
+        pub(crate) simple_nic: SimpleNic,
+    }
+
     pub(crate) struct BufferInitialized;
     pub(crate) struct Ready;
 }
 
-pub(crate) struct CsrConfig;
+pub(crate) trait InitializeDevice {
+    type Cmd;
+    type Send;
+    type MetaReport;
+    type SimpleNic;
 
-pub(crate) struct NetworkConfig;
-
-pub(crate) struct BufferConfig;
-
-pub(crate) trait DeviceOperations {
-    fn initialize_csr(&mut self, config: CsrConfig) -> io::Result<()>;
-    fn initialize_network(&mut self, config: NetworkConfig) -> io::Result<()>;
-    fn initialize_recv_buffer(&mut self, config: BufferConfig) -> io::Result<()>;
+    fn initialize() -> (Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic);
 }
 
 pub(crate) struct Device<Inner, S> {
     inner: Inner,
-    _state: PhantomData<S>,
+    state: S,
 }
 
-impl<Inner: DeviceOperations> Device<Inner, state::Uninitialized> {
-    pub(crate) fn new(inner: Inner) -> Self {
-        Self {
-            inner,
-            _state: PhantomData,
-        }
-    }
+type Initialized<I> = state::QueueInitialized<
+    <I as InitializeDevice>::Cmd,
+    <I as InitializeDevice>::Send,
+    <I as InitializeDevice>::MetaReport,
+    <I as InitializeDevice>::SimpleNic,
+>;
 
-    pub(crate) fn initialize_csr(
-        mut self,
-        config: CsrConfig,
-    ) -> io::Result<Device<Inner, state::CsrInitialized>> {
-        self.inner.initialize_csr(config)?;
-        todo!();
-    }
-}
+impl<Inner: InitializeDevice> Device<Inner, state::Uninitialized> {
+    pub(crate) fn init_queue(inner: Inner) -> Device<Inner, Initialized<Inner>> {
+        let (cmd, send, meta_report, simple_nic) = Inner::initialize();
 
-impl<Inner: DeviceOperations> Device<Inner, state::CsrInitialized> {
-    pub(crate) fn initialize_buffer(
-        mut self,
-        config: BufferConfig,
-    ) -> io::Result<Device<Inner, state::BufferInitialized>> {
-        self.inner.initialize_recv_buffer(config)?;
+        let state = state::QueueInitialized {
+            cmd,
+            send,
+            meta_report,
+            simple_nic,
+        };
 
-        todo!()
+        Device { inner, state }
     }
 }
 
-impl<Inner: DeviceOperations> Device<Inner, state::Ready> {
-    pub(crate) fn initialize_network(
-        mut self,
-        config: NetworkConfig,
-    ) -> io::Result<Device<Inner, state::Ready>> {
-        self.inner.initialize_network(config)?;
-
-        todo!()
+impl<Inner> Device<Inner, Initialized<Inner>>
+where
+    Inner: InitializeDevice,
+    Inner::Cmd: DeviceCommand,
+{
+    fn a(&self) {
+        self.state.cmd.set_raw_packet_recv_buffer()
     }
 }

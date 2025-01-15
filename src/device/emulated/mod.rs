@@ -21,7 +21,8 @@ use crate::{
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },
     queue::{
-        cmd_queue::{CmdQueue, CmdQueueDesc},
+        abstr::DeviceCommand,
+        cmd_queue::{CmdQueue, CmdQueueDesc, CommandController},
         DescRingBufferAllocator,
     },
     ringbuffer::{RingBuffer, RingCtx},
@@ -45,6 +46,20 @@ impl DeviceAdaptor for EmulatedDevice {
         self.0.write_csr(addr, data)
     }
 }
+
+//impl InitializeCsr for EmulatedDevice {
+//    type Cmd = CommandController<Self>;
+//
+//    type Send = ();
+//
+//    type MetaReport = ();
+//
+//    type SimpleNic = ();
+//
+//    fn initialize(&mut self) -> (Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic) {
+//        (Self::Cmd::new(), (), (), ())
+//    }
+//}
 
 impl EmulatedDevice {
     #[allow(

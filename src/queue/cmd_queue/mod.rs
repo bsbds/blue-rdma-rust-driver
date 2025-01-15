@@ -18,7 +18,38 @@ use crate::{
     ringbuffer::{Descriptor, RingBuffer},
 };
 
-use super::DescRingBuffer;
+use super::{abstr::DeviceCommand, DescRingBuffer};
+
+pub(crate) struct CommandController<Dev> {
+    cmd_queue: CmdQueue<Dev>,
+}
+
+impl<Dev> CommandController<Dev> {
+    pub(crate) fn new() -> Self {
+        todo!()
+    }
+}
+
+impl<Dev> DeviceCommand for CommandController<Dev> {
+    fn update_mtt(&self, entry: crate::queue::abstr::MttEntry) -> io::Result<()> {
+        todo!()
+    }
+
+    fn update_qp(&self, entry: crate::queue::abstr::QPEntry) -> io::Result<()> {
+        todo!()
+    }
+
+    fn set_network(&self, param: crate::queue::abstr::NetworkParam) -> io::Result<()> {
+        todo!()
+    }
+
+    fn set_raw_packet_recv_buffer(
+        &self,
+        buffer: crate::queue::abstr::RecvBuffer,
+    ) -> io::Result<()> {
+        todo!()
+    }
+}
 
 /// Command queue for submitting commands to the device
 pub(crate) struct CmdQueue<Dev> {
