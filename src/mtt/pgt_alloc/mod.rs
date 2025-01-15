@@ -2,7 +2,7 @@
 pub(super) const PGT_LEN: usize = 0x20000;
 
 /// Trait for allocating and deallocating second stage table entries
-pub(super) trait PgtAlloc {
+pub(crate) trait PgtAlloc {
     /// Allocates a contiguous range of page table entries
     ///
     /// # Arguments

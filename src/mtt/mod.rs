@@ -5,7 +5,7 @@ mod pgt_alloc;
 mod mr_alloc;
 
 /// Mtt implementation version 2
-mod v2;
+pub(crate) mod v2;
 
 use std::{
     io, iter,
@@ -314,7 +314,7 @@ impl<PAlloc: PgtAlloc> Mtt<PAlloc> {
 }
 
 /// Table memory allocator for MTT
-struct Alloc<PAlloc> {
+pub(crate) struct Alloc<PAlloc> {
     /// First stage table allocator
     mr: MrTableAlloc,
     /// Second stage table allocator

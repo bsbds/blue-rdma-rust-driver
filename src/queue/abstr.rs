@@ -5,7 +5,7 @@ use crate::{mem::page::ContiguousPages, net::config::NetworkConfig};
 /// RDMA device configuration interface
 pub(crate) trait DeviceCommand {
     /// Updates Memory Translation Table entry
-    fn update_mtt(&self, entry: MttEntry) -> io::Result<()>;
+    fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()>;
     /// Updates Queue Pair entry
     fn update_qp(&self, entry: QPEntry) -> io::Result<()>;
     /// Sets network parameters
@@ -51,8 +51,48 @@ pub(crate) trait FrameRx: Send + 'static {
     fn recv_nonblocking(&mut self) -> io::Result<&[u8]>;
 }
 
+#[allow(clippy::missing_docs_in_private_items)]
 /// Memory Translation Table entry
-pub(crate) struct MttEntry;
+pub(crate) struct MttEntry<'a> {
+    /// Reference to the mtt entry buffer, shouldn't be dropped during operations
+    entry_buffer: &'a ContiguousPages<1>,
+    mr_base_va: u64,
+    mr_length: u32,
+    mr_key: u32,
+    pd_handler: u32,
+    acc_flags: u8,
+    pgt_offset: u32,
+    dma_addr: u64,
+    zero_based_entry_count: u32,
+}
+
+impl<'a> MttEntry<'a> {
+    #[allow(clippy::too_many_arguments)]
+    /// Creates a new `MttEntry`
+    pub(crate) fn new(
+        entry_buffer: &'a ContiguousPages<1>,
+        mr_base_va: u64,
+        mr_length: u32,
+        mr_key: u32,
+        pd_handler: u32,
+        acc_flags: u8,
+        pgt_offset: u32,
+        dma_addr: u64,
+        zero_based_entry_count: u32,
+    ) -> Self {
+        Self {
+            entry_buffer,
+            mr_base_va,
+            mr_length,
+            mr_key,
+            pd_handler,
+            acc_flags,
+            pgt_offset,
+            dma_addr,
+            zero_based_entry_count,
+        }
+    }
+}
 /// Queue Pair entry
 pub(crate) struct QPEntry;
 

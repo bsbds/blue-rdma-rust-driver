@@ -3,35 +3,45 @@ use std::io;
 use crate::{
     desc::cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
     mem::{page::ContiguousPages, virt_to_phy::virt_to_phy_range, PAGE_SIZE},
+    queue::abstr::MttEntry,
 };
 
-use super::{pgt_alloc::PgtAlloc, Alloc};
-
-/// Descriptors for updating the MTT
-type MttUpdateDescs = (CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT);
+use super::{
+    pgt_alloc::{simple::SimplePgtAlloc, PgtAlloc},
+    Alloc,
+};
 
 /// Memory Translation Table implementation
-struct Mttv2<A> {
+pub(crate) struct Mttv2<A = SimplePgtAlloc> {
     /// Table memory allocator
     alloc: Alloc<A>,
 }
 
+impl Mttv2<SimplePgtAlloc> {
+    /// Creates a new `Mtt` with simple allocator
+    pub(crate) fn new_simple() -> Self {
+        Self {
+            alloc: Alloc::new_simple(),
+        }
+    }
+}
+
 impl<A: PgtAlloc> Mttv2<A> {
     /// Creates a new `Mtt`
-    fn new(alloc: Alloc<A>) -> Self {
+    pub(crate) fn new(alloc: Alloc<A>) -> Self {
         Self { alloc }
     }
 
     /// Register a memory region
-    pub(crate) fn register(
+    pub(crate) fn register<'a>(
         &mut self,
-        page_buffer: &mut ContiguousPages<1>,
+        page_buffer: &'a mut ContiguousPages<1>,
         page_buffer_phy_addr: u64,
         addr: u64,
         length: usize,
         pd_handle: u32,
         access: u8,
-    ) -> io::Result<MttUpdateDescs> {
+    ) -> io::Result<MttEntry<'a>> {
         Self::ensure_valid(addr, length)?;
         Self::try_pin_pages(addr, length)?;
         let num_pages = Self::get_num_page(addr, length);
@@ -53,27 +63,22 @@ impl<A: PgtAlloc> Mttv2<A> {
             .unwrap_or_else(|_| unreachable!("allocator should not alloc index larger than u32"));
         let length_u32 =
             u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
-        let update_mr_table_id = 0;
-        let update_pgt_id = 1;
         let entry_count = u32::try_from(num_pages.saturating_sub(1))
             .map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
-        let update_mr_table = CmdQueueReqDescUpdateMrTable::new(
-            update_mr_table_id,
+
+        let entry = MttEntry::new(
+            page_buffer,
             addr,
             length_u32,
             mr_key.0,
             pd_handle,
             access,
             index_u32,
-        );
-        let update_pgt = CmdQueueReqDescUpdatePGT::new(
-            update_pgt_id,
             page_buffer_phy_addr,
-            index_u32,
             entry_count,
         );
 
-        Ok((update_mr_table, update_pgt))
+        Ok(entry)
     }
 
     /// Pins pages in memory to prevent swapping
