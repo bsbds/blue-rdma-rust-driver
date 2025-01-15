@@ -4,6 +4,9 @@ mod pgt_alloc;
 /// First stage mtt allocator
 mod mr_alloc;
 
+/// Mtt implementation version 2
+mod v2;
+
 use std::{
     io, iter,
     sync::{
@@ -65,26 +68,22 @@ impl IbvMr {
 }
 
 /// Memory Translation Table implementation
-struct Mtt<PAlloc, Dev> {
+struct Mtt<PAlloc> {
     /// Table memory allocator
     alloc: Arc<Mutex<Alloc<PAlloc>>>,
     /// Command queue for submitting commands to device
-    cmd_queue: Arc<Mutex<CmdQueue<Dev>>>,
+    cmd_queue: Arc<Mutex<CmdQueue>>,
     /// Registration for getting notifies from the device
     reg: Arc<Mutex<Registration>>,
     /// Command ID generator
     cmd_id: AtomicU8,
 }
 
-impl<PAlloc, Dev> Mtt<PAlloc, Dev>
-where
-    PAlloc: PgtAlloc,
-    Dev: DeviceAdaptor,
-{
+impl<PAlloc: PgtAlloc> Mtt<PAlloc> {
     /// Creates a new `Mtt`
     fn new(
         alloc: Arc<Mutex<Alloc<PAlloc>>>,
-        cmd_queue: Arc<Mutex<CmdQueue<Dev>>>,
+        cmd_queue: Arc<Mutex<CmdQueue>>,
         reg: Arc<Mutex<Registration>>,
     ) -> Self {
         Self {
@@ -387,7 +386,7 @@ mod test {
         let buffer = DescRingBufferAllocator::new_host_allocator()
             .alloc()
             .unwrap();
-        let mut queue = Arc::new(Mutex::new(CmdQueue::new(DummyDevice::default(), buffer)));
+        let mut queue = Arc::new(Mutex::new(CmdQueue::new(buffer)));
         let mut reg = Arc::new(Mutex::new(Registration::new()));
         let reg_c = Arc::clone(&reg);
         let mtt = Mtt::new(alloc, queue, reg);
