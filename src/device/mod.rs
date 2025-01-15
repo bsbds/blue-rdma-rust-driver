@@ -18,7 +18,14 @@ mod constants;
 
 use std::{io, marker::PhantomData};
 
-use crate::queue::abstr::DeviceCommand;
+use crate::{
+    mem::page::PageAllocator,
+    net::config::NetworkConfig,
+    queue::abstr::{
+        DeviceCommand, MetaReport, MttEntry, QPEntry, RDMASend, RDMASendOp, RecvBuffer,
+        SimpleNicTunnel,
+    },
+};
 
 /// A trait for interacting with device hardware through CSR operations.
 pub(crate) trait DeviceAdaptor {
@@ -134,15 +141,10 @@ where
 
 pub(crate) mod state {
     pub(crate) struct Uninitialized;
-    pub(crate) struct QueueInitialized<Cmd, Send, MetaReport, SimpleNic> {
+    pub(crate) struct InitializedDevice<Cmd, Send> {
         pub(crate) cmd: Cmd,
         pub(crate) send: Send,
-        pub(crate) meta_report: MetaReport,
-        pub(crate) simple_nic: SimpleNic,
     }
-
-    pub(crate) struct BufferInitialized;
-    pub(crate) struct Ready;
 }
 
 pub(crate) trait InitializeDevice {
@@ -159,25 +161,41 @@ pub(crate) struct Device<Inner, S> {
     state: S,
 }
 
-type Initialized<I> = state::QueueInitialized<
-    <I as InitializeDevice>::Cmd,
-    <I as InitializeDevice>::Send,
-    <I as InitializeDevice>::MetaReport,
-    <I as InitializeDevice>::SimpleNic,
->;
+type Initialized<Dev> =
+    state::InitializedDevice<<Dev as InitializeDevice>::Cmd, <Dev as InitializeDevice>::Send>;
 
-impl<Inner: InitializeDevice> Device<Inner, state::Uninitialized> {
-    pub(crate) fn init_queue(inner: Inner) -> Device<Inner, Initialized<Inner>> {
+impl<Inner> Device<Inner, state::Uninitialized>
+where
+    Inner: InitializeDevice,
+    Inner::Cmd: DeviceCommand,
+    Inner::MetaReport: MetaReport,
+    Inner::SimpleNic: SimpleNicTunnel,
+{
+    pub(crate) fn init<Allocator: PageAllocator<1>>(
+        inner: Inner,
+        network: NetworkConfig,
+        mut allocator: Allocator,
+    ) -> io::Result<Device<Inner, Initialized<Inner>>> {
         let (cmd, send, meta_report, simple_nic) = Inner::initialize();
+        let page = allocator.alloc()?;
+        let recv_buffer = RecvBuffer::new(page);
+        cmd.set_network(network)?;
+        cmd.set_raw_packet_recv_buffer(recv_buffer.meta())?;
+        Self::launch_backgroud(meta_report, simple_nic, recv_buffer);
 
-        let state = state::QueueInitialized {
-            cmd,
-            send,
-            meta_report,
-            simple_nic,
-        };
+        Ok(Device {
+            inner,
+            state: state::InitializedDevice { cmd, send },
+        })
+    }
 
-        Device { inner, state }
+    fn launch_backgroud(
+        meta_report: Inner::MetaReport,
+        simple_nic: Inner::SimpleNic,
+        recv_buffer: RecvBuffer,
+    ) {
+        /// spwan the workers
+        todo!()
     }
 }
 
@@ -185,8 +203,20 @@ impl<Inner> Device<Inner, Initialized<Inner>>
 where
     Inner: InitializeDevice,
     Inner::Cmd: DeviceCommand,
+    Inner::Send: RDMASend,
 {
-    fn a(&self) {
-        self.state.cmd.set_raw_packet_recv_buffer()
+    /// Updates Memory Translation Table entry
+    fn update_mtt(&self, entry: MttEntry) -> io::Result<()> {
+        self.state.cmd.update_mtt(entry)
+    }
+
+    /// Updates Queue Pair entry
+    fn update_qp(&self, entry: QPEntry) -> io::Result<()> {
+        self.state.cmd.update_qp(entry)
+    }
+
+    /// Sends an RDMA operation
+    fn send(&self, op: RDMASendOp) -> io::Result<()> {
+        self.state.send.send(op)
     }
 }

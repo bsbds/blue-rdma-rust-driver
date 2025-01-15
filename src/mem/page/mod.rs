@@ -35,6 +35,11 @@ pub(crate) struct ContiguousPages<const N: usize> {
 }
 
 impl<const N: usize> ContiguousPages<N> {
+    #[allow(clippy::as_conversions)] // converting *mut c_void to u64
+    pub(crate) fn addr(&self) -> u64 {
+        self.inner.ptr as u64
+    }
+
     /// Creates a new `ContiguousPages`
     pub(super) fn new(inner: MmapMut) -> Self {
         Self { inner }

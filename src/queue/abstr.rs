@@ -1,5 +1,7 @@
 use std::io;
 
+use crate::{mem::page::ContiguousPages, net::config::NetworkConfig};
+
 /// RDMA device configuration interface
 pub(crate) trait DeviceCommand {
     /// Updates Memory Translation Table entry
@@ -7,9 +9,9 @@ pub(crate) trait DeviceCommand {
     /// Updates Queue Pair entry
     fn update_qp(&self, entry: QPEntry) -> io::Result<()>;
     /// Sets network parameters
-    fn set_network(&self, param: NetworkParam) -> io::Result<()>;
+    fn set_network(&self, param: NetworkConfig) -> io::Result<()>;
     /// Sets receive buffer for raw packets
-    fn set_raw_packet_recv_buffer(&self, buffer: RecvBuffer) -> io::Result<()>;
+    fn set_raw_packet_recv_buffer(&self, buffer: RecvBufferMeta) -> io::Result<()>;
 }
 
 /// RDMA send operations interface
@@ -38,10 +40,39 @@ pub(crate) trait SimpleNicTunnel {
 pub(crate) struct MttEntry;
 /// Queue Pair entry
 pub(crate) struct QPEntry;
-/// Network parameters
-pub(crate) struct NetworkParam;
+
 /// Receive buffer
-pub(crate) struct RecvBuffer;
+pub(crate) struct RecvBuffer {
+    inner: ContiguousPages<1>,
+}
+
+pub(crate) struct RecvBufferMeta {
+    addr: u64,
+}
+
+impl RecvBuffer {
+    pub(crate) fn new(inner: ContiguousPages<1>) -> Self {
+        Self { inner }
+    }
+
+    pub(crate) fn meta(&self) -> RecvBufferMeta {
+        RecvBufferMeta {
+            addr: self.inner.addr(),
+        }
+    }
+}
+
+impl AsMut<[u8]> for RecvBuffer {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.inner
+    }
+}
+
+impl AsRef<[u8]> for RecvBuffer {
+    fn as_ref(&self) -> &[u8] {
+        &self.inner
+    }
+}
 
 /// RDMA send operation types
 pub(crate) enum RDMASendOp {
