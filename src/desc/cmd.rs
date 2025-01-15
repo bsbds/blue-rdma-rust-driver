@@ -136,20 +136,6 @@ impl CmdQueueReqDescUpdateMrTable {
     }
 }
 
-#[allow(unsafe_code)]
-impl From<CmdQueueReqDescUpdateMrTable> for RingBufDescUntyped {
-    fn from(desc: CmdQueueReqDescUpdateMrTable) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<RingBufDescUntyped> for CmdQueueReqDescUpdateMrTable {
-    fn from(desc: RingBufDescUntyped) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 pub(crate) struct CmdQueueReqDescUpdatePGTChunk0 {
@@ -228,20 +214,6 @@ impl CmdQueueReqDescUpdatePGT {
     }
 }
 
-#[allow(unsafe_code)]
-impl From<CmdQueueReqDescUpdatePGT> for RingBufDescUntyped {
-    fn from(desc: CmdQueueReqDescUpdatePGT) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<RingBufDescUntyped> for CmdQueueReqDescUpdatePGT {
-    fn from(desc: RingBufDescUntyped) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueRespDescOnlyCommonHeader {
     header: CmdQueueReqDescHeaderChunk,
@@ -273,19 +245,5 @@ impl CmdQueueRespDescOnlyCommonHeader {
 
     pub(crate) fn headers(&self) -> CmdQueueReqDescHeaderChunk {
         self.header
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<RingBufDescUntyped> for CmdQueueRespDescOnlyCommonHeader {
-    fn from(desc: RingBufDescUntyped) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<CmdQueueRespDescOnlyCommonHeader> for RingBufDescUntyped {
-    fn from(desc: CmdQueueRespDescOnlyCommonHeader) -> Self {
-        unsafe { std::mem::transmute(desc) }
     }
 }

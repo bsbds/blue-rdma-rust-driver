@@ -1,5 +1,3 @@
-#![allow(clippy::missing_docs_in_private_items)]
-
 use bilge::prelude::*;
 
 use crate::desc::RingBufDescCommonHead;
@@ -117,26 +115,5 @@ impl SimpleNicRxQueueDesc {
 
     pub(crate) fn set_len(&mut self, val: u32) {
         self.c0.set_len(val);
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<SimpleNicTxQueueDesc> for RingBufDescUntyped {
-    fn from(desc: SimpleNicTxQueueDesc) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<RingBufDescUntyped> for SimpleNicTxQueueDesc {
-    fn from(desc: RingBufDescUntyped) -> Self {
-        unsafe { std::mem::transmute(desc) }
-    }
-}
-
-#[allow(unsafe_code)]
-impl From<RingBufDescUntyped> for SimpleNicRxQueueDesc {
-    fn from(desc: RingBufDescUntyped) -> Self {
-        unsafe { std::mem::transmute(desc) }
     }
 }

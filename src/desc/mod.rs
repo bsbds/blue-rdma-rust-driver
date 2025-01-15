@@ -1,8 +1,17 @@
+#![allow(clippy::missing_docs_in_private_items)]
+
 /// Cmd queue pair descriptors
 pub(crate) mod cmd;
 
 /// Simple NIC descriptors
 pub(crate) mod simple_nic;
+
+/// Meta report queue descriptors
+pub(crate) mod meta_report;
+
+pub(crate) use cmd::*;
+pub(crate) use meta_report::*;
+pub(crate) use simple_nic::*;
 
 use bilge::prelude::*;
 use cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT};
@@ -37,6 +46,28 @@ macro_rules! impl_from_bytes {
                 #[allow(unsafe_code)]
                 fn from_bytes(bytes: [u8; DESC_SIZE]) -> Self {
                     unsafe { std::mem::transmute(bytes) }
+                }
+            }
+        )*
+    }
+}
+
+macro_rules! impl_desc_conversion_untyped {
+    ($($type:ty),*) => {
+        $(
+            const _: () = assert!(std::mem::size_of::<$type>() == DESC_SIZE);
+
+            #[allow(unsafe_code)]
+            impl From<$type> for RingBufDescUntyped {
+                fn from(desc: $type) -> Self {
+                    unsafe { std::mem::transmute(desc) }
+                }
+            }
+
+            #[allow(unsafe_code)]
+            impl From<RingBufDescUntyped> for $type {
+                fn from(desc: RingBufDescUntyped) -> Self {
+                    unsafe { std::mem::transmute(desc) }
                 }
             }
         )*
@@ -110,6 +141,18 @@ impl Descriptor for RingBufDescUntyped {
         valid
     }
 }
+
+impl_desc_conversion_untyped!(
+    CmdQueueRespDescOnlyCommonHeader,
+    CmdQueueReqDescUpdateMrTable,
+    CmdQueueReqDescUpdatePGT,
+    SimpleNicTxQueueDesc,
+    SimpleNicRxQueueDesc,
+    MetaReportQueuePacketBasicInfoDesc,
+    MetaReportQueueReadReqExtendInfoDesc,
+    MetaReportQueueAckDesc,
+    MetaReportQueueAckExtraDesc
+);
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
