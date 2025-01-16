@@ -22,7 +22,7 @@ pub(crate) trait DeviceCommand {
 /// RDMA send operations interface
 pub(crate) trait WorkReqSend {
     /// Sends an RDMA operation
-    fn send(&self, op: WorkReqOp) -> io::Result<()>;
+    fn send(&self, op: WrChunk) -> io::Result<()>;
 }
 
 /// Metadata reporting interface
@@ -152,16 +152,6 @@ impl AsRef<[u8]> for RecvBuffer {
     fn as_ref(&self) -> &[u8] {
         &self.inner
     }
-}
-
-/// RDMA send operation types
-pub(crate) enum WorkReqOp {
-    /// Write operation
-    Write,
-    /// Write with immediate
-    WriteWithImm,
-    /// Read operation
-    Read,
 }
 
 /// Metadata operation header types

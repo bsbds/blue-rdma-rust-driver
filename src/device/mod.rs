@@ -29,7 +29,7 @@ use crate::{
     net::{config::NetworkConfig, tap::TapDevice},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
-        WorkReqOp, WorkReqSend,
+        WorkReqOp, WorkReqSend, WrChunk,
     },
     simple_nic,
 };
@@ -243,7 +243,7 @@ where
     }
 
     /// Sends an RDMA operation
-    fn send(&self, op: WorkReqOp) -> io::Result<()> {
+    fn send(&self, op: WrChunk) -> io::Result<()> {
         self.state.send.send(op)
     }
 }

@@ -2,19 +2,23 @@
 // TODO: add field validations
 use std::marker::PhantomData;
 
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Initial;
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct WithQpParams;
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct WithIbvParams;
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct WithChunkInfo;
 
 /// Work Request Builder
-#[derive(Debug, Default)]
-pub(crate) struct WrBuilder<S> {
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct WrChunkBuilder<S> {
     inner: WrChunk,
     _state: PhantomData<S>,
 }
 
-impl WrBuilder<Initial> {
+impl WrChunkBuilder<Initial> {
     pub(crate) fn new() -> Self {
         Self {
             inner: WrChunk::default(),
@@ -22,15 +26,18 @@ impl WrBuilder<Initial> {
         }
     }
 
+    #[allow(clippy::unused_self, clippy::too_many_arguments)]
     pub(crate) fn set_qp_params(
+        self,
+        msn: u16,
         qp_type: u8,
         sqpn: u32,
         mac_addr: u64,
         dqpn: u32,
         dqp_ip: u32,
         pmtu: u8,
-    ) -> WrBuilder<WithQpParams> {
-        WrBuilder {
+    ) -> WrChunkBuilder<WithQpParams> {
+        WrChunkBuilder {
             inner: WrChunk {
                 qp_type,
                 sqpn,
@@ -38,6 +45,7 @@ impl WrBuilder<Initial> {
                 dqpn,
                 dqp_ip,
                 pmtu,
+                msn,
                 ..Default::default()
             },
             _state: PhantomData,
@@ -45,42 +53,40 @@ impl WrBuilder<Initial> {
     }
 }
 
-impl WrBuilder<WithQpParams> {
+impl WrChunkBuilder<WithQpParams> {
     pub(crate) fn set_ibv_params(
         mut self,
         flags: u8,
-        raddr: u64,
         rkey: u32,
         total_len: u32,
         lkey: u32,
         imm: u32,
-    ) -> WrBuilder<WithIbvParams> {
+    ) -> WrChunkBuilder<WithIbvParams> {
         self.inner.flags = flags;
-        self.inner.raddr = raddr;
         self.inner.rkey = rkey;
         self.inner.total_len = total_len;
         self.inner.lkey = lkey;
         self.inner.imm = imm;
 
-        WrBuilder {
+        WrChunkBuilder {
             inner: self.inner,
             _state: PhantomData,
         }
     }
 }
 
-impl WrBuilder<WithIbvParams> {
-    pub(crate) fn set_chunk_info(
+impl WrChunkBuilder<WithIbvParams> {
+    pub(crate) fn set_chunk_meta(
         mut self,
-        msn: u16,
         psn: u32,
-        addr: u64,
+        laddr: u64,
+        raddr: u64,
         len: u32,
         pos: ChunkPos,
-    ) -> WrBuilder<WithChunkInfo> {
-        self.inner.msn = msn;
+    ) -> WrChunkBuilder<WithChunkInfo> {
         self.inner.psn = psn;
-        self.inner.laddr = addr;
+        self.inner.laddr = laddr;
+        self.inner.raddr = raddr;
         self.inner.len = len;
         match pos {
             ChunkPos::First => self.inner.is_first = true,
@@ -88,14 +94,18 @@ impl WrBuilder<WithIbvParams> {
             ChunkPos::Middle => {}
         }
 
-        WrBuilder {
+        WrChunkBuilder {
             inner: self.inner,
             _state: PhantomData,
         }
     }
+
+    pub(crate) fn pmtu(&self) -> u8 {
+        self.inner.pmtu
+    }
 }
 
-impl WrBuilder<WithChunkInfo> {
+impl WrChunkBuilder<WithChunkInfo> {
     pub(crate) fn set_is_retry(mut self) -> Self {
         self.inner.is_retry = true;
         self
@@ -111,7 +121,7 @@ impl WrBuilder<WithChunkInfo> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct WrChunk {
     qp_type: u8,
     sqpn: u32,
@@ -135,8 +145,9 @@ pub(crate) struct WrChunk {
     enable_ecn: bool,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChunkPos {
+    #[default]
     First,
     Middle,
     Last,

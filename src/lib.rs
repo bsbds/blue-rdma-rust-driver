@@ -188,6 +188,8 @@ mod ringbuffer;
 mod send;
 /// Simple network interface card
 mod simple_nic;
+/// Queue pair state
+mod user_qp;
 /// Device Queue Workers
 mod workers;
 
