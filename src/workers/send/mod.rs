@@ -1,4 +1,4 @@
-use crate::queue::abstr::RDMASend;
+use crate::queue::abstr::WorkReqSend;
 
 struct SendWorker<SQ> {
     send_queue: SQ,
@@ -9,7 +9,7 @@ struct Inject;
 
 struct Task;
 
-impl<SQ: RDMASend> SendWorker<SQ> {
+impl<SQ: WorkReqSend> SendWorker<SQ> {
     fn run(self) {
         loop {
             let task = self.find_task();

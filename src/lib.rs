@@ -184,6 +184,8 @@ pub(crate) mod queue;
 mod retransmission;
 /// RDMA ring buffer implementation
 mod ringbuffer;
+/// Send Queue implementations
+mod send;
 /// Simple network interface card
 mod simple_nic;
 /// Device Queue Workers

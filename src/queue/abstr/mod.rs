@@ -1,3 +1,8 @@
+/// Work Request Builder
+mod wr;
+
+pub(crate) use wr::*;
+
 use std::io;
 
 use crate::{mem::page::ContiguousPages, net::config::NetworkConfig};
@@ -15,9 +20,9 @@ pub(crate) trait DeviceCommand {
 }
 
 /// RDMA send operations interface
-pub(crate) trait RDMASend {
+pub(crate) trait WorkReqSend {
     /// Sends an RDMA operation
-    fn send(&self, op: RDMASendOp) -> io::Result<()>;
+    fn send(&self, op: WorkReqOp) -> io::Result<()>;
 }
 
 /// Metadata reporting interface
@@ -150,9 +155,11 @@ impl AsRef<[u8]> for RecvBuffer {
 }
 
 /// RDMA send operation types
-pub(crate) enum RDMASendOp {
+pub(crate) enum WorkReqOp {
     /// Write operation
     Write,
+    /// Write with immediate
+    WriteWithImm,
     /// Read operation
     Read,
 }

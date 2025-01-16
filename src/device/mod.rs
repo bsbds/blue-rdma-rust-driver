@@ -28,8 +28,8 @@ use crate::{
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
     queue::abstr::{
-        DeviceCommand, MetaReport, MttEntry, QPEntry, RDMASend, RDMASendOp, RecvBuffer,
-        RecvBufferMeta, SimpleNicTunnel,
+        DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
+        WorkReqOp, WorkReqSend,
     },
     simple_nic,
 };
@@ -230,7 +230,7 @@ impl<Inner> Device<Inner, Initialized<Inner>>
 where
     Inner: InitializeDevice,
     Inner::Cmd: DeviceCommand,
-    Inner::Send: RDMASend,
+    Inner::Send: WorkReqSend,
 {
     /// Updates Memory Translation Table entry
     fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
@@ -243,7 +243,7 @@ where
     }
 
     /// Sends an RDMA operation
-    fn send(&self, op: RDMASendOp) -> io::Result<()> {
+    fn send(&self, op: WorkReqOp) -> io::Result<()> {
         self.state.send.send(op)
     }
 }
