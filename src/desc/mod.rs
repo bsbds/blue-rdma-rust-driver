@@ -19,7 +19,6 @@ pub(crate) use send::*;
 pub(crate) use simple_nic::*;
 
 use bilge::prelude::*;
-use cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT};
 
 use crate::ringbuffer::Descriptor;
 

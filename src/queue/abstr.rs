@@ -55,15 +55,15 @@ pub(crate) trait FrameRx: Send + 'static {
 /// Memory Translation Table entry
 pub(crate) struct MttEntry<'a> {
     /// Reference to the mtt entry buffer, shouldn't be dropped during operations
-    entry_buffer: &'a ContiguousPages<1>,
-    mr_base_va: u64,
-    mr_length: u32,
-    mr_key: u32,
-    pd_handler: u32,
-    acc_flags: u8,
-    pgt_offset: u32,
-    dma_addr: u64,
-    zero_based_entry_count: u32,
+    pub(crate) entry_buffer: &'a ContiguousPages<1>,
+    pub(crate) mr_base_va: u64,
+    pub(crate) mr_length: u32,
+    pub(crate) mr_key: u32,
+    pub(crate) pd_handler: u32,
+    pub(crate) acc_flags: u8,
+    pub(crate) pgt_offset: u32,
+    pub(crate) dma_addr: u64,
+    pub(crate) zero_based_entry_count: u32,
 }
 
 impl<'a> MttEntry<'a> {
@@ -94,7 +94,17 @@ impl<'a> MttEntry<'a> {
     }
 }
 /// Queue Pair entry
-pub(crate) struct QPEntry;
+#[allow(clippy::missing_docs_in_private_items)]
+pub(crate) struct QPEntry {
+    pub(crate) ip_addr: u32,
+    pub(crate) qpn: u32,
+    pub(crate) peer_qpn: u32,
+    pub(crate) rq_access_flags: u8,
+    pub(crate) qp_type: u8,
+    pub(crate) pmtu: u8,
+    pub(crate) local_udp_port: u16,
+    pub(crate) peer_mac_addr: u64,
+}
 
 /// Receive buffer
 pub(crate) struct RecvBuffer {
@@ -105,7 +115,7 @@ pub(crate) struct RecvBuffer {
 /// Metadata about a receive buffer
 pub(crate) struct RecvBufferMeta {
     /// Physical address of the receive buffer
-    phys_addr: u64,
+    pub(crate) phys_addr: u64,
 }
 
 impl RecvBufferMeta {

@@ -10,7 +10,16 @@ use crate::device::{
     CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, RingBufferCsrAddr, ToCard, ToHost,
 };
 
-#[derive(Debug)]
+/// Trait for proxying access to an underlying RDMA device.
+pub(crate) trait DeviceProxy {
+    /// The concrete device type being proxied
+    type Device;
+
+    /// Returns a reference to the underlying device
+    fn device(&self) -> &Self::Device;
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct CmdQueueCsrProxy<Dev>(pub(crate) Dev);
 
 impl<Dev> ToCard for CmdQueueCsrProxy<Dev> {}
@@ -22,7 +31,15 @@ impl<Dev> RingBufferCsrAddr for CmdQueueCsrProxy<Dev> {
     const BASE_ADDR_HIGH: usize = CSR_ADDR_CMD_REQ_QUEUE_ADDR_HIGH;
 }
 
-#[derive(Debug)]
+impl<Dev> DeviceProxy for CmdQueueCsrProxy<Dev> {
+    type Device = Dev;
+
+    fn device(&self) -> &Self::Device {
+        &self.0
+    }
+}
+
+#[derive(Clone, Debug)]
 pub(crate) struct CmdRespQueueCsrProxy<Dev>(pub(crate) Dev);
 
 impl<Dev> ToHost for CmdRespQueueCsrProxy<Dev> {}
@@ -34,20 +51,10 @@ impl<Dev> RingBufferCsrAddr for CmdRespQueueCsrProxy<Dev> {
     const BASE_ADDR_HIGH: usize = CSR_ADDR_CMD_RESP_QUEUE_ADDR_HIGH;
 }
 
-macro_rules! impl_device_adaptor_proxy {
-    ($($proxy:ty),*) => {
-        $(
-            impl<Dev> DeviceAdaptor for $proxy where Dev: DeviceAdaptor {
-                fn read_csr(&self, addr: usize) -> io::Result<u32> {
-                    self.0.read_csr(addr)
-                }
+impl<Dev> DeviceProxy for CmdRespQueueCsrProxy<Dev> {
+    type Device = Dev;
 
-                fn write_csr(&self, addr: usize, data: u32) -> io::Result<()> {
-                    self.0.write_csr(addr, data)
-                }
-            }
-        )*
-    };
+    fn device(&self) -> &Self::Device {
+        &self.0
+    }
 }
-
-impl_device_adaptor_proxy!(CmdQueueCsrProxy<Dev>, CmdRespQueueCsrProxy<Dev>);

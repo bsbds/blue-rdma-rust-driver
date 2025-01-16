@@ -22,7 +22,7 @@ use crate::{
     },
     queue::{
         abstr::DeviceCommand,
-        cmd_queue::{CmdQueue, CmdQueueDesc, CommandController},
+        cmd_queue::{CmdQueue, CmdQueueDesc},
         DescRingBufferAllocator,
     },
     ringbuffer::{RingBuffer, RingCtx},
@@ -88,13 +88,14 @@ impl EmulatedDevice {
         let phy_addr1 = resolver.virt_to_phys(buffer1.base_addr())?.unwrap_or(0);
         proxy_cmd_queue.write_base_addr(phy_addr0)?;
         proxy_resp_queue.write_base_addr(phy_addr1)?;
-        let mut cmd_queue = CmdQueue::new(dev, buffer0);
+        let mut cmd_queue = CmdQueue::new(buffer0);
         let desc0 =
             CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 1, 1, 1, 1, 1, 1));
         let desc1 = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(8, 1, 1, 1));
         cmd_queue.push(desc0).unwrap_or_else(|_| unreachable!());
         cmd_queue.push(desc1).unwrap_or_else(|_| unreachable!());
-        cmd_queue.flush()?;
+        // TODO: flush
+        //cmd_queue.flush()?;
         std::thread::sleep(Duration::from_secs(1));
 
         let resps: Vec<CmdQueueRespDescOnlyCommonHeader> =

@@ -5,11 +5,9 @@ use std::io;
 
 use crate::{
     desc::{
-        cmd::{
-            CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
-            CmdQueueRespDescOnlyCommonHeader,
-        },
-        RingBufDescUntyped,
+        CmdQueueReqDescQpManagement, CmdQueueReqDescSetNetworkParam,
+        CmdQueueReqDescSetRawPacketReceiveMeta, CmdQueueReqDescUpdateMrTable,
+        CmdQueueReqDescUpdatePGT, CmdQueueRespDescOnlyCommonHeader, RingBufDescUntyped,
     },
     device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
@@ -21,49 +19,10 @@ use crate::{
 
 use super::{abstr::DeviceCommand, DescRingBuffer};
 
-/// Controller of the command queue
-pub(crate) struct CommandController<Dev> {
-    /// The command request queue
-    cmd_queue: CmdQueue<Dev>,
-}
-
-impl<Dev> CommandController<Dev> {
-    /// Creates a new command controller instance
-    ///
-    /// # Returns
-    /// A new `CommandController` with an initialized command queue
-    pub(crate) fn new() -> Self {
-        todo!()
-    }
-}
-
-impl<Dev> DeviceCommand for CommandController<Dev> {
-    fn update_mtt(&self, entry: crate::queue::abstr::MttEntry) -> io::Result<()> {
-        todo!()
-    }
-
-    fn update_qp(&self, entry: crate::queue::abstr::QPEntry) -> io::Result<()> {
-        todo!()
-    }
-
-    fn set_network(&self, param: NetworkConfig) -> io::Result<()> {
-        todo!()
-    }
-
-    fn set_raw_packet_recv_buffer(
-        &self,
-        buffer: crate::queue::abstr::RecvBufferMeta,
-    ) -> io::Result<()> {
-        todo!()
-    }
-}
-
 /// Command queue for submitting commands to the device
-pub(crate) struct CmdQueue<Dev> {
+pub(crate) struct CmdQueue {
     /// Inner ring buffer
     inner: DescRingBuffer,
-    /// The CSR proxy
-    proxy: CmdQueueCsrProxy<Dev>,
 }
 
 /// Command queue descriptor types that can be submitted
@@ -73,15 +32,18 @@ pub(crate) enum CmdQueueDesc {
     UpdateMrTable(CmdQueueReqDescUpdateMrTable),
     /// Update second stage table command
     UpdatePGT(CmdQueueReqDescUpdatePGT),
+    /// Manage Queue Pair operations
+    ManageQP(CmdQueueReqDescQpManagement),
+    /// Set network parameters
+    SetNetworkParam(CmdQueueReqDescSetNetworkParam),
+    /// Set metadata for raw packet receive operations
+    SetRawPacketReceiveMeta(CmdQueueReqDescSetRawPacketReceiveMeta),
 }
 
-impl<Dev: DeviceAdaptor> CmdQueue<Dev> {
+impl CmdQueue {
     /// Creates a new `CmdQueue`
-    pub(crate) fn new(device: Dev, ring_buffer: DescRingBuffer) -> Self {
-        Self {
-            inner: ring_buffer,
-            proxy: CmdQueueCsrProxy(device),
-        }
+    pub(crate) fn new(ring_buffer: DescRingBuffer) -> Self {
+        Self { inner: ring_buffer }
     }
 
     /// Produces command descriptors to the queue
@@ -97,12 +59,27 @@ impl<Dev: DeviceAdaptor> CmdQueue<Dev> {
                 .push(d.into())
                 .map_err(Into::into)
                 .map_err(CmdQueueDesc::UpdatePGT),
+            CmdQueueDesc::ManageQP(d) => self
+                .inner
+                .push(d.into())
+                .map_err(Into::into)
+                .map_err(CmdQueueDesc::ManageQP),
+            CmdQueueDesc::SetNetworkParam(d) => self
+                .inner
+                .push(d.into())
+                .map_err(Into::into)
+                .map_err(CmdQueueDesc::SetNetworkParam),
+            CmdQueueDesc::SetRawPacketReceiveMeta(d) => self
+                .inner
+                .push(d.into())
+                .map_err(Into::into)
+                .map_err(CmdQueueDesc::SetRawPacketReceiveMeta),
         }
     }
 
-    /// Flush
-    pub(crate) fn flush(&self) -> io::Result<()> {
-        self.proxy.write_head(self.inner.head())
+    /// Returns the head pointer
+    pub(crate) fn head(&self) -> u32 {
+        self.inner.head()
     }
 }
 
@@ -119,20 +96,15 @@ impl std::ops::Deref for CmdRespQueueDesc {
 }
 
 /// Queue for receiving command responses from the device
-struct CmdRespQueue<Dev> {
+pub(crate) struct CmdRespQueue {
     /// Inner ring buffer
     inner: DescRingBuffer,
-    /// The CSR proxy
-    proxy: CmdRespQueueCsrProxy<Dev>,
 }
 
-impl<Dev: DeviceAdaptor> CmdRespQueue<Dev> {
+impl CmdRespQueue {
     /// Creates a new `CmdRespQueue`
-    fn new(device: Dev, ring_buffer: DescRingBuffer) -> Self {
-        Self {
-            inner: ring_buffer,
-            proxy: CmdRespQueueCsrProxy(device),
-        }
+    pub(crate) fn new(ring_buffer: DescRingBuffer) -> Self {
+        Self { inner: ring_buffer }
     }
 
     /// Tries to poll next valid entry from the queue
@@ -144,9 +116,9 @@ impl<Dev: DeviceAdaptor> CmdRespQueue<Dev> {
             .map(CmdRespQueueDesc)
     }
 
-    /// Flush
-    pub(crate) fn flush(&self) -> io::Result<()> {
-        self.proxy.write_tail(self.inner.tail())
+    /// Return tail pointer
+    pub(crate) fn tail(&self) -> u32 {
+        self.inner.tail()
     }
 }
 
@@ -167,7 +139,7 @@ mod test {
         let buffer = DescRingBufferAllocator::new_host_allocator()
             .alloc()
             .unwrap();
-        let mut queue = CmdQueue::new(DummyDevice::default(), buffer);
+        let mut queue = CmdQueue::new(buffer);
         let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
         queue.push(desc).unwrap();
     }
@@ -180,7 +152,7 @@ mod test {
             .unwrap();
         let desc = RingBufDescUntyped::new_valid_default();
         ring.push(desc).unwrap();
-        let mut queue = CmdRespQueue::new(DummyDevice::default(), buffer);
+        let mut queue = CmdRespQueue::new(buffer);
         let desc = queue.try_pop().unwrap();
     }
 }

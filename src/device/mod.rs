@@ -22,6 +22,8 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
+use proxy::DeviceProxy;
+
 use crate::{
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
@@ -33,7 +35,7 @@ use crate::{
 };
 
 /// A trait for interacting with device hardware through CSR operations.
-pub(crate) trait DeviceAdaptor {
+pub(crate) trait DeviceAdaptor: Clone {
     /// Reads from a CSR at the specified address.
     ///
     /// # Arguments
@@ -102,45 +104,50 @@ pub(crate) trait CsrBaseAddrAdaptor {
 
 impl<T> CsrWriterAdaptor for T
 where
-    T: ToCard + DeviceAdaptor + RingBufferCsrAddr,
+    T: DeviceProxy + ToCard + RingBufferCsrAddr,
+    <T as DeviceProxy>::Device: DeviceAdaptor,
 {
     fn write_head(&self, data: u32) -> io::Result<()> {
-        self.write_csr(T::HEAD, data)
+        self.device().write_csr(T::HEAD, data)
     }
 
     fn read_tail(&self) -> io::Result<u32> {
-        self.read_csr(T::TAIL)
+        self.device().read_csr(T::TAIL)
     }
 }
 
 impl<T> CsrReaderAdaptor for T
 where
-    T: ToHost + DeviceAdaptor + RingBufferCsrAddr,
+    T: DeviceProxy + ToHost + RingBufferCsrAddr,
+    <T as DeviceProxy>::Device: DeviceAdaptor,
 {
     fn write_tail(&self, data: u32) -> io::Result<()> {
-        self.write_csr(Self::TAIL, data)
+        self.device().write_csr(Self::TAIL, data)
     }
 
     fn read_head(&self) -> io::Result<u32> {
-        self.read_csr(Self::HEAD)
+        self.device().read_csr(Self::HEAD)
     }
 }
 
 impl<T> CsrBaseAddrAdaptor for T
 where
-    T: DeviceAdaptor + RingBufferCsrAddr,
+    T: DeviceProxy + RingBufferCsrAddr,
+    <T as DeviceProxy>::Device: DeviceAdaptor,
 {
     #[allow(clippy::arithmetic_side_effects)]
     fn read_base_addr(&self) -> io::Result<u64> {
-        let lo = self.read_csr(Self::BASE_ADDR_LOW)?;
-        let hi = self.read_csr(Self::BASE_ADDR_HIGH)?;
+        let lo = self.device().read_csr(Self::BASE_ADDR_LOW)?;
+        let hi = self.device().read_csr(Self::BASE_ADDR_HIGH)?;
         Ok(u64::from(lo) + (u64::from(hi) << 32))
     }
 
     #[allow(clippy::as_conversions)]
     fn write_base_addr(&self, phys_addr: u64) -> io::Result<()> {
-        self.write_csr(Self::BASE_ADDR_LOW, (phys_addr & 0xFFFF_FFFF) as u32)?;
-        self.write_csr(Self::BASE_ADDR_HIGH, (phys_addr >> 32) as u32)
+        self.device()
+            .write_csr(Self::BASE_ADDR_LOW, (phys_addr & 0xFFFF_FFFF) as u32)?;
+        self.device()
+            .write_csr(Self::BASE_ADDR_HIGH, (phys_addr >> 32) as u32)
     }
 }
 
@@ -226,7 +233,7 @@ where
     Inner::Send: RDMASend,
 {
     /// Updates Memory Translation Table entry
-    fn update_mtt(&self, entry: MttEntry) -> io::Result<()> {
+    fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
         self.state.cmd.update_mtt(entry)
     }
 

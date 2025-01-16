@@ -18,6 +18,15 @@ pub trait NetworkResolver: Send + Sync + 'static {
 #[non_exhaustive]
 pub struct MacAddress(pub [u8; 6]);
 
+impl From<MacAddress> for u64 {
+    #[inline]
+    fn from(mac: MacAddress) -> u64 {
+        let mut bytes = [0u8; 8];
+        bytes[..6].copy_from_slice(&mac.0);
+        u64::from_le_bytes(bytes)
+    }
+}
+
 /// Static network configuration containing IP network, gateway and MAC address
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]

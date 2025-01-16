@@ -165,45 +165,29 @@
         dead_code
     )
 )]
+#![allow(unused)] // FIXME: removed clippy unused
 #![allow(clippy::todo)] // FIXME: implement all
 
-// FIXME: removed clippy unused
-
-#[allow(unused)]
-/// Memory operation components
-mod mem;
-
-#[allow(unused)]
+/// Device Command Control implementations
+mod cmd;
 /// Descriptor definitions
 mod desc;
-
-#[allow(unused)]
-/// RDMA ring buffer implementation
-mod ringbuffer;
-
-#[allow(unused)]
-/// Memory translation table
-mod mtt;
-
-#[allow(unused)]
-/// Queue implementation
-pub(crate) mod queue;
-
-#[allow(unused)]
 /// Adaptor deivce
 mod device;
-
-#[allow(unused)]
-/// Simple network interface card
-mod simple_nic;
-
-#[allow(unused)]
-/// Device Queue Workers
-mod workers;
-
-#[allow(unused)]
+/// Memory operation components
+mod mem;
+/// Memory translation table
+mod mtt;
+/// Queue implementation
+pub(crate) mod queue;
 /// Packet retransmission implementations
 mod retransmission;
+/// RDMA ring buffer implementation
+mod ringbuffer;
+/// Simple network interface card
+mod simple_nic;
+/// Device Queue Workers
+mod workers;
 
 #[allow(unused)]
 /// Network implementations
