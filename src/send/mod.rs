@@ -33,12 +33,15 @@ impl Iterator for WrFragmenter {
     type Item = WrChunk;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.rem_len == 0 {
+        if self.is_complete() {
             return None;
         }
 
         let pmtu = self.builder.pmtu();
-        let pmtu_mask = pmtu.checked_sub(1)?;
+        let pmtu_mask = pmtu
+            .checked_sub(1)
+            .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
+
         // Chunk boundary must align with PMTU
         let chunk_end = self.laddr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
         let chunk_size: u32 = chunk_end
@@ -55,9 +58,7 @@ impl Iterator for WrFragmenter {
             .set_chunk_meta(self.psn, self.laddr, self.raddr, chunk_size, self.chunk_pos)
             .build();
 
-        let num_packets = chunk_size
-            .checked_add(u32::from(pmtu_mask))?
-            .checked_div(u32::from(pmtu))?;
+        let num_packets = chunk_size.div_ceil(u32::from(pmtu));
         self.psn = self.psn.wrapping_add(num_packets); // FIXME: is wrapping add correct?
         self.laddr = self.laddr.checked_add(u64::from(chunk_size))?;
         self.raddr = self.raddr.checked_add(u64::from(chunk_size))?;
@@ -71,44 +72,89 @@ impl Iterator for WrFragmenter {
 }
 
 impl WrFragmenter {
-    /// Creates a new `SgeSplitter`
+    /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
-    fn new(wr: ibv_send_wr, builder: WrChunkBuilder<WithQpParams>, base_psn: u32) -> Result<Self> {
-        let num_sge: usize = usize::try_from(wr.num_sge).map_err(ValidationError::invalid_input)?;
-        match num_sge {
-            0 => return Ok(Self::default()),
-            1 => return Err(ValidationError::unimplemented("multiple sges unsupported")),
-            _ => {}
-        };
-        // SAFETY: The sg_list pointer is guaranteed to be valid if num_sge > 0
-        let sge = unsafe { *wr.sg_list };
-        let opcode = wr.opcode;
-        match opcode {
-            IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {}
-            _ => return Err(ValidationError::unimplemented("opcode not supported")),
-        }
-        // SAFETY: union member is rdma for RDMA_WRITE
-        let (raddr, rkey, imm_data) = unsafe {
-            (
-                wr.wr.rdma.remote_addr,
-                wr.wr.rdma.rkey,
-                wr.__bindgen_anon_1.imm_data,
-            )
-        };
+    fn new(wr: SendWrResolver, builder: WrChunkBuilder<WithQpParams>, base_psn: u32) -> Self {
         #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
         // truncation is exptected
         // behavior
-        let builder =
-            builder.set_ibv_params(wr.send_flags as u8, rkey, sge.length, sge.lkey, imm_data);
+        let builder = builder.set_ibv_params(
+            wr.send_flags() as u8,
+            wr.rkey(),
+            wr.length(),
+            wr.lkey(),
+            wr.imm(),
+        );
 
-        Ok(Self {
+        Self {
             psn: base_psn,
-            laddr: sge.addr,
-            raddr,
-            rem_len: sge.length,
+            laddr: wr.laddr(),
+            raddr: wr.raddr(),
+            rem_len: wr.length(),
             chunk_pos: ChunkPos::First,
             builder,
-        })
+        }
+    }
+
+    /// Checks if the fragmentation is complete, the iteration will yeild `None`
+    fn is_complete(&self) -> bool {
+        self.rem_len == 0
+    }
+}
+
+/// A resolver and validator for `ibv_send_wr`
+#[derive(Clone, Copy)]
+pub(crate) struct SendWrResolver(ibv_send_wr);
+
+#[allow(unsafe_code)] // SAFETY: The sg_list pointer is guaranteed to be valid if num_sge > 0
+impl SendWrResolver {
+    /// Creates a new resolver from the given work request.
+    /// Returns None if the input is invalid
+    pub(crate) fn new(wr: ibv_send_wr) -> Result<Self> {
+        match wr.opcode {
+            IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {}
+            _ => return Err(ValidationError::unimplemented("opcode not supported")),
+        }
+        let num_sge: usize = usize::try_from(wr.num_sge).map_err(ValidationError::invalid_input)?;
+        if num_sge != 1 {
+            return Err(ValidationError::unimplemented("only support single sge"));
+        }
+        Ok(Self(wr))
+    }
+
+    /// Returns the local address of the SGE buffer.
+    pub(crate) fn laddr(&self) -> u64 {
+        unsafe { *self.0.sg_list }.addr
+    }
+
+    /// Returns the length of the SGE buffer in bytes.
+    pub(crate) fn length(&self) -> u32 {
+        unsafe { *self.0.sg_list }.length
+    }
+
+    /// Returns the local key associated with the SGE buffer.
+    pub(crate) fn lkey(&self) -> u32 {
+        unsafe { *self.0.sg_list }.lkey
+    }
+
+    /// Returns the remote memory address for RDMA operations
+    pub(crate) fn raddr(&self) -> u64 {
+        unsafe { self.0.wr.rdma.remote_addr }
+    }
+
+    /// Returns the remote key for RDMA operations
+    pub(crate) fn rkey(&self) -> u32 {
+        unsafe { self.0.wr.rdma.rkey }
+    }
+
+    /// Returns the immediate data value
+    pub(crate) fn imm(&self) -> u32 {
+        unsafe { self.0.__bindgen_anon_1.imm_data }
+    }
+
+    /// Returns the send flags
+    pub(crate) fn send_flags(&self) -> u32 {
+        self.0.send_flags
     }
 }
 

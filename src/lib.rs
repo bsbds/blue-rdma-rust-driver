@@ -178,6 +178,8 @@ mod device;
 mod mem;
 /// Memory translation table
 mod mtt;
+/// Queue pair state
+mod qp;
 /// Queue implementation
 pub(crate) mod queue;
 /// Packet retransmission implementations
@@ -188,8 +190,6 @@ mod ringbuffer;
 mod send;
 /// Simple network interface card
 mod simple_nic;
-/// Queue pair state
-mod user_qp;
 /// Device Queue Workers
 mod workers;
 

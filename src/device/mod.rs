@@ -29,7 +29,7 @@ use crate::{
     net::{config::NetworkConfig, tap::TapDevice},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
-        WorkReqOp, WorkReqSend, WrChunk,
+        WorkReqSend, WrChunk,
     },
     simple_nic,
 };
