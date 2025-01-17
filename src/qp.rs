@@ -6,7 +6,69 @@ use crate::{
     send::SendWrResolver,
 };
 
+/// Manages QP allocation and storage
+struct QpManager {
+    /// Bitmap tracking allocated QPNs
+    bitmap: BitVec,
+    /// QPN to `DeviceQp` mapping
+    qps: Vec<Option<DeviceQp>>,
+}
+
+#[allow(clippy::as_conversions, clippy::indexing_slicing)]
+impl QpManager {
+    /// Creates a new `QpManager`
+    pub(crate) fn new(max_num_qps: u32) -> Self {
+        let size = max_num_qps as usize;
+        let mut bitmap = BitVec::with_capacity(size);
+        bitmap.resize(size, false);
+        Self {
+            bitmap,
+            qps: vec![None; size],
+        }
+    }
+
+    /// Allocates a new QP and returns its QPN
+    #[allow(clippy::cast_possible_truncation)] // no larger than u32
+    pub(crate) fn create_qp(&mut self, qp: DeviceQp) -> Option<u32> {
+        let qpn = self.bitmap.first_zero()? as u32;
+        self.bitmap.set(qpn as usize, true);
+        self.qps[qpn as usize] = Some(qp);
+        Some(qpn)
+    }
+
+    /// Removes and returns the QP associated with the given QPN
+    pub(crate) fn destroy_qp(&mut self, qpn: u32) -> Option<DeviceQp> {
+        if qpn as usize >= self.max_num_qps() {
+            return None;
+        }
+        self.bitmap.set(qpn as usize, false);
+        self.qps[qpn as usize].take()
+    }
+
+    /// Gets a reference to the QP associated with the given QPN
+    pub(crate) fn get_qp(&self, qpn: u32) -> Option<&DeviceQp> {
+        if qpn as usize >= self.max_num_qps() {
+            return None;
+        }
+        self.qps[qpn as usize].as_ref()
+    }
+
+    /// Gets a mutable reference to the QP associated with the given QPN
+    pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut DeviceQp> {
+        if qpn as usize >= self.max_num_qps() {
+            return None;
+        }
+        self.qps[qpn as usize].as_mut()
+    }
+
+    /// Returns the maximum number of Queue Pairs (QPs) supported
+    fn max_num_qps(&self) -> usize {
+        self.qps.len()
+    }
+}
+
 #[allow(clippy::missing_docs_in_private_items)]
+#[derive(Debug, Clone, Copy)]
 /// A queue pair for building work requests
 pub(crate) struct DeviceQp {
     qp_type: u8,
@@ -74,7 +136,7 @@ impl DeviceQp {
 }
 
 /// Device Qp state
-#[derive(Default)]
+#[derive(Default, Debug, Clone, Copy)]
 struct State {
     /// Current MSN
     msn: u16,
@@ -108,33 +170,5 @@ impl State {
     /// Sets the last completed PSN
     fn set_last_comp_psn(&mut self, psn: u32) {
         self.last_comp_psn = psn;
-    }
-}
-
-/// A pool for managing queue pair numbers (QPN).
-struct QpPool {
-    /// Bitmap tracking allocated QPNs
-    bitmap: BitVec,
-}
-
-#[allow(clippy::as_conversions, clippy::cast_possible_truncation)] // u32 to usize
-impl QpPool {
-    /// Creates a new `QpPool`
-    pub(crate) fn new(max_qps: u32) -> Self {
-        let mut bitmap = BitVec::with_capacity(max_qps as usize);
-        bitmap.resize(max_qps as usize, false);
-        QpPool { bitmap }
-    }
-
-    /// Allocates a new queue pair number.
-    pub(crate) fn allocate_qpn(&mut self) -> Option<u32> {
-        let pos = self.bitmap.first_zero()?;
-        self.bitmap.set(pos, true);
-        Some(pos as u32)
-    }
-
-    /// Frees a previously allocated queue pair number.
-    pub(crate) fn free_qpn(&mut self, qpn: u32) {
-        self.bitmap.set(qpn as usize, false);
     }
 }
