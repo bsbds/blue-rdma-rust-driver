@@ -10,14 +10,14 @@ pub(crate) enum SendQueueDesc {
     /// First segment
     Seg0(SendQueueReqDescSeg0),
     /// Second segment
-    Sge1(SendQueueReqDescSeg1),
+    Seg1(SendQueueReqDescSeg1),
 }
 
 impl From<SendQueueDesc> for RingBufDescUntyped {
     fn from(desc: SendQueueDesc) -> Self {
         match desc {
             SendQueueDesc::Seg0(d) => d.into(),
-            SendQueueDesc::Sge1(d) => d.into(),
+            SendQueueDesc::Seg1(d) => d.into(),
         }
     }
 }

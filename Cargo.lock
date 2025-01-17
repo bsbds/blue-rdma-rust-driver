@@ -147,6 +147,7 @@ dependencies = [
  "bitvec",
  "bluesimalloc",
  "criterion",
+ "crossbeam-deque",
  "ibverbs-sys",
  "ipnetwork",
  "libc",

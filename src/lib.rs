@@ -188,6 +188,8 @@ mod retransmission;
 mod ringbuffer;
 /// Send Queue implementations
 mod send;
+/// Send queue scheduler
+mod send_scheduler;
 /// Simple network interface card
 mod simple_nic;
 /// Device Queue Workers
