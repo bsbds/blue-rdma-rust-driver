@@ -47,33 +47,13 @@ impl CmdQueue {
     }
 
     /// Produces command descriptors to the queue
-    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> Result<(), CmdQueueDesc> {
+    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> io::Result<()> {
         match desc {
-            CmdQueueDesc::UpdateMrTable(d) => self
-                .inner
-                .push(d.into())
-                .map_err(Into::into)
-                .map_err(CmdQueueDesc::UpdateMrTable),
-            CmdQueueDesc::UpdatePGT(d) => self
-                .inner
-                .push(d.into())
-                .map_err(Into::into)
-                .map_err(CmdQueueDesc::UpdatePGT),
-            CmdQueueDesc::ManageQP(d) => self
-                .inner
-                .push(d.into())
-                .map_err(Into::into)
-                .map_err(CmdQueueDesc::ManageQP),
-            CmdQueueDesc::SetNetworkParam(d) => self
-                .inner
-                .push(d.into())
-                .map_err(Into::into)
-                .map_err(CmdQueueDesc::SetNetworkParam),
-            CmdQueueDesc::SetRawPacketReceiveMeta(d) => self
-                .inner
-                .push(d.into())
-                .map_err(Into::into)
-                .map_err(CmdQueueDesc::SetRawPacketReceiveMeta),
+            CmdQueueDesc::UpdateMrTable(d) => self.inner.push(d.into()),
+            CmdQueueDesc::UpdatePGT(d) => self.inner.push(d.into()),
+            CmdQueueDesc::ManageQP(d) => self.inner.push(d.into()),
+            CmdQueueDesc::SetNetworkParam(d) => self.inner.push(d.into()),
+            CmdQueueDesc::SetRawPacketReceiveMeta(d) => self.inner.push(d.into()),
         }
     }
 

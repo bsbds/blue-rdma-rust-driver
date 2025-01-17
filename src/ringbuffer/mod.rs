@@ -117,9 +117,9 @@ where
     }
 
     /// Appends some descriptors to the ring buffer
-    pub(crate) fn push(&mut self, desc: Desc) -> Result<(), Desc> {
+    pub(crate) fn push(&mut self, desc: Desc) -> io::Result<()> {
         if self.ctx.len() == RING_BUF_LEN as usize {
-            return Err(desc);
+            return Err(io::ErrorKind::WouldBlock.into());
         }
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;

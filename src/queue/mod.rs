@@ -4,6 +4,9 @@ pub(crate) mod cmd_queue;
 /// Simple NIC tx queue implementation
 pub(crate) mod simple_nic;
 
+/// Send queue implementation
+pub(crate) mod send_queue;
+
 /// Abstract queue definitions
 pub(crate) mod abstr;
 
@@ -24,14 +27,14 @@ use crate::{
 /// To Card Queue
 pub(crate) trait ToCardQueue {
     /// The descriptor type
-    type Desc: Into<RingBufDescUntyped> + From<RingBufDescUntyped>;
+    type Desc: Into<RingBufDescUntyped>;
 
     /// Pushes descriptors to the queue.
     ///
     /// # Errors
     ///
     /// Returns an I/O error if the queue is full or if there is an error pushing the descriptors.
-    fn push(&mut self, descs: Self::Desc) -> Result<(), Self::Desc>;
+    fn push(&mut self, descs: Self::Desc) -> io::Result<()>;
 }
 
 /// To Host Queue
@@ -124,12 +127,12 @@ pub(crate) struct ToCardQueueTyped<Desc> {
 
 impl<Desc> ToCardQueue for ToCardQueueTyped<Desc>
 where
-    Desc: Into<RingBufDescUntyped> + From<RingBufDescUntyped>,
+    Desc: Into<RingBufDescUntyped>,
 {
     type Desc = Desc;
 
-    fn push(&mut self, desc: Desc) -> Result<(), Desc> {
-        self.inner.push(desc.into()).map_err(Into::into)
+    fn push(&mut self, desc: Desc) -> io::Result<()> {
+        self.inner.push(desc.into())
     }
 }
 

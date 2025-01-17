@@ -49,8 +49,7 @@ impl FrameTx for FrameTxQueue {
         let mut desc = Self::build_desc(buf)
             .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
         // retry until success
-        while let Err(d) = self.inner.push(desc) {
-            desc = d;
+        while self.inner.push(desc).is_err() {
             thread::yield_now();
         }
 
