@@ -27,10 +27,12 @@ use proxy::DeviceProxy;
 use crate::{
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
+    qp::DeviceQp,
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
         WorkReqSend, WrChunk,
     },
+    send::{SendWrResolver, WrFragmenter},
     simple_nic,
 };
 
@@ -243,7 +245,16 @@ where
     }
 
     /// Sends an RDMA operation
-    fn send(&self, op: WrChunk) -> io::Result<()> {
-        self.state.send.send(op)
+    fn send_wr(&self, qp: &mut DeviceQp, wr: SendWrResolver) -> io::Result<()> {
+        let (builder, base_psn) = qp
+            .next_wr(&wr)
+            .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
+        let fragmenter = WrFragmenter::new(wr, builder, base_psn);
+        for chunk in fragmenter {
+            // TODO: Should this never fail
+            self.state.send.send(chunk)?;
+        }
+
+        Ok(())
     }
 }

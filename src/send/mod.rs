@@ -14,7 +14,7 @@ type Result<T> = std::result::Result<T, ValidationError>;
 
 /// Work Request Fragmenter, used to split a single work request into multiple chunks
 #[derive(Default)]
-struct WrFragmenter {
+pub(crate) struct WrFragmenter {
     /// Current PSN
     psn: u32,
     /// Current laddr
@@ -74,7 +74,11 @@ impl Iterator for WrFragmenter {
 impl WrFragmenter {
     /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
-    fn new(wr: SendWrResolver, builder: WrChunkBuilder<WithQpParams>, base_psn: u32) -> Self {
+    pub(crate) fn new(
+        wr: SendWrResolver,
+        builder: WrChunkBuilder<WithQpParams>,
+        base_psn: u32,
+    ) -> Self {
         #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
         // truncation is exptected
         // behavior
@@ -97,7 +101,7 @@ impl WrFragmenter {
     }
 
     /// Checks if the fragmentation is complete, the iteration will yeild `None`
-    fn is_complete(&self) -> bool {
+    pub(crate) fn is_complete(&self) -> bool {
         self.rem_len == 0
     }
 }
