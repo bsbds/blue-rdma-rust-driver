@@ -27,10 +27,8 @@ pub(crate) trait WorkReqSend {
 
 /// Metadata reporting interface
 pub(crate) trait MetaReport {
-    /// Tries to receive operation header metadata
-    fn try_recv_op_header(&self) -> io::Result<Option<MetaReportOpHeader>>;
-    /// Tries to receive operation acknowledgment
-    fn try_recv_ack(&self) -> io::Result<Option<Ack>>;
+    /// Tries to receive operation metadata
+    fn try_recv_meta(&mut self) -> io::Result<Option<ReportMeta>>;
 }
 
 /// Simple NIC tunnel interface
@@ -154,20 +152,54 @@ impl AsRef<[u8]> for RecvBuffer {
     }
 }
 
-/// Metadata operation header types
-pub(crate) enum MetaReportOpHeader {
+#[allow(clippy::missing_docs_in_private_items)]
+/// Metadata from meta report queue
+pub(crate) enum ReportMeta {
     /// Write operation header
-    Write,
+    Write {
+        msn: u16,
+        psn: u32,
+        solicited: bool,
+        ack_req: bool,
+        is_retry: bool,
+        dqpn: u32,
+        total_len: u32,
+        raddr: u64,
+        rkey: u32,
+        imm: u32,
+    },
     /// Read operation header
-    Read,
+    Read {
+        raddr: u64,
+        rkey: u32,
+        total_len: u32,
+        laddr: u64,
+        lkey: u32,
+    },
     /// Congestion Notification Packet
-    Cnp,
-}
-
-/// Operation acknowledgment types
-pub(crate) enum Ack {
+    Cnp {
+        /// The initiator's QP number
+        qpn: u32,
+    },
     /// Positive acknowledgment
-    Ack,
+    Ack {
+        qpn: u32,
+        msn: u16,
+        psn_now: u32,
+        now_bitmap: u128,
+        is_window_slided: bool,
+        is_send_by_local_hw: bool,
+        is_send_by_driver: bool,
+    },
     /// Negative acknowledgment
-    Nak,
+    Nak {
+        qpn: u32,
+        msn: u16,
+        psn_now: u32,
+        now_bitmap: u128,
+        pre_bitmap: u128,
+        psn_before_slide: u32,
+        is_send_by_local_hw: bool,
+        is_send_by_driver: bool,
+    },
 }

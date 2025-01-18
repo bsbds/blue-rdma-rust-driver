@@ -176,6 +176,10 @@ mod desc;
 mod device;
 /// Memory operation components
 mod mem;
+/// Meta Report Queue handling
+mod meta_report;
+/// Worker for handling meta from meta report queues
+mod meta_worker;
 /// Memory translation table
 mod mtt;
 /// Queue pair state

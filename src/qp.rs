@@ -3,11 +3,12 @@ use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 
 use crate::{
     queue::abstr::{WithQpParams, WrChunkBuilder},
+    retransmission::psn_tracker::PsnTracker,
     send::SendWrResolver,
 };
 
-/// Manages QP allocation and storage
-struct QpManager {
+/// Manages QPs
+pub(crate) struct QpManager {
     /// Bitmap tracking allocated QPNs
     bitmap: BitVec,
     /// QPN to `DeviceQp` mapping
@@ -68,7 +69,7 @@ impl QpManager {
 }
 
 #[allow(clippy::missing_docs_in_private_items)]
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 /// A queue pair for building work requests
 pub(crate) struct DeviceQp {
     qp_type: u8,
@@ -118,6 +119,16 @@ impl DeviceQp {
         ))
     }
 
+    /// Acknowledges a single PSN.
+    pub(crate) fn ack_one(&mut self, psn: u32) {
+        self.state.psn_tracker.ack_one(psn);
+    }
+
+    /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
+    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128) {
+        self.state.psn_tracker.ack_range(base_psn, bitmap);
+    }
+
     /// Calculate the number of psn required for this WR
     fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
         let pmtu_mask = pmtu
@@ -136,7 +147,7 @@ impl DeviceQp {
 }
 
 /// Device Qp state
-#[derive(Default, Debug, Clone, Copy)]
+#[derive(Default, Debug, Clone)]
 struct State {
     /// Current MSN
     msn: u16,
@@ -146,6 +157,8 @@ struct State {
     last_comp_msn: u16,
     /// Last completed PSN
     last_comp_psn: u32,
+    /// Tracker for tracking acked PSNs
+    psn_tracker: PsnTracker,
 }
 
 impl State {

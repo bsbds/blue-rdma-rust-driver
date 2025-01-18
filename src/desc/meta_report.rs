@@ -2,6 +2,151 @@ use bilge::prelude::*;
 
 use crate::desc::RingBufDescCommonHead;
 
+use super::RingBufDescUntyped;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+enum RdmaOpCode {
+    SendFirst = 0x00,
+    SendMiddle = 0x01,
+    SendLast = 0x02,
+    SendLastWithImmediate = 0x03,
+    SendOnly = 0x04,
+    SendOnlyWithImmediate = 0x05,
+    RdmaWriteFirst = 0x06,
+    RdmaWriteMiddle = 0x07,
+    RdmaWriteLast = 0x08,
+    RdmaWriteLastWithImmediate = 0x09,
+    RdmaWriteOnly = 0x0a,
+    RdmaWriteOnlyWithImmediate = 0x0b,
+    RdmaReadRequest = 0x0c,
+    RdmaReadResponseFirst = 0x0d,
+    RdmaReadResponseMiddle = 0x0e,
+    RdmaReadResponseLast = 0x0f,
+    RdmaReadResponseOnly = 0x10,
+    Acknowledge = 0x11,
+    AtomicAcknowledge = 0x12,
+    CompareSwap = 0x13,
+    FetchAdd = 0x14,
+    Resync = 0x15,
+    SendLastWithInvalidate = 0x16,
+    SendOnlyWithInvalidate = 0x17,
+}
+
+impl RdmaOpCode {
+    fn from_u8(value: u8) -> Option<Self> {
+        let variant = match value {
+            0x00 => Self::SendFirst,
+            0x01 => Self::SendMiddle,
+            0x02 => Self::SendLast,
+            0x03 => Self::SendLastWithImmediate,
+            0x04 => Self::SendOnly,
+            0x05 => Self::SendOnlyWithImmediate,
+            0x06 => Self::RdmaWriteFirst,
+            0x07 => Self::RdmaWriteMiddle,
+            0x08 => Self::RdmaWriteLast,
+            0x09 => Self::RdmaWriteLastWithImmediate,
+            0x0a => Self::RdmaWriteOnly,
+            0x0b => Self::RdmaWriteOnlyWithImmediate,
+            0x0c => Self::RdmaReadRequest,
+            0x0d => Self::RdmaReadResponseFirst,
+            0x0e => Self::RdmaReadResponseMiddle,
+            0x0f => Self::RdmaReadResponseLast,
+            0x10 => Self::RdmaReadResponseOnly,
+            0x11 => Self::Acknowledge,
+            0x12 => Self::AtomicAcknowledge,
+            0x13 => Self::CompareSwap,
+            0x14 => Self::FetchAdd,
+            0x15 => Self::Resync,
+            0x16 => Self::SendLastWithInvalidate,
+            0x17 => Self::SendOnlyWithInvalidate,
+            _ => return None,
+        };
+        Some(variant)
+    }
+
+    fn is_packet(&self) -> bool {
+        matches!(
+            *self,
+            RdmaOpCode::SendFirst
+                | RdmaOpCode::SendMiddle
+                | RdmaOpCode::SendLast
+                | RdmaOpCode::SendLastWithImmediate
+                | RdmaOpCode::SendOnly
+                | RdmaOpCode::SendOnlyWithImmediate
+                | RdmaOpCode::RdmaWriteFirst
+                | RdmaOpCode::RdmaWriteMiddle
+                | RdmaOpCode::RdmaWriteLast
+                | RdmaOpCode::RdmaWriteLastWithImmediate
+                | RdmaOpCode::RdmaWriteOnly
+                | RdmaOpCode::RdmaWriteOnlyWithImmediate
+                | RdmaOpCode::RdmaReadRequest
+                | RdmaOpCode::RdmaReadResponseFirst
+                | RdmaOpCode::RdmaReadResponseMiddle
+                | RdmaOpCode::RdmaReadResponseLast
+                | RdmaOpCode::RdmaReadResponseOnly
+        )
+    }
+
+    fn is_ack(&self) -> bool {
+        matches!(
+            *self,
+            RdmaOpCode::Acknowledge | RdmaOpCode::AtomicAcknowledge
+        )
+    }
+}
+
+/// Meta report queue descriptor types that can be submitted
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MetaReportQueueDescFirst {
+    /// Basic packet header info
+    PacketInfo(MetaReportQueuePacketBasicInfoDesc),
+    /// Ack info
+    Ack(MetaReportQueueAckDesc),
+}
+
+impl MetaReportQueueDescFirst {
+    pub(crate) fn has_next(&self) -> bool {
+        match *self {
+            MetaReportQueueDescFirst::PacketInfo(d) => d.common_header().has_next(),
+            MetaReportQueueDescFirst::Ack(d) => d.common_header().has_next(),
+        }
+    }
+}
+
+/// Meta report queue descriptor types that can be submitted
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum MetaReportQueueDescNext {
+    /// Extended info for READ
+    ReadInfo(MetaReportQueueReadReqExtendInfoDesc),
+    /// Extra Ack info, used for NAK
+    AckExtra(MetaReportQueueAckExtraDesc),
+}
+
+impl From<RingBufDescUntyped> for MetaReportQueueDescFirst {
+    fn from(desc: RingBufDescUntyped) -> Self {
+        let rdma_opcode = RdmaOpCode::from_u8(desc.head.op_code())
+            .unwrap_or_else(|| unreachable!("invalid opcode"));
+        match rdma_opcode {
+            op if rdma_opcode.is_packet() => Self::PacketInfo(desc.into()),
+            op if rdma_opcode.is_ack() => Self::Ack(desc.into()),
+            _ => unreachable!("opcode unsupported"),
+        }
+    }
+}
+
+impl From<RingBufDescUntyped> for MetaReportQueueDescNext {
+    fn from(desc: RingBufDescUntyped) -> Self {
+        let rdma_opcode = RdmaOpCode::from_u8(desc.head.op_code())
+            .unwrap_or_else(|| unreachable!("invalid opcode"));
+        match rdma_opcode {
+            op if rdma_opcode.is_packet() => Self::ReadInfo(desc.into()),
+            op if rdma_opcode.is_ack() => Self::AckExtra(desc.into()),
+            _ => unreachable!("opcode unsupported"),
+        }
+    }
+}
+
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct MetaReportQueuePacketBasicInfoDescChunk0 {
@@ -131,6 +276,10 @@ impl MetaReportQueuePacketBasicInfoDesc {
 
     pub(crate) fn set_imm_data(&mut self, val: u32) {
         self.c3.set_imm_data(val);
+    }
+
+    fn common_header(&self) -> RingBufDescCommonHead {
+        self.c0.common_header()
     }
 }
 
@@ -301,6 +450,10 @@ impl MetaReportQueueAckDesc {
 
     pub(crate) fn set_now_bitmap(&mut self, val: u128) {
         self.c2.set_now_bitmap(val);
+    }
+
+    fn common_header(&self) -> RingBufDescCommonHead {
+        self.c0.common_header()
     }
 }
 
