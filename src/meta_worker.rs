@@ -10,7 +10,8 @@ use tracing::error;
 
 use crate::{
     qp::QpManager,
-    queue::abstr::{MetaReport, ReportMeta},
+    queue::abstr::{MetaReport, PacketPos, ReportMeta},
+    retransmission::message_tracker::MessageTracker,
 };
 
 /// A worker for processing packet meta
@@ -19,6 +20,8 @@ struct MetaWorker<T> {
     inner: T,
     /// Manages QPs
     qp_manager: QpManager,
+    /// Message ack tracker info
+    message_tracker: MessageTracker,
 }
 
 impl<T: MetaReport> MetaWorker<T> {
@@ -40,6 +43,7 @@ impl<T: MetaReport> MetaWorker<T> {
     fn handle_meta(&mut self, meta: ReportMeta) {
         match meta {
             ReportMeta::Write {
+                pos,
                 msn,
                 psn,
                 solicited,
@@ -56,6 +60,20 @@ impl<T: MetaReport> MetaWorker<T> {
                     return;
                 };
                 qp.ack_one(psn);
+                let end_psn = match pos {
+                    PacketPos::First | PacketPos::Only => {
+                        let psn_total = qp
+                            .num_psn(raddr, total_len)
+                            .unwrap_or_else(|| unreachable!("parameters should be valid"));
+                        Some(self.message_tracker.insert(msn, psn, psn_total))
+                    }
+                    PacketPos::Middle | PacketPos::Last => self.message_tracker.get_end_psn(msn),
+                };
+                if let Some(end_psn) = end_psn {
+                    if qp.all_acked(end_psn) {
+                        todo!("generate completion event");
+                    }
+                }
             }
             ReportMeta::Read {
                 raddr,

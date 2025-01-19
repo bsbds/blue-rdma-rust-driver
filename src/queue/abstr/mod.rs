@@ -152,11 +152,24 @@ impl AsRef<[u8]> for RecvBuffer {
     }
 }
 
+/// The position of a packet
+pub(crate) enum PacketPos {
+    /// First packet
+    First,
+    /// Middle packet
+    Middle,
+    /// Last packet
+    Last,
+    /// Only packet
+    Only,
+}
+
 #[allow(clippy::missing_docs_in_private_items)]
 /// Metadata from meta report queue
 pub(crate) enum ReportMeta {
     /// Write operation header
     Write {
+        pos: PacketPos,
         msn: u16,
         psn: u32,
         solicited: bool,

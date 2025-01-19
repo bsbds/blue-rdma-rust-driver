@@ -1,6 +1,6 @@
 use bilge::prelude::*;
 
-use crate::desc::RingBufDescCommonHead;
+use crate::{desc::RingBufDescCommonHead, queue::abstr::PacketPos};
 
 use super::RingBufDescUntyped;
 
@@ -65,9 +65,9 @@ impl RdmaOpCode {
         Some(variant)
     }
 
-    fn is_packet(&self) -> bool {
+    fn is_packet(self) -> bool {
         matches!(
-            *self,
+            self,
             RdmaOpCode::SendFirst
                 | RdmaOpCode::SendMiddle
                 | RdmaOpCode::SendLast
@@ -88,9 +88,39 @@ impl RdmaOpCode {
         )
     }
 
-    fn is_ack(&self) -> bool {
+    fn packet_pos(self) -> Option<PacketPos> {
+        match self {
+            RdmaOpCode::SendFirst
+            | RdmaOpCode::RdmaWriteFirst
+            | RdmaOpCode::RdmaReadResponseFirst => Some(PacketPos::First),
+            RdmaOpCode::SendMiddle
+            | RdmaOpCode::RdmaWriteMiddle
+            | RdmaOpCode::RdmaReadResponseMiddle => Some(PacketPos::Middle),
+            RdmaOpCode::SendLast
+            | RdmaOpCode::SendLastWithImmediate
+            | RdmaOpCode::RdmaWriteLast
+            | RdmaOpCode::RdmaWriteLastWithImmediate
+            | RdmaOpCode::RdmaReadResponseLast
+            | RdmaOpCode::SendLastWithInvalidate => Some(PacketPos::Last),
+            RdmaOpCode::SendOnly
+            | RdmaOpCode::SendOnlyWithImmediate
+            | RdmaOpCode::RdmaWriteOnly
+            | RdmaOpCode::RdmaWriteOnlyWithImmediate
+            | RdmaOpCode::RdmaReadResponseOnly
+            | RdmaOpCode::SendOnlyWithImmediate
+            | RdmaOpCode::SendOnlyWithInvalidate => Some(PacketPos::Only),
+            RdmaOpCode::RdmaReadRequest
+            | RdmaOpCode::Acknowledge
+            | RdmaOpCode::AtomicAcknowledge
+            | RdmaOpCode::CompareSwap
+            | RdmaOpCode::FetchAdd
+            | RdmaOpCode::Resync => None,
+        }
+    }
+
+    fn is_ack(self) -> bool {
         matches!(
-            *self,
+            self,
             RdmaOpCode::Acknowledge | RdmaOpCode::AtomicAcknowledge
         )
     }
@@ -190,6 +220,14 @@ pub(crate) struct MetaReportQueuePacketBasicInfoDesc {
 }
 
 impl MetaReportQueuePacketBasicInfoDesc {
+    pub(crate) fn packet_pos(&self) -> PacketPos {
+        RdmaOpCode::from_u8(self.c0.common_header().op_code())
+            .and_then(RdmaOpCode::packet_pos)
+            .unwrap_or_else(|| {
+                unreachable!("packet position info should always exists for this descriptor")
+            })
+    }
+
     pub(crate) fn msn(&self) -> u16 {
         self.c0.msn()
     }

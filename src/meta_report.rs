@@ -27,6 +27,7 @@ impl MetaReport for MetaReportQueueHandler {
             self.pos = (idx + 1) % NUM_META_REPORT_QUEUES;
             let meta = match desc {
                 MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write {
+                    pos: d.packet_pos(),
                     msn: d.msn(),
                     psn: d.psn(),
                     solicited: d.solicited(),

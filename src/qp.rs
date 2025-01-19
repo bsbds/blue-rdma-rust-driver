@@ -102,7 +102,7 @@ impl DeviceQp {
         &mut self,
         wr: &SendWrResolver,
     ) -> Option<(WrChunkBuilder<WithQpParams>, u32)> {
-        let num_psn = Self::num_psn(self.pmtu, wr.laddr(), wr.length())?;
+        let num_psn = self.num_psn(wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.state.next(num_psn)?;
 
         Some((
@@ -132,9 +132,15 @@ impl DeviceQp {
         let _ignore = self.state.psn_tracker.ack_range(base_psn, bitmap);
     }
 
+    /// Returns `true` if all PSNs up to and including the given PSN have been acknowledged.
+    pub(crate) fn all_acked(&self, psn: u32) -> bool {
+        self.state.psn_tracker.all_acked(psn)
+    }
+
     /// Calculate the number of psn required for this WR
-    fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
-        let pmtu_mask = pmtu
+    pub(crate) fn num_psn(&self, addr: u64, length: u32) -> Option<u32> {
+        let pmtu_mask = self
+            .pmtu
             .checked_sub(1)
             .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
         let next_align_addr = addr.saturating_add(u64::from(pmtu_mask)) & !u64::from(pmtu_mask);
@@ -143,7 +149,7 @@ impl DeviceQp {
         length_u64
             .checked_sub(gap)
             .unwrap_or(length_u64)
-            .div_ceil(u64::from(pmtu))
+            .div_ceil(u64::from(self.pmtu))
             .try_into()
             .ok()
     }
