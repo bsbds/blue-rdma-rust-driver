@@ -78,7 +78,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     error!("qp number: {qpn} does not exist");
                     return;
                 };
-                qp.ack_range(psn_now, now_bitmap);
+                qp.ack_range(psn_now, now_bitmap, msn);
             }
             ReportMeta::Nak {
                 qpn,

@@ -3,7 +3,7 @@ use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 
 use crate::{
     queue::abstr::{WithQpParams, WrChunkBuilder},
-    retransmission::psn_tracker::PsnTracker,
+    retransmission::{ack_msn_tracker::AckMsnTracker, psn_tracker::PsnTracker},
     send::SendWrResolver,
 };
 
@@ -121,12 +121,15 @@ impl DeviceQp {
 
     /// Acknowledges a single PSN.
     pub(crate) fn ack_one(&mut self, psn: u32) {
-        self.state.psn_tracker.ack_one(psn);
+        let _ignore = self.state.psn_tracker.ack_one(psn);
     }
 
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
-    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128) {
-        self.state.psn_tracker.ack_range(base_psn, bitmap);
+    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128, ack_msn: u16) {
+        if self.state.ack_msn_tracker.ack(ack_msn).is_some() {
+            let _ignore = self.state.psn_tracker.ack_before(base_psn);
+        }
+        let _ignore = self.state.psn_tracker.ack_range(base_psn, bitmap);
     }
 
     /// Calculate the number of psn required for this WR
@@ -159,6 +162,8 @@ struct State {
     last_comp_psn: u32,
     /// Tracker for tracking acked PSNs
     psn_tracker: PsnTracker,
+    /// Tracker for tracking message sequence number of ACK packets
+    ack_msn_tracker: AckMsnTracker,
 }
 
 impl State {

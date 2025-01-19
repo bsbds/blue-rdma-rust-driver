@@ -1,6 +1,7 @@
 use bitvec::vec::BitVec;
 
 /// Tracker for tracking message sequence number of ACK packets
+#[derive(Default, Debug, Clone)]
 pub(crate) struct AckMsnTracker {
     base_msn: u16,
     inner: BitVec,
