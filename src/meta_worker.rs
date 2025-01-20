@@ -9,6 +9,7 @@ use std::{
 use tracing::error;
 
 use crate::{
+    completion::CqManager,
     qp::QpManager,
     queue::abstr::{MetaReport, PacketPos, ReportMeta},
     retransmission::message_tracker::MessageTracker,
@@ -20,6 +21,8 @@ struct MetaWorker<T> {
     inner: T,
     /// Manages QPs
     qp_manager: QpManager,
+    /// Manages CQs
+    cq_manager: CqManager,
 }
 
 impl<T: MetaReport> MetaWorker<T> {
@@ -58,23 +61,22 @@ impl<T: MetaReport> MetaWorker<T> {
                     return;
                 };
                 qp.ack_one(psn);
-                let end_psn = match pos {
+                match pos {
                     PacketPos::First | PacketPos::Only => {
                         let psn_total = qp
                             .num_psn(raddr, total_len)
                             .unwrap_or_else(|| unreachable!("parameters should be valid"));
                         let end_psn = psn.wrapping_add(psn_total);
                         qp.message_tracker().insert(msn, end_psn);
-                        Some(end_psn)
                     }
-                    PacketPos::Middle | PacketPos::Last => qp.message_tracker().get_end_psn(msn),
+                    PacketPos::Middle | PacketPos::Last => {}
                 };
-                if let Some(end_psn) = end_psn {
-                    if qp.all_acked(end_psn) {
-                        qp.message_tracker().remove(msn);
-                        todo!("generate completion event");
-                    }
-                }
+                //if let Some(end_psn) = end_psn {
+                //    if qp.all_acked(end_psn) {
+                //        qp.message_tracker().remove(msn);
+                //        todo!("generate completion event");
+                //    }
+                //}
             }
             ReportMeta::Read {
                 raddr,
@@ -86,7 +88,7 @@ impl<T: MetaReport> MetaWorker<T> {
             ReportMeta::Cnp { qpn } => todo!(),
             ReportMeta::Ack {
                 qpn,
-                msn,
+                msn: ack_msn,
                 psn_now,
                 now_bitmap,
                 is_window_slided,
@@ -97,7 +99,19 @@ impl<T: MetaReport> MetaWorker<T> {
                     error!("qp number: {qpn} does not exist");
                     return;
                 };
-                qp.ack_range(psn_now, now_bitmap, msn);
+                if let Some(psn) = qp.ack_range(psn_now, now_bitmap, ack_msn) {
+                    let acked_msns = qp.message_tracker().ack(psn);
+                    let cq_handle = if is_send_by_local_hw {
+                        qp.send_cq_handle()
+                    } else {
+                        qp.recv_cq_handle()
+                    };
+                    if let Some(cq) = cq_handle.and_then(|h| self.cq_manager.get_cq_mut(h)) {
+                        for msn in acked_msns {
+                            cq.ack_event(msn, qp.qpn());
+                        }
+                    }
+                }
             }
             ReportMeta::Nak {
                 qpn,

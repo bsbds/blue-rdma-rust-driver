@@ -170,6 +170,8 @@
 
 /// Device Command Control implementations
 mod cmd;
+/// Completion Queue implementation
+mod completion;
 /// Constants used throughout the driver
 mod constants;
 /// Descriptor definitions

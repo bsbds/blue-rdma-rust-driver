@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// Tracks MSNs and their corresponding PSN
 #[derive(Default, Debug, Clone)]
 pub(crate) struct MessageTracker {
     /// Maps MSNs to their last PSN
-    inner: HashMap<u16, u32>,
+    inner: BTreeMap<u32, u16>,
 }
 
 impl MessageTracker {
@@ -14,22 +14,21 @@ impl MessageTracker {
     ///
     /// The last PSN for this message (base_psn + psn_total)
     pub(crate) fn insert(&mut self, msn: u16, end_psn: u32) {
-        if self.inner.insert(msn, end_psn).is_some() {
-            tracing::debug!("Duplicate first packet, MSN: {msn}");
+        if self.inner.insert(end_psn, msn).is_some() {
+            tracing::error!("Duplicate end psn, psn: {end_psn}");
         }
     }
 
-    /// Gets the last PSN for a given message sequence number.
-    ///
-    /// # Returns
-    ///
-    /// The final PSN if the MSN exists, None otherwise
-    pub(crate) fn get_end_psn(&mut self, msn: u16) -> Option<u32> {
-        self.inner.get(&msn).copied()
-    }
-
-    /// Removes a message with the given MSN from the tracker.
-    pub(crate) fn remove(&mut self, msn: u16) {
-        let _ignore = self.inner.remove(&msn);
+    // FIXME: wrapped PSN
+    /// Acknowledges messages up to the given PSN and returns the MSNs of all
+    /// acknowledged messages.
+    pub(crate) fn ack(&mut self, psn: u32) -> Vec<u16> {
+        let mut acked = Vec::new();
+        while self.inner.first_entry().is_some_and(|e| *e.key() <= psn) {
+            if let Some((_, msn)) = self.inner.pop_first() {
+                acked.push(msn);
+            }
+        }
+        acked
     }
 }

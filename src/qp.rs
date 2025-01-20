@@ -81,14 +81,23 @@ pub(crate) struct DeviceQp {
     dqp_ip: u32,
     mac_addr: u64,
     pmtu: u8,
-
+    send_cq: Option<u32>,
+    recv_cq: Option<u32>,
     state: State,
 }
 
 impl DeviceQp {
     /// Creates a new RC QP
     #[allow(clippy::as_conversions, clippy::cast_possible_truncation)] // qp_type should smaller than u8::MAX
-    pub(crate) fn new_rc(qpn: u32, pmtu: u8, dqpn: u32, dqp_ip: u32, mac_addr: u64) -> Self {
+    pub(crate) fn new_rc(
+        qpn: u32,
+        pmtu: u8,
+        dqpn: u32,
+        dqp_ip: u32,
+        mac_addr: u64,
+        send_cq: Option<u32>,
+        recv_cq: Option<u32>,
+    ) -> Self {
         Self {
             qp_type: IBV_QPT_RC as u8,
             qpn,
@@ -96,6 +105,8 @@ impl DeviceQp {
             dqp_ip,
             mac_addr,
             pmtu,
+            send_cq,
+            recv_cq,
             state: State::default(),
         }
     }
@@ -128,11 +139,15 @@ impl DeviceQp {
     }
 
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
-    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128, ack_msn: u16) {
+    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128, ack_msn: u16) -> Option<u32> {
+        let mut acked_psn = None;
         if self.state.ack_msn_tracker.ack(ack_msn).is_some() {
-            let _ignore = self.state.psn_tracker.ack_before(base_psn);
+            acked_psn = self.state.psn_tracker.ack_before(base_psn);
         }
-        let _ignore = self.state.psn_tracker.ack_range(base_psn, bitmap);
+        if let Some(psn) = self.state.psn_tracker.ack_range(base_psn, bitmap) {
+            acked_psn = Some(psn);
+        }
+        acked_psn
     }
 
     /// Returns `true` if all PSNs up to and including the given PSN have been acknowledged.
@@ -160,6 +175,21 @@ impl DeviceQp {
             .div_ceil(u64::from(self.pmtu))
             .try_into()
             .ok()
+    }
+
+    /// Returns the send cq handle.
+    pub(crate) fn send_cq_handle(&self) -> Option<u32> {
+        self.send_cq
+    }
+
+    /// Returns the recv cq handle.
+    pub(crate) fn recv_cq_handle(&self) -> Option<u32> {
+        self.recv_cq
+    }
+
+    /// Returns the QPN of this QP
+    pub(crate) fn qpn(&self) -> u32 {
+        self.qpn
     }
 }
 

@@ -246,6 +246,14 @@ where
 
     /// Sends an RDMA operation
     fn send_wr(&self, qp: &mut DeviceQp, wr: SendWrResolver) -> io::Result<()> {
+        let flags = wr.send_flags();
+        if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
+            let wr_id = wr.wr_id();
+            let send_cq_handle = qp
+                .send_cq_handle()
+                .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+            todo!("register completion event");
+        }
         let (builder, base_psn) = qp
             .next_wr(&wr)
             .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;

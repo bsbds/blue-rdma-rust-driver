@@ -160,6 +160,11 @@ impl SendWrResolver {
     pub(crate) fn send_flags(&self) -> u32 {
         self.0.send_flags
     }
+
+    /// Returns the ID associated with this WR
+    pub(crate) fn wr_id(&self) -> u64 {
+        self.0.wr_id
+    }
 }
 
 /// Error type for invalid input validation
