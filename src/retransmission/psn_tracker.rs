@@ -1,15 +1,13 @@
 // FIXME: Implement protection againt wrapped PSNs
 use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 
+use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
+
 #[derive(Default, Debug, Clone)]
 pub(crate) struct PsnTracker {
     base_psn: u32,
     inner: BitVec,
 }
-
-const MAX_PSN_SIZE_BITS: usize = 24;
-const MAX_PSN_WINDOW: usize = 1 << (MAX_PSN_SIZE_BITS - 1);
-const PSN_MASK: u32 = (1 << MAX_PSN_SIZE_BITS) - 1;
 
 impl PsnTracker {
     #[allow(clippy::as_conversions)] // u32 to usize
@@ -86,6 +84,11 @@ impl PsnTracker {
     pub(crate) fn all_acked(&self, psn_to: u32) -> bool {
         let x = self.base_psn.wrapping_sub(psn_to) & PSN_MASK;
         x > 0 && (x as usize) < MAX_PSN_WINDOW
+    }
+
+    /// Returns the current base PSN
+    pub(crate) fn base_psn(&self) -> u32 {
+        self.base_psn
     }
 
     /// Try to advance the base PSN to the next unacknowledged PSN.

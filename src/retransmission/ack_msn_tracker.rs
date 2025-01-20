@@ -31,6 +31,11 @@ impl AckMsnTracker {
         self.try_advance()
     }
 
+    /// Returns the current base MSN
+    pub(crate) fn base_msn(&self) -> u16 {
+        self.base_msn
+    }
+
     /// Try to advance the base MSN
     ///
     /// # Returns

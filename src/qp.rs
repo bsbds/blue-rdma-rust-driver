@@ -2,6 +2,7 @@ use bitvec::vec::BitVec;
 use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 
 use crate::{
+    constants::MAX_PSN_WINDOW,
     queue::abstr::{WithQpParams, WrChunkBuilder},
     retransmission::{ack_msn_tracker::AckMsnTracker, psn_tracker::PsnTracker},
     send::SendWrResolver,
@@ -162,10 +163,6 @@ struct State {
     msn: u16,
     /// Current PSN
     psn: u32,
-    /// Last completed PSN
-    last_comp_msn: u16,
-    /// Last completed PSN
-    last_comp_psn: u32,
     /// Tracker for tracking acked PSNs
     psn_tracker: PsnTracker,
     /// Tracker for tracking message sequence number of ACK packets
@@ -173,26 +170,31 @@ struct State {
 }
 
 impl State {
-    /// FIXME: check `last_comp_psn`
+    /// Get the next MSN and PSN pair for a new request.
+    ///
+    /// # Arguments
+    ///
+    /// * `num_psn` - Number of PSNs needed for this request
+    ///
+    /// # Returns
+    ///
+    /// * `Some((msn, psn))` - The MSN and PSN pair for the new request
+    /// * `None` - If there is not enough PSN window available or MSN has wrapped around
     #[allow(clippy::similar_names)] // name is clear
+    #[allow(clippy::as_conversions)] // convert u32 to usize
     fn next(&mut self, num_psn: u32) -> Option<(u16, u32)> {
+        let base_psn = self.psn_tracker.base_psn();
+        let outstanding_num_psn = self.psn.saturating_sub(base_psn);
+        if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW {
+            return None;
+        }
         let current_psn = self.psn;
         let current_msn = self.msn;
         let next_msn = self.msn.wrapping_add(1);
-        (next_msn != self.last_comp_msn).then(|| {
+        (next_msn != self.ack_msn_tracker.base_msn()).then(|| {
             self.msn = next_msn;
             self.psn = self.psn.wrapping_add(num_psn);
             (current_msn, current_psn)
         })
-    }
-
-    /// Sets the last completed MSN
-    fn set_last_comp_msn(&mut self, msn: u16) {
-        self.last_comp_msn = msn;
-    }
-
-    /// Sets the last completed PSN
-    fn set_last_comp_psn(&mut self, psn: u32) {
-        self.last_comp_psn = psn;
     }
 }

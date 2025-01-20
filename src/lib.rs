@@ -170,6 +170,8 @@
 
 /// Device Command Control implementations
 mod cmd;
+/// Constants used throughout the driver
+mod constants;
 /// Descriptor definitions
 mod desc;
 /// Adaptor deivce
