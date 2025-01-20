@@ -4,7 +4,9 @@ use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 use crate::{
     constants::MAX_PSN_WINDOW,
     queue::abstr::{WithQpParams, WrChunkBuilder},
-    retransmission::{ack_msn_tracker::AckMsnTracker, psn_tracker::PsnTracker},
+    retransmission::{
+        ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
+    },
     send::SendWrResolver,
 };
 
@@ -138,6 +140,11 @@ impl DeviceQp {
         self.state.psn_tracker.all_acked(psn)
     }
 
+    /// Returns a mutable reference to the message tracker associated with this QP.
+    pub(crate) fn message_tracker(&mut self) -> &mut MessageTracker {
+        &mut self.state.message_tracker
+    }
+
     /// Calculate the number of psn required for this WR
     pub(crate) fn num_psn(&self, addr: u64, length: u32) -> Option<u32> {
         let pmtu_mask = self
@@ -167,6 +174,8 @@ struct State {
     psn_tracker: PsnTracker,
     /// Tracker for tracking message sequence number of ACK packets
     ack_msn_tracker: AckMsnTracker,
+    /// Message ack tracker info
+    message_tracker: MessageTracker,
 }
 
 impl State {

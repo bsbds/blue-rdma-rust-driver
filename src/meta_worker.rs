@@ -20,8 +20,6 @@ struct MetaWorker<T> {
     inner: T,
     /// Manages QPs
     qp_manager: QpManager,
-    /// Message ack tracker info
-    message_tracker: MessageTracker,
 }
 
 impl<T: MetaReport> MetaWorker<T> {
@@ -65,12 +63,15 @@ impl<T: MetaReport> MetaWorker<T> {
                         let psn_total = qp
                             .num_psn(raddr, total_len)
                             .unwrap_or_else(|| unreachable!("parameters should be valid"));
-                        Some(self.message_tracker.insert(msn, psn, psn_total))
+                        let end_psn = psn.wrapping_add(psn_total);
+                        qp.message_tracker().insert(msn, end_psn);
+                        Some(end_psn)
                     }
-                    PacketPos::Middle | PacketPos::Last => self.message_tracker.get_end_psn(msn),
+                    PacketPos::Middle | PacketPos::Last => qp.message_tracker().get_end_psn(msn),
                 };
                 if let Some(end_psn) = end_psn {
                     if qp.all_acked(end_psn) {
+                        qp.message_tracker().remove(msn);
                         todo!("generate completion event");
                     }
                 }
