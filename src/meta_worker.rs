@@ -10,7 +10,7 @@ use tracing::error;
 
 use crate::{
     completion::CqManager,
-    qp::QpManager,
+    qp::{QpManager, QpTrackers},
     queue::abstr::{MetaReport, PacketPos, ReportMeta},
     retransmission::message_tracker::MessageTracker,
 };
@@ -20,7 +20,7 @@ struct MetaWorker<T> {
     /// Inner meta report queue
     inner: T,
     /// Manages QPs
-    qp_manager: QpManager,
+    qp_trackers: QpTrackers,
     /// Manages CQs
     cq_manager: CqManager,
 }
@@ -56,7 +56,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 rkey,
                 imm,
             } => {
-                let Some(qp) = self.qp_manager.get_qp_mut(dqpn) else {
+                let Some(qp) = self.qp_trackers.state_mut(dqpn) else {
                     error!("qp number: d{dqpn} does not exist");
                     return;
                 };
@@ -71,12 +71,6 @@ impl<T: MetaReport> MetaWorker<T> {
                     }
                     PacketPos::Middle | PacketPos::Last => {}
                 };
-                //if let Some(end_psn) = end_psn {
-                //    if qp.all_acked(end_psn) {
-                //        qp.message_tracker().remove(msn);
-                //        todo!("generate completion event");
-                //    }
-                //}
             }
             ReportMeta::Read {
                 raddr,
@@ -95,7 +89,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 is_send_by_local_hw,
                 is_send_by_driver,
             } => {
-                let Some(qp) = self.qp_manager.get_qp_mut(qpn) else {
+                let Some(qp) = self.qp_trackers.state_mut(qpn) else {
                     error!("qp number: {qpn} does not exist");
                     return;
                 };

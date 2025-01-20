@@ -27,7 +27,7 @@ use proxy::DeviceProxy;
 use crate::{
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
-    qp::DeviceQp,
+    qp::{DeviceQp, QpInitiators},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
         WorkReqSend, WrChunk,
@@ -154,10 +154,13 @@ where
 }
 
 pub(crate) mod state {
+    use crate::qp::QpInitiators;
+
     pub(crate) struct Uninitialized;
     pub(crate) struct InitializedDevice<Cmd, Send> {
         pub(crate) cmd: Cmd,
         pub(crate) send: Send,
+        pub(crate) qp_states: QpInitiators,
     }
 }
 
@@ -209,7 +212,11 @@ where
 
         Ok(Device {
             inner,
-            state: state::InitializedDevice { cmd, send },
+            state: state::InitializedDevice {
+                cmd,
+                send,
+                qp_states: QpInitiators::new(),
+            },
         })
     }
 
@@ -245,7 +252,12 @@ where
     }
 
     /// Sends an RDMA operation
-    fn send_wr(&self, qp: &mut DeviceQp, wr: SendWrResolver) -> io::Result<()> {
+    fn send_wr(&mut self, qpn: u32, wr: SendWrResolver) -> io::Result<()> {
+        let qp = self
+            .state
+            .qp_states
+            .state_mut(qpn)
+            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let flags = wr.send_flags();
         if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
             let wr_id = wr.wr_id();
