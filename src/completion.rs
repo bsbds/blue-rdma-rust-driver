@@ -83,8 +83,8 @@ pub(crate) struct DeviceCq {
     context: *const c_void,
     /// Current number of CQEs
     cqe_count: usize,
-    /// MSN to `wr_id` map, stores event that needs to be notified
-    local_event: HashMap<u16, u64>,
+    /// Event registration
+    event_reg: rtrb::Consumer<(u16, u64)>,
     /// Event queue
     event_queue: VecDeque<CompletionEvent>,
 }
@@ -106,28 +106,34 @@ impl CompletionEvent {
 
 impl DeviceCq {
     /// Creates a new `DeviceCq`
-    pub(crate) fn new(handle: u32, num_cqe: usize, channel: File, context: *const c_void) -> Self {
+    pub(crate) fn new(
+        handle: u32,
+        num_cqe: usize,
+        channel: File,
+        context: *const c_void,
+        event_reg: rtrb::Consumer<(u16, u64)>,
+    ) -> Self {
         Self {
             handle,
             num_cqe,
             channel,
             context,
             cqe_count: 0,
-            local_event: HashMap::new(),
+            event_reg,
             event_queue: VecDeque::new(),
         }
     }
 
-    /// Register a local event with a given Message Sequence Number (MSN) and work request ID.
-    ///
-    /// # Arguments
-    /// * `msn` - Message Sequence Number to register
-    /// * `wr_id` - Work request ID to associate with this event
-    pub(crate) fn register_local_event(&mut self, msn: u16, wr_id: u64) {
-        if self.local_event.insert(msn, wr_id).is_some() {
-            tracing::error!("duplicate event MSN: {msn}");
-        }
-    }
+    ///// Register a local event with a given Message Sequence Number (MSN) and work request ID.
+    /////
+    ///// # Arguments
+    ///// * `msn` - Message Sequence Number to register
+    ///// * `wr_id` - Work request ID to associate with this event
+    //pub(crate) fn register_local_event(&mut self, msn: u16, wr_id: u64) {
+    //    if self.local_event.insert(msn, wr_id).is_some() {
+    //        tracing::error!("duplicate event MSN: {msn}");
+    //    }
+    //}
 
     /// Acknowledge an event with the given MSN and queue pair number.
     ///
@@ -135,6 +141,10 @@ impl DeviceCq {
     /// * `msn` - Message Sequence Number to acknowledge
     /// * `qpn` - Queue Pair Number associated with this event
     pub(crate) fn ack_event(&mut self, msn: u16, qpn: u32) {
+        let Ok((current_msn, wr_id)) = self.event_reg.peek() else {
+            return;
+        };
+
         if let Some(wr_id) = self.local_event.remove(&msn) {
             self.event_queue.push_back(CompletionEvent::new(wr_id, qpn));
             self.notify_completion();
