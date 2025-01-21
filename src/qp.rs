@@ -7,7 +7,7 @@ use bitvec::vec::BitVec;
 use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 
 use crate::{
-    constants::MAX_PSN_WINDOW,
+    constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW},
     queue::abstr::{WithQpParams, WrChunkBuilder},
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
@@ -148,70 +148,6 @@ impl DeviceQp {
         }
     }
 
-    /// Returns the next wr
-    pub(crate) fn next_wr(
-        &mut self,
-        wr: &SendWrResolver,
-    ) -> Option<(WrChunkBuilder<WithQpParams>, u32)> {
-        let num_psn = self.num_psn(wr.raddr(), wr.length())?;
-        let (msn, base_psn) = self.state.next(num_psn)?;
-
-        Some((
-            WrChunkBuilder::new().set_qp_params(
-                msn,
-                self.qp_type,
-                self.qpn,
-                self.mac_addr,
-                self.dqpn,
-                self.dqp_ip,
-                self.pmtu,
-            ),
-            base_psn,
-        ))
-    }
-
-    /// Acknowledges a single PSN.
-    pub(crate) fn ack_one(&mut self, psn: u32) {
-        let _ignore = self.state.psn_tracker.ack_one(psn);
-    }
-
-    /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
-    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128, ack_msn: u16) -> Option<u32> {
-        let mut acked_psn = None;
-        if self.state.ack_msn_tracker.ack(ack_msn).is_some() {
-            acked_psn = self.state.psn_tracker.ack_before(base_psn);
-        }
-        if let Some(psn) = self.state.psn_tracker.ack_range(base_psn, bitmap) {
-            acked_psn = Some(psn);
-        }
-        acked_psn
-    }
-
-    /// Returns `true` if all PSNs up to and including the given PSN have been acknowledged.
-    pub(crate) fn all_acked(&self, psn: u32) -> bool {
-        self.state.psn_tracker.all_acked(psn)
-    }
-
-    /// Returns a mutable reference to the message tracker associated with this QP.
-    pub(crate) fn message_tracker(&mut self) -> &mut MessageTracker {
-        &mut self.state.message_tracker
-    }
-
-    /// Calculate the number of psn required for this WR
-    pub(crate) fn num_psn(&self, addr: u64, length: u32) -> Option<u32> {
-        num_psn(self.pmtu, addr, length)
-    }
-
-    /// Returns the send cq handle.
-    pub(crate) fn send_cq_handle(&self) -> Option<u32> {
-        self.send_cq
-    }
-
-    /// Returns the recv cq handle.
-    pub(crate) fn recv_cq_handle(&self) -> Option<u32> {
-        self.recv_cq
-    }
-
     /// Returns the QPN of this QP
     pub(crate) fn qpn(&self) -> u32 {
         self.qpn
@@ -320,18 +256,22 @@ impl InitiatorState {
     #[allow(clippy::as_conversions)] // convert u32 to usize
     fn next(&mut self, num_psn: u32) -> Option<(u16, u32)> {
         let base_psn = self.shared.base_psn();
+        let base_msn = self.shared.base_msn();
         let outstanding_num_psn = self.psn.saturating_sub(base_psn);
-        if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW {
+        let outstanding_num_msn = self.msn.saturating_sub(base_msn);
+        if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW
+            || outstanding_num_msn.saturating_add(1) as usize > MAX_MSN_WINDOW
+        {
             return None;
         }
         let current_psn = self.psn;
         let current_msn = self.msn;
         let next_msn = self.msn.wrapping_add(1);
-        (next_msn != self.shared.base_msn()).then(|| {
-            self.msn = next_msn;
-            self.psn = self.psn.wrapping_add(num_psn);
-            (current_msn, current_psn)
-        })
+        let next_psn = self.psn.wrapping_add(num_psn);
+        self.msn = next_msn;
+        self.psn = next_psn;
+
+        Some((current_msn, current_psn))
     }
 }
 
@@ -412,36 +352,6 @@ impl TrackerState {
     /// Returns the QPN of this QP
     pub(crate) fn qpn(&self) -> u32 {
         self.qpn
-    }
-}
-
-impl State {
-    /// Get the next MSN and PSN pair for a new request.
-    ///
-    /// # Arguments
-    ///
-    /// * `num_psn` - Number of PSNs needed for this request
-    ///
-    /// # Returns
-    ///
-    /// * `Some((msn, psn))` - The MSN and PSN pair for the new request
-    /// * `None` - If there is not enough PSN window available or MSN has wrapped around
-    #[allow(clippy::similar_names)] // name is clear
-    #[allow(clippy::as_conversions)] // convert u32 to usize
-    fn next(&mut self, num_psn: u32) -> Option<(u16, u32)> {
-        let base_psn = self.psn_tracker.base_psn();
-        let outstanding_num_psn = self.psn.saturating_sub(base_psn);
-        if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW {
-            return None;
-        }
-        let current_psn = self.psn;
-        let current_msn = self.msn;
-        let next_msn = self.msn.wrapping_add(1);
-        (next_msn != self.ack_msn_tracker.base_msn()).then(|| {
-            self.msn = next_msn;
-            self.psn = self.psn.wrapping_add(num_psn);
-            (current_msn, current_psn)
-        })
     }
 }
 
