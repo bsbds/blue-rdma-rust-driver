@@ -15,6 +15,9 @@ use crate::{
     retransmission::message_tracker::MessageTracker,
 };
 
+/// Offset between the `now_psn` an `base_psn`
+const BASE_PSN_OFFSET: u32 = 0x70;
+
 /// A worker for processing packet meta
 struct MetaWorker<T> {
     /// Inner meta report queue
@@ -93,6 +96,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     error!("qp number: {qpn} does not exist");
                     return;
                 };
+                let base_psn = psn_now.wrapping_sub(BASE_PSN_OFFSET);
                 if let Some(psn) = qp.ack_range(psn_now, now_bitmap, ack_msn) {
                     let last_msn_acked = qp.message_tracker().ack(psn);
                     let cq_handle = if is_send_by_local_hw {
