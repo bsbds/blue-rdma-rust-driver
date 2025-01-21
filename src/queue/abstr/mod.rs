@@ -32,7 +32,7 @@ pub(crate) trait MetaReport {
 }
 
 /// Simple NIC tunnel interface
-pub(crate) trait SimpleNicTunnel: Send + Sync + 'static {
+pub(crate) trait SimpleNicTunnel: Send + 'static {
     /// Frame Sender
     type Sender: FrameTx;
     /// Frame Receiver

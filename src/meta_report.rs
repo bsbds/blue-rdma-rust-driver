@@ -9,11 +9,22 @@ use crate::queue::{
 const NUM_META_REPORT_QUEUES: usize = 4;
 
 /// Handler for meta report queues
-struct MetaReportQueueHandler {
+pub(crate) struct MetaReportQueueHandler {
     /// All four meta report queues
-    inner: [MetaReportQueue; NUM_META_REPORT_QUEUES],
+    inner: Vec<MetaReportQueue>,
     /// Current position, used for round robin polling
     pos: usize,
+}
+
+impl MetaReportQueueHandler {
+    pub(crate) fn new(inner: Vec<MetaReportQueue>) -> Self {
+        debug_assert_eq!(
+            inner.len(),
+            NUM_META_REPORT_QUEUES,
+            "invalid numer of queues"
+        );
+        Self { inner, pos: 0 }
+    }
 }
 
 impl MetaReport for MetaReportQueueHandler {

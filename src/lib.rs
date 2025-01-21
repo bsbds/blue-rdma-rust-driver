@@ -208,6 +208,8 @@ mod workers;
 /// Context operations
 pub mod ctx_ops;
 
+pub use device::BlueRdmaDevice;
+
 #[allow(unused)]
 /// Network implementations
 pub mod net;

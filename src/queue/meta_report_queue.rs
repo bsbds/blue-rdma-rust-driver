@@ -34,6 +34,15 @@ pub(crate) struct MetaReportQueue {
 }
 
 impl MetaReportQueue {
+    pub(crate) fn new(inner: DescRingBuffer) -> Self {
+        Self { inner }
+    }
+
+    /// Returns the base address of the buffer
+    pub(crate) fn base_addr(&self) -> u64 {
+        self.inner.base_addr()
+    }
+
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<MetaReportQueueDesc> {
         let first = self

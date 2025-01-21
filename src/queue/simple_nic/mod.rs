@@ -5,12 +5,20 @@ use std::{
 
 use crate::desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc};
 
-use super::{ToCardQueue, ToCardQueueTyped, ToHostQueue, ToHostQueueTyped};
+use super::{DescRingBuffer, ToCardQueue, ToCardQueueTyped, ToHostQueue, ToHostQueueTyped};
 
 /// A transmit queue for the simple NIC device.
 pub(crate) struct SimpleNicTxQueue {
     /// Inner queue
     inner: ToCardQueueTyped<SimpleNicTxQueueDesc>,
+}
+
+impl SimpleNicTxQueue {
+    pub(crate) fn new(inner: DescRingBuffer) -> Self {
+        Self {
+            inner: ToCardQueueTyped::new(inner),
+        }
+    }
 }
 
 impl ToCardQueue for SimpleNicTxQueue {
@@ -25,6 +33,14 @@ impl ToCardQueue for SimpleNicTxQueue {
 pub(crate) struct SimpleNicRxQueue {
     /// Inner queue
     inner: ToHostQueueTyped<SimpleNicRxQueueDesc>,
+}
+
+impl SimpleNicRxQueue {
+    pub(crate) fn new(inner: DescRingBuffer) -> Self {
+        Self {
+            inner: ToHostQueueTyped::new(inner),
+        }
+    }
 }
 
 impl ToHostQueue for SimpleNicRxQueue {

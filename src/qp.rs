@@ -14,13 +14,15 @@ use crate::{
     },
     send::SendWrResolver,
 };
+
 /// Initiator state tacking of all QPs
-pub(crate) struct QpInitiators {
+#[derive(Debug)]
+pub(crate) struct QpInitiatorTable {
     /// Vector maps the QPN to the initiator state of each QP
     qps: Vec<InitiatorState>,
 }
 
-impl QpInitiators {
+impl QpInitiatorTable {
     /// Creates a new `QpInitiators`
     pub(crate) fn new() -> Self {
         todo!()
@@ -170,6 +172,7 @@ struct State {
 }
 
 #[allow(clippy::missing_docs_in_private_items)]
+#[derive(Debug)]
 pub(crate) struct InitiatorState {
     qp_type: u8,
     qpn: u32,

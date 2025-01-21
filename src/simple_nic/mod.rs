@@ -7,6 +7,8 @@ mod worker;
 #[cfg(test)]
 mod tests;
 
+pub(crate) use worker::SimpleNicController;
+
 use std::{
     io::{self},
     sync::{atomic::AtomicBool, Arc},

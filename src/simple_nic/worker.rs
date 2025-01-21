@@ -11,29 +11,73 @@ use tracing::error;
 
 use crate::{
     desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
+    device::{
+        proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
+        CsrBaseAddrAdaptor, DeviceAdaptor,
+    },
     mem::page::ContiguousPages,
     queue::{
         abstr::{FrameRx, FrameTx},
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
-        ToCardQueue, ToHostQueue,
+        DescRingBuffer, ToCardQueue, ToHostQueue,
     },
 };
 
-use super::SimpleNicDevice;
+use super::{SimpleNicDevice, SimpleNicTunnel};
+
+pub(crate) struct SimpleNicController<Dev> {
+    tx: FrameTxQueue<Dev>,
+    rx: FrameRxQueue<Dev>,
+}
+
+impl<Dev: DeviceAdaptor> SimpleNicController<Dev> {
+    pub(crate) fn init(
+        dev: &Dev,
+        tx_rb: DescRingBuffer,
+        tx_rb_base_pa: u64,
+        rx_rb: DescRingBuffer,
+        rx_rb_base_pa: u64,
+        rx_bufffer: ContiguousPages<1>,
+    ) -> io::Result<Self> {
+        let mut tx_queue = SimpleNicTxQueue::new(tx_rb);
+        let mut rx_queue = SimpleNicRxQueue::new(rx_rb);
+        let req_csr_proxy = SimpleNicTxQueueCsrProxy(dev.clone());
+        let resp_csr_proxy = SimpleNicRxQueueCsrProxy(dev.clone());
+        req_csr_proxy.write_base_addr(tx_rb_base_pa)?;
+        resp_csr_proxy.write_base_addr(rx_rb_base_pa)?;
+
+        Ok(Self {
+            tx: FrameTxQueue::new(tx_queue, req_csr_proxy),
+            rx: FrameRxQueue::new(rx_queue, rx_bufffer, resp_csr_proxy),
+        })
+    }
+}
+
+impl<Dev: Send + 'static> SimpleNicTunnel for SimpleNicController<Dev> {
+    type Sender = FrameTxQueue<Dev>;
+
+    type Receiver = FrameRxQueue<Dev>;
+
+    fn into_split(self, recv_buffer: super::RecvBuffer) -> (Self::Sender, Self::Receiver) {
+        (self.tx, self.rx)
+    }
+}
 
 /// A buffer slot size for a single frame
 const FRAME_SLOT_SIZE: usize = 2048;
 
 /// Send frame through `SimpleNicTxQueue`
-pub(crate) struct FrameTxQueue {
+pub(crate) struct FrameTxQueue<Dev> {
     /// Inner
     inner: SimpleNicTxQueue,
+    /// CSR Proxy
+    csr_proxy: SimpleNicTxQueueCsrProxy<Dev>,
 }
 
-impl FrameTxQueue {
+impl<Dev> FrameTxQueue<Dev> {
     /// Creates a new `FrameTxQueue`
-    pub(crate) fn new(inner: SimpleNicTxQueue) -> Self {
-        Self { inner }
+    pub(crate) fn new(inner: SimpleNicTxQueue, csr_proxy: SimpleNicTxQueueCsrProxy<Dev>) -> Self {
+        Self { inner, csr_proxy }
     }
 
     /// Build the descriptor from the given buffer
@@ -44,7 +88,7 @@ impl FrameTxQueue {
     }
 }
 
-impl FrameTx for FrameTxQueue {
+impl<Dev: Send + 'static> FrameTx for FrameTxQueue<Dev> {
     fn send(&mut self, buf: &[u8]) -> io::Result<()> {
         let mut desc = Self::build_desc(buf)
             .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
@@ -58,21 +102,31 @@ impl FrameTx for FrameTxQueue {
 }
 
 /// Receive frame from `SimpleNicRxQueue`
-pub(crate) struct FrameRxQueue {
+pub(crate) struct FrameRxQueue<Dev> {
     /// Queue for receiving frames from the NIC
     rx_queue: SimpleNicRxQueue,
     /// Buffer for storing received frames
     rx_buf: ContiguousPages<1>,
+    /// CSR Proxy
+    csr_proxy: SimpleNicRxQueueCsrProxy<Dev>,
 }
 
-impl FrameRxQueue {
+impl<Dev> FrameRxQueue<Dev> {
     /// Creates a new `FrameRxQueue`
-    pub(crate) fn new(rx_queue: SimpleNicRxQueue, rx_buf: ContiguousPages<1>) -> Self {
-        Self { rx_queue, rx_buf }
+    pub(crate) fn new(
+        rx_queue: SimpleNicRxQueue,
+        rx_buf: ContiguousPages<1>,
+        csr_proxy: SimpleNicRxQueueCsrProxy<Dev>,
+    ) -> Self {
+        Self {
+            rx_queue,
+            rx_buf,
+            csr_proxy,
+        }
     }
 }
 
-impl FrameRx for FrameRxQueue {
+impl<Dev: Send + 'static> FrameRx for FrameRxQueue<Dev> {
     #[allow(clippy::arithmetic_side_effects)]
     #[allow(clippy::as_conversions)] // converting u32 to usize
     fn recv_nonblocking(&mut self) -> io::Result<&[u8]> {

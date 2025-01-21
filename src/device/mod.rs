@@ -19,16 +19,18 @@ mod constants;
 use std::{
     io,
     marker::PhantomData,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{atomic::AtomicBool, Arc, OnceLock},
 };
 
+use parking_lot::Mutex;
 use proxy::DeviceProxy;
 
 use crate::{
-    completion::CompletionEvent,
+    completion::{CompletionEvent, EventRegistry},
+    ctx_ops::RdmaCtxOps,
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
-    qp::{DeviceQp, QpInitiators},
+    qp::{DeviceQp, QpInitiatorTable},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
         WorkReqSend, WrChunk,
@@ -154,55 +156,40 @@ where
     }
 }
 
-pub(crate) mod state {
-    use std::sync::Arc;
-
-    use crate::{completion::EventRegistry, qp::QpInitiators};
-
-    pub(crate) struct Uninitialized;
-    pub(crate) struct InitializedDevice<Cmd, Send> {
-        pub(crate) cmd: Cmd,
-        pub(crate) send: Send,
-        pub(crate) qp_states: QpInitiators,
-        pub(crate) event_reg: Arc<EventRegistry>,
-    }
-}
-
 pub(crate) trait InitializeDevice {
     type Cmd;
     type Send;
     type MetaReport;
     type SimpleNic;
 
-    fn initialize() -> (Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic);
+    #[allow(clippy::type_complexity)]
+    fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)>;
 }
 
-pub(crate) struct Device<Inner, S> {
-    inner: Inner,
-    state: S,
+struct DeviceBuilder<B> {
+    queue_builder: B,
 }
 
-type Initialized<Dev> =
-    state::InitializedDevice<<Dev as InitializeDevice>::Cmd, <Dev as InitializeDevice>::Send>;
-
-impl<Inner> Device<Inner, state::Uninitialized>
+impl<B> DeviceBuilder<B>
 where
-    Inner: InitializeDevice,
-    Inner::Cmd: DeviceCommand,
-    Inner::MetaReport: MetaReport,
-    Inner::SimpleNic: SimpleNicTunnel,
+    B: InitializeDevice,
+    B::Send: WorkReqSend + Send + 'static,
+    B::Cmd: DeviceCommand + Send + 'static,
+    B::MetaReport: MetaReport + Send + 'static,
+    B::SimpleNic: SimpleNicTunnel + Send + 'static,
 {
-    pub(crate) fn init<Allocator, Resolver>(
-        inner: Inner,
+    fn initialize<A, R>(
+        &self,
         network: NetworkConfig,
-        mut allocator: Allocator,
-        phys_addr_resolver: &Resolver,
-    ) -> io::Result<Device<Inner, Initialized<Inner>>>
+        mut allocator: A,
+        phys_addr_resolver: &R,
+    ) -> io::Result<BlueRdmaDevice>
     where
-        Allocator: PageAllocator<1>,
-        Resolver: VirtToPhys,
+        A: PageAllocator<1>,
+        R: VirtToPhys,
     {
-        let (cmd, send, meta_report, simple_nic) = Inner::initialize();
+        let (cmd_queue, send_queue, meta_report_queue, simple_nic) =
+            self.queue_builder.initialize()?;
         let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
         let page = allocator.alloc()?;
         let recv_buffer = RecvBuffer::new(page);
@@ -210,25 +197,22 @@ where
             .virt_to_phys(recv_buffer.addr())?
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let meta = RecvBufferMeta::new(phys_addr);
-        cmd.set_network(network)?;
-        cmd.set_raw_packet_recv_buffer(meta)?;
-        Self::launch_backgroud(meta_report, simple_nic, tap_dev, recv_buffer);
+        cmd_queue.set_network(network)?;
+        cmd_queue.set_raw_packet_recv_buffer(meta)?;
+        Self::launch_backgroud(meta_report_queue, simple_nic, tap_dev, recv_buffer);
 
-        Ok(Device {
-            inner,
-            state: state::InitializedDevice {
-                cmd,
-                send,
-                qp_states: QpInitiators::new(),
-                event_reg: todo!(),
-            },
+        Ok(BlueRdmaDevice {
+            cmd_queue: Box::new(cmd_queue),
+            send_queue: Box::new(send_queue),
+            qp_table: QpInitiatorTable::new(),
+            event_reg: todo!(),
         })
     }
 
     #[allow(clippy::needless_pass_by_value)] // FIXME: Remove the clippy
     fn launch_backgroud(
-        meta_report: Inner::MetaReport,
-        simple_nic: Inner::SimpleNic,
+        meta_report: B::MetaReport,
+        simple_nic: B::SimpleNic,
         tap_dev: TapDevice,
         recv_buffer: RecvBuffer,
     ) {
@@ -240,27 +224,29 @@ where
     }
 }
 
-impl<Inner> Device<Inner, Initialized<Inner>>
-where
-    Inner: InitializeDevice,
-    Inner::Cmd: DeviceCommand,
-    Inner::Send: WorkReqSend,
-{
+#[allow(missing_debug_implementations)]
+pub struct BlueRdmaDevice {
+    pub(crate) cmd_queue: Box<dyn DeviceCommand + Send + 'static>,
+    pub(crate) send_queue: Box<dyn WorkReqSend + Send + 'static>,
+    pub(crate) qp_table: QpInitiatorTable,
+    pub(crate) event_reg: Arc<EventRegistry>,
+}
+
+impl BlueRdmaDevice {
     /// Updates Memory Translation Table entry
     fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
-        self.state.cmd.update_mtt(entry)
+        self.cmd_queue.update_mtt(entry)
     }
 
     /// Updates Queue Pair entry
     fn update_qp(&self, entry: QPEntry) -> io::Result<()> {
-        self.state.cmd.update_qp(entry)
+        self.cmd_queue.update_qp(entry)
     }
 
     /// Sends an RDMA operation
-    fn send_wr(&mut self, qpn: u32, wr: SendWrResolver) -> io::Result<()> {
+    fn post_send_inner(&mut self, qpn: u32, wr: SendWrResolver) -> io::Result<()> {
         let qp = self
-            .state
-            .qp_states
+            .qp_table
             .state_mut(qpn)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let (builder, msn, base_psn) = qp
@@ -272,17 +258,163 @@ where
             let send_cq_handle = qp
                 .send_cq_handle()
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            self.state
-                .event_reg
+            self.event_reg
                 .register(qpn, CompletionEvent::new(qpn, msn, wr_id));
         }
 
         let fragmenter = WrFragmenter::new(wr, builder, base_psn);
         for chunk in fragmenter {
             // TODO: Should this never fail
-            self.state.send.send(chunk)?;
+            self.send_queue.send(chunk)?;
         }
 
         Ok(())
+    }
+}
+
+static INSTANCE: OnceLock<Mutex<BlueRdmaDevice>> = OnceLock::new();
+
+#[allow(unsafe_code)]
+#[allow(clippy::not_unsafe_ptr_arg_deref)]
+unsafe impl RdmaCtxOps for BlueRdmaDevice {
+    #[inline]
+    fn init() {
+        todo!()
+    }
+
+    #[inline]
+    fn new(sysfs_name: *const std::ffi::c_char) -> *mut std::ffi::c_void {
+        todo!()
+    }
+
+    #[inline]
+    fn free(driver_data: *const std::ffi::c_void) {
+        todo!()
+    }
+
+    #[inline]
+    fn alloc_pd(blue_context: *mut ibverbs_sys::ibv_context) -> *mut ibverbs_sys::ibv_pd {
+        Box::into_raw(Box::new(ibverbs_sys::ibv_pd {
+            context: blue_context,
+            handle: 0,
+        }))
+    }
+
+    #[inline]
+    fn dealloc_pd(pd: *mut ibverbs_sys::ibv_pd) -> ::std::os::raw::c_int {
+        0
+    }
+
+    #[inline]
+    fn query_device_ex(
+        blue_context: *mut ibverbs_sys::ibv_context,
+        _input: *const ibverbs_sys::ibv_query_device_ex_input,
+        device_attr: *mut ibverbs_sys::ibv_device_attr,
+        _attr_size: usize,
+    ) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn query_port(
+        blue_context: *mut ibverbs_sys::ibv_context,
+        port_num: u8,
+        port_attr: *mut ibverbs_sys::ibv_port_attr,
+    ) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn create_cq(
+        blue_context: *mut ibverbs_sys::ibv_context,
+        cqe: core::ffi::c_int,
+        channel: *mut ibverbs_sys::ibv_comp_channel,
+        comp_vector: core::ffi::c_int,
+    ) -> *mut ibverbs_sys::ibv_cq {
+        todo!()
+    }
+
+    #[inline]
+    fn destroy_cq(cq: *mut ibverbs_sys::ibv_cq) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn create_qp(
+        pd: *mut ibverbs_sys::ibv_pd,
+        init_attr: *mut ibverbs_sys::ibv_qp_init_attr,
+    ) -> *mut ibverbs_sys::ibv_qp {
+        todo!()
+    }
+
+    #[inline]
+    fn destroy_qp(qp: *mut ibverbs_sys::ibv_qp) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn modify_qp(
+        qp: *mut ibverbs_sys::ibv_qp,
+        attr: *mut ibverbs_sys::ibv_qp_attr,
+        attr_mask: core::ffi::c_int,
+    ) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn query_qp(
+        qp: *mut ibverbs_sys::ibv_qp,
+        attr: *mut ibverbs_sys::ibv_qp_attr,
+        attr_mask: core::ffi::c_int,
+        init_attr: *mut ibverbs_sys::ibv_qp_init_attr,
+    ) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn reg_mr(
+        pd: *mut ibverbs_sys::ibv_pd,
+        addr: *mut ::std::os::raw::c_void,
+        length: usize,
+        _hca_va: u64,
+        access: core::ffi::c_int,
+    ) -> *mut ibverbs_sys::ibv_mr {
+        todo!()
+    }
+
+    #[inline]
+    fn dereg_mr(mr: *mut ibverbs_sys::ibv_mr) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn post_send(
+        qp: *mut ibverbs_sys::ibv_qp,
+        wr: *mut ibverbs_sys::ibv_send_wr,
+        bad_wr: *mut *mut ibverbs_sys::ibv_send_wr,
+    ) -> ::std::os::raw::c_int {
+        unsafe {
+            let qp_num = (*qp).qp_num;
+            let wr = SendWrResolver::new(*wr).unwrap_or_else(|_| todo!("handle invalid input"));
+        }
+        todo!()
+    }
+
+    #[inline]
+    fn post_recv(
+        qp: *mut ibverbs_sys::ibv_qp,
+        wr: *mut ibverbs_sys::ibv_recv_wr,
+        bad_wr: *mut *mut ibverbs_sys::ibv_recv_wr,
+    ) -> ::std::os::raw::c_int {
+        todo!()
+    }
+
+    #[inline]
+    fn poll_cq(
+        cq: *mut ibverbs_sys::ibv_cq,
+        num_entries: i32,
+        wc: *mut ibverbs_sys::ibv_wc,
+    ) -> i32 {
+        todo!()
     }
 }

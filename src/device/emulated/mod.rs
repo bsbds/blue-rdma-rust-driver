@@ -3,11 +3,12 @@
 /// Crs client implementation
 mod csr;
 
-use std::{io, net::SocketAddr, time::Duration};
+use std::{io, iter, net::SocketAddr, thread, time::Duration};
 
 use csr::RpcClient;
 
 use crate::{
+    cmd::CommandController,
     desc::{
         cmd::{
             CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
@@ -15,22 +16,33 @@ use crate::{
         },
         RingBufDescUntyped,
     },
+    device::proxy::{
+        MetaReportQueueCsrProxy0, MetaReportQueueCsrProxy1, MetaReportQueueCsrProxy2,
+        MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
+        SendQueueCsrProxy3,
+    },
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator},
         slot_alloc::SlotAlloc,
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },
+    meta_report::MetaReportQueueHandler,
     queue::{
         abstr::DeviceCommand,
-        cmd_queue::{CmdQueue, CmdQueueDesc},
+        cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
+        meta_report_queue::MetaReportQueue,
+        send_queue::SendQueue,
         DescRingBufferAllocator,
     },
     ringbuffer::{RingBuffer, RingCtx},
+    send_scheduler::{SendQueueScheduler, SendWorkerBuilder},
+    simple_nic::SimpleNicController,
 };
 
 use super::{
     proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
+    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, InitializeDevice,
+    PageAllocator,
 };
 
 #[non_exhaustive]
@@ -47,19 +59,119 @@ impl DeviceAdaptor for EmulatedDevice {
     }
 }
 
-//impl InitializeCsr for EmulatedDevice {
-//    type Cmd = CommandController<Self>;
-//
-//    type Send = ();
-//
-//    type MetaReport = ();
-//
-//    type SimpleNic = ();
-//
-//    fn initialize(&mut self) -> (Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic) {
-//        (Self::Cmd::new(), (), (), ())
-//    }
-//}
+struct EmulatedQueueBuilder {
+    rpc_server_addr: SocketAddr,
+}
+
+impl InitializeDevice for EmulatedQueueBuilder {
+    type Cmd = CommandController<EmulatedDevice>;
+    type Send = SendQueueScheduler;
+    type MetaReport = MetaReportQueueHandler;
+    type SimpleNic = SimpleNicController<EmulatedDevice>;
+
+    #[allow(clippy::indexing_slicing)] // bound is checked
+    #[allow(clippy::as_conversions)] // usize to u64
+    #[allow(clippy::similar_names)] // it's clear
+    fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)> {
+        let mut page_allocator = EmulatedPageAllocator::new(
+            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
+        );
+        let mut allocator = DescRingBufferAllocator::new(page_allocator);
+        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
+        let cli = RpcClient::new(self.rpc_server_addr)?;
+        let dev = EmulatedDevice(cli);
+        let proxy_cmd_queue = CmdQueueCsrProxy(dev.clone());
+        let proxy_resp_queue = CmdRespQueueCsrProxy(dev.clone());
+        let cmd_queue_buffer = allocator.alloc()?;
+        let cmd_resp_queue_buffer = allocator.alloc()?;
+        let cmdq_base_pa = resolver
+            .virt_to_phys(cmd_queue_buffer.base_addr())?
+            .unwrap_or_else(|| unreachable!());
+        let cmdrespq_base_pa = resolver
+            .virt_to_phys(cmd_resp_queue_buffer.base_addr())?
+            .unwrap_or_else(|| unreachable!());
+        let cmd_controller = CommandController::init(
+            &dev,
+            cmd_queue_buffer,
+            cmdq_base_pa,
+            cmd_resp_queue_buffer,
+            cmdrespq_base_pa,
+        )?;
+
+        let sqs = iter::repeat_with(|| allocator.alloc().map(SendQueue::new))
+            .take(4)
+            .collect::<Result<Vec<_>, _>>()?;
+        let sq_base_pas: Vec<_> = sqs
+            .iter()
+            .map(SendQueue::base_addr)
+            .map(|addr| resolver.virt_to_phys(addr))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        // TODO: use loop
+        let sq_proxy0 = SendQueueCsrProxy0(dev.clone());
+        let sq_proxy1 = SendQueueCsrProxy1(dev.clone());
+        let sq_proxy2 = SendQueueCsrProxy2(dev.clone());
+        let sq_proxy3 = SendQueueCsrProxy3(dev.clone());
+        sq_proxy0.write_base_addr(sq_base_pas[0]);
+        sq_proxy1.write_base_addr(sq_base_pas[1]);
+        sq_proxy2.write_base_addr(sq_base_pas[1]);
+        sq_proxy3.write_base_addr(sq_base_pas[1]);
+        let send_scheduler = SendQueueScheduler::new();
+        let builder = SendWorkerBuilder::new_with_global_injector(send_scheduler.injector());
+        let workers = builder.build_workers(sqs);
+        workers
+            .into_iter()
+            .map(|worker| thread::spawn(|| worker.run()));
+
+        let mrqs = iter::repeat_with(|| allocator.alloc().map(MetaReportQueue::new))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mrq_base_pas: Vec<_> = mrqs
+            .iter()
+            .map(MetaReportQueue::base_addr)
+            .map(|addr| resolver.virt_to_phys(addr))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        let mrq_proxy0 = MetaReportQueueCsrProxy0(dev.clone());
+        let mrq_proxy1 = MetaReportQueueCsrProxy1(dev.clone());
+        let mrq_proxy2 = MetaReportQueueCsrProxy2(dev.clone());
+        let mrq_proxy3 = MetaReportQueueCsrProxy3(dev.clone());
+        mrq_proxy0.write_base_addr(mrq_base_pas[0]);
+        mrq_proxy1.write_base_addr(mrq_base_pas[1]);
+        mrq_proxy2.write_base_addr(mrq_base_pas[1]);
+        mrq_proxy3.write_base_addr(mrq_base_pas[1]);
+        let meta_report_handler = MetaReportQueueHandler::new(mrqs);
+
+        let simple_nic_tx_queue_buffer = allocator.alloc()?;
+        let simple_nic_rx_queue_buffer = allocator.alloc()?;
+        let simple_nic_tx_queue_pa = resolver
+            .virt_to_phys(simple_nic_tx_queue_buffer.base_addr())?
+            .unwrap_or_else(|| unreachable!());
+        let simple_nic_rx_queue_pa = resolver
+            .virt_to_phys(simple_nic_rx_queue_buffer.base_addr())?
+            .unwrap_or_else(|| unreachable!());
+        let simple_nic_rx_buffer = allocator.into_inner().alloc()?;
+
+        let simple_nic_controller = SimpleNicController::init(
+            &dev,
+            simple_nic_tx_queue_buffer,
+            simple_nic_rx_queue_pa,
+            simple_nic_rx_queue_buffer,
+            simple_nic_rx_queue_pa,
+            simple_nic_rx_buffer,
+        )?;
+
+        Ok((
+            cmd_controller,
+            send_scheduler,
+            meta_report_handler,
+            simple_nic_controller,
+        ))
+    }
+}
 
 impl EmulatedDevice {
     #[allow(
@@ -96,10 +208,10 @@ impl EmulatedDevice {
         cmd_queue.push(desc1).unwrap_or_else(|_| unreachable!());
         // TODO: flush
         //cmd_queue.flush()?;
-        std::thread::sleep(Duration::from_secs(1));
+        thread::sleep(Duration::from_secs(1));
 
         let resps: Vec<CmdQueueRespDescOnlyCommonHeader> =
-            std::iter::repeat_with(|| buffer1.try_pop().copied())
+            iter::repeat_with(|| buffer1.try_pop().copied())
                 .flatten()
                 .take(2)
                 .map(Into::into)

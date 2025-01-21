@@ -87,6 +87,10 @@ impl<A: PageAllocator<1>> DescRingBufferAllocator<A> {
             .unwrap_or_else(|| unreachable!("ringbuffer creation should never fail"));
         Ok(DescRingBuffer(rb))
     }
+
+    pub(crate) fn into_inner(self) -> A {
+        self.0
+    }
 }
 
 impl DescRingBufferAllocator<HostPageAllocator<1>> {
@@ -128,6 +132,15 @@ pub(crate) struct ToCardQueueTyped<Desc> {
     _marker: PhantomData<Desc>,
 }
 
+impl<Desc> ToCardQueueTyped<Desc> {
+    pub(crate) fn new(inner: DescRingBuffer) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
+}
+
 impl<Desc> ToCardQueue for ToCardQueueTyped<Desc>
 where
     Desc: Into<RingBufDescUntyped>,
@@ -145,6 +158,15 @@ pub(super) struct ToHostQueueTyped<Desc> {
     inner: DescRingBuffer,
     /// Descriptor Type
     _marker: PhantomData<Desc>,
+}
+
+impl<Desc> ToHostQueueTyped<Desc> {
+    pub(super) fn new(inner: DescRingBuffer) -> Self {
+        Self {
+            inner,
+            _marker: PhantomData,
+        }
+    }
 }
 
 impl<Desc> ToHostQueue for ToHostQueueTyped<Desc>

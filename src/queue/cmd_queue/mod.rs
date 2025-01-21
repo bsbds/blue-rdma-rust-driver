@@ -46,6 +46,11 @@ impl CmdQueue {
         Self { inner: ring_buffer }
     }
 
+    /// Returns the base address of the buffer
+    pub(crate) fn base_addr(&self) -> u64 {
+        self.inner.base_addr()
+    }
+
     /// Produces command descriptors to the queue
     pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> io::Result<()> {
         match desc {
@@ -85,6 +90,11 @@ impl CmdRespQueue {
     /// Creates a new `CmdRespQueue`
     pub(crate) fn new(ring_buffer: DescRingBuffer) -> Self {
         Self { inner: ring_buffer }
+    }
+
+    /// Returns the base address of the buffer
+    pub(crate) fn base_addr(&self) -> u64 {
+        self.inner.base_addr()
     }
 
     /// Tries to poll next valid entry from the queue
