@@ -26,7 +26,7 @@ use parking_lot::Mutex;
 use proxy::DeviceProxy;
 
 use crate::{
-    completion::{CompletionEvent, EventRegistry},
+    completion::{CompletionEvent, CqManager, EventRegistry, MetaCqTable},
     ctx_ops::RdmaCtxOps,
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     meta_worker,
@@ -185,6 +185,7 @@ where
         mut allocator: A,
         phys_addr_resolver: &R,
         max_num_qps: u32,
+        max_num_cqs: u32,
     ) -> io::Result<BlueRdmaDevice>
     where
         A: PageAllocator<1>,
@@ -201,30 +202,37 @@ where
         cmd_queue.set_network(network)?;
         cmd_queue.set_raw_packet_recv_buffer(meta)?;
         let qp_manager = QpManager::new(max_num_qps);
+        let cq_manager = CqManager::new(max_num_cqs);
+        let meta_cq_table = cq_manager.new_meta_table();
         let (initiator_table, tracker_table) = qp_manager.new_split();
-        Self::launch_backgroud(meta_report_queue, simple_nic, tap_dev, tracker_table);
+        Self::launch_backgroud(
+            meta_report_queue,
+            simple_nic,
+            tap_dev,
+            tracker_table,
+            meta_cq_table,
+        );
 
         Ok(BlueRdmaDevice {
             cmd_queue: Box::new(cmd_queue),
             send_queue: Box::new(send_queue),
             qp_manager,
             qp_table: initiator_table,
-            event_reg: todo!(),
+            cq_manager,
         })
     }
 
-    #[allow(clippy::needless_pass_by_value)] // FIXME: Remove the clippy
     fn launch_backgroud(
         meta_report: B::MetaReport,
         simple_nic: B::SimpleNic,
         tap_dev: TapDevice,
         tracker_table: QpTrackerTable,
+        meta_cq_table: MetaCqTable,
     ) {
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let launch = simple_nic::Launch::new(simple_nic, tap_dev);
         let _handle = launch.launch(Arc::clone(&is_shutdown));
-        let launch_meta =
-            meta_worker::Launch::new(meta_report, tracker_table, { todo!("pass cqs") });
+        let launch_meta = meta_worker::Launch::new(meta_report, tracker_table, meta_cq_table);
         launch_meta.launch(Arc::clone(&is_shutdown));
     }
 }
@@ -234,8 +242,8 @@ pub struct BlueRdmaDevice {
     pub(crate) cmd_queue: Box<dyn DeviceCommand + Send + 'static>,
     pub(crate) send_queue: Box<dyn WorkReqSend + Send + 'static>,
     pub(crate) qp_manager: QpManager,
+    pub(crate) cq_manager: CqManager,
     pub(crate) qp_table: QpInitiatorTable,
-    pub(crate) event_reg: Arc<EventRegistry>,
 }
 
 impl BlueRdmaDevice {
@@ -264,8 +272,11 @@ impl BlueRdmaDevice {
             let send_cq_handle = qp
                 .send_cq_handle()
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            self.event_reg
-                .register(qpn, CompletionEvent::new(qpn, msn, wr_id));
+            self.cq_manager.register_event(
+                send_cq_handle,
+                qpn,
+                CompletionEvent::new(qpn, msn, wr_id),
+            );
         }
 
         let fragmenter = WrFragmenter::new(wr, builder, base_psn);

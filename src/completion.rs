@@ -18,7 +18,7 @@ pub(crate) struct CqManager {
     /// Bitmap tracking allocated CQ handles
     bitmap: BitVec,
     /// CQ handle to `DeviceCq` mapping
-    cqs: Vec<Option<DeviceCq>>,
+    cqs: Vec<DeviceCq>,
 }
 
 #[allow(clippy::as_conversions, clippy::indexing_slicing)]
@@ -30,42 +30,58 @@ impl CqManager {
         bitmap.resize(size, false);
         Self {
             bitmap,
-            cqs: iter::repeat_with(|| None).take(size).collect(),
+            cqs: iter::repeat_with(DeviceCq::default).take(size).collect(),
+        }
+    }
+
+    pub(crate) fn new_meta_table(&self) -> MetaCqTable {
+        let entries = self
+            .cqs
+            .iter()
+            .map(|cq| MetaCqEntry {
+                attr: Arc::clone(&cq.attr),
+                cqe_count: 0,
+            })
+            .collect();
+        MetaCqTable { table: entries }
+    }
+
+    pub(crate) fn register_event(&self, handle: u32, qpn: u32, event: CompletionEvent) {
+        if let Some(cq) = self.get_cq(handle) {
+            cq.attr.inner.lock().event_registry.register(qpn, event);
         }
     }
 
     /// Allocates a new cq and returns its cqN
     #[allow(clippy::cast_possible_truncation)] // no larger than u32
-    pub(crate) fn create_cq(&mut self, cq: DeviceCq) -> Option<u32> {
-        let cqn = self.bitmap.first_zero()? as u32;
-        self.bitmap.set(cqn as usize, true);
-        self.cqs[cqn as usize] = Some(cq);
-        Some(cqn)
+    pub(crate) fn create_cq(&mut self) -> Option<u32> {
+        let handle = self.bitmap.first_zero()? as u32;
+        self.bitmap.set(handle as usize, true);
+        if let Some(cq) = self.cqs.get(handle as usize) {
+            cq.attr.clear();
+        }
+        Some(handle)
     }
 
     /// Removes and returns the cq associated with the given cqN
-    pub(crate) fn destroy_cq(&mut self, cqn: u32) -> Option<DeviceCq> {
-        if cqn as usize >= self.max_num_cqs() {
-            return None;
+    pub(crate) fn destroy_cq(&mut self, handle: u32) {
+        if handle as usize >= self.max_num_cqs() {
+            return;
         }
-        self.bitmap.set(cqn as usize, false);
-        self.cqs[cqn as usize].take()
+        self.bitmap.set(handle as usize, false);
+        if let Some(cq) = self.cqs.get(handle as usize) {
+            cq.attr.clear();
+        }
     }
 
     /// Gets a reference to the cq associated with the given cqN
     pub(crate) fn get_cq(&self, handle: u32) -> Option<&DeviceCq> {
-        if handle as usize >= self.max_num_cqs() {
-            return None;
-        }
-        self.cqs[handle as usize].as_ref()
+        self.cqs.get(handle as usize)
     }
 
     /// Gets a mutable reference to the cq associated with the given cqN
-    pub(crate) fn get_cq_mut(&mut self, cqn: u32) -> Option<&mut DeviceCq> {
-        if cqn as usize >= self.max_num_cqs() {
-            return None;
-        }
-        self.cqs[cqn as usize].as_mut()
+    pub(crate) fn get_cq_mut(&mut self, handle: u32) -> Option<&mut DeviceCq> {
+        self.cqs.get_mut(handle as usize)
     }
 
     /// Returns the maximum number of Queue Pairs (cqs) supported
@@ -74,40 +90,106 @@ impl CqManager {
     }
 }
 
-/// A completion queue implementation
-#[derive(Debug)]
-pub(crate) struct DeviceCq {
+pub(crate) struct MetaCqTable {
+    table: Vec<MetaCqEntry>,
+}
+
+impl MetaCqTable {
+    #[allow(clippy::as_conversions)] // u32 to usize
+    pub(crate) fn get_mut(&mut self, handle: u32) -> Option<&mut MetaCqEntry> {
+        self.table.get_mut(handle as usize)
+    }
+}
+
+pub(crate) struct MetaCqEntry {
+    attr: Arc<CqAttrShared>,
+    /// Current number of CQEs
+    cqe_count: usize,
+}
+
+impl MetaCqEntry {
+    /// Acknowledge an event with the given MSN and queue pair number.
+    ///
+    /// # Arguments
+    /// * `msn` - Message Sequence Number to acknowledge
+    /// * `qpn` - Queue Pair Number associated with this event
+    #[allow(clippy::as_conversions)] // u16 to usize
+    pub(crate) fn ack_event(&mut self, last_msn_acked: u16, qpn: u32) {
+        let mut attr_guard = self.attr.inner.lock();
+        let Some(queue) = attr_guard.event_registry.get_mut(qpn) else {
+            return;
+        };
+        let mut events = Vec::new();
+        while let Some(event) = queue.front() {
+            let x = last_msn_acked.wrapping_sub(event.msn);
+            if x > 0 && (x as usize) < MAX_MSN_WINDOW {
+                events.push(queue.pop_front());
+            } else {
+                break;
+            }
+        }
+        let mut event_count = events.len();
+        for event in events.into_iter().flatten() {
+            attr_guard.event_queue.push_back(event);
+        }
+        // TODO: check cqe limit
+        self.cqe_count = self.cqe_count.wrapping_add(event_count);
+        if let Some(channel) = attr_guard.channel.as_mut() {
+            let buf = vec![0u8; event_count.checked_mul(8).unwrap_or_else(|| unreachable!())];
+            channel
+                .write_all(&buf)
+                .unwrap_or_else(|err| unreachable!("channel not writable: {err}"));
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct CqAttrShared {
+    inner: Mutex<CqAttr>,
+}
+
+impl CqAttrShared {
+    fn num_cqe(&self) -> usize {
+        self.inner.lock().num_cqe
+    }
+
+    fn clear(&self) {
+        *self.inner.lock() = CqAttr::default();
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct CqAttr {
     /// Unique handle identifying this CQ
     handle: u32,
     /// Number of CQEs this CQ can hold
     num_cqe: usize,
-    /// File descriptor for the completion event channel
-    channel: File,
-    /// Opaque pointer stored the user context
-    context_addr: u64,
-    /// Current number of CQEs
-    cqe_count: usize,
-    /// Event registration
-    event_reg: Arc<EventRegistry>,
     /// Event queue
     event_queue: VecDeque<CompletionEvent>,
+    /// File descriptor for the completion event channel
+    channel: Option<File>,
+    /// Event registration
+    event_registry: EventRegistry,
 }
 
-#[derive(Debug)]
+/// A completion queue implementation
+#[derive(Default, Debug)]
+pub(crate) struct DeviceCq {
+    attr: Arc<CqAttrShared>,
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct EventRegistry {
-    events: Mutex<HashMap<u32, VecDeque<CompletionEvent>>>,
+    events: HashMap<u32, VecDeque<CompletionEvent>>,
 }
 
 impl EventRegistry {
-    pub(crate) fn new() -> Self {
-        Self {
-            events: Mutex::new(HashMap::new()),
-        }
+    pub(crate) fn get_mut(&mut self, qpn: u32) -> Option<&mut VecDeque<CompletionEvent>> {
+        self.events.get_mut(&qpn)
     }
 
-    pub(crate) fn register(&self, qpn: u32, event: CompletionEvent) {
-        let mut events = self.events.lock();
-        events.entry(qpn).or_default().push_back(event);
+    pub(crate) fn register(&mut self, qpn: u32, event: CompletionEvent) {
+        self.events.entry(qpn).or_default().push_back(event);
     }
 }
 
@@ -133,80 +215,11 @@ impl CompletionEvent {
 }
 
 impl DeviceCq {
-    /// Creates a new `DeviceCq`
-    pub(crate) fn new(
-        handle: u32,
-        num_cqe: usize,
-        channel: File,
-        context_addr: u64,
-        event_reg: Arc<EventRegistry>,
-    ) -> Self {
-        Self {
-            handle,
-            num_cqe,
-            channel,
-            context_addr,
-            cqe_count: 0,
-            event_reg,
-            event_queue: VecDeque::new(),
-        }
-    }
-
-    ///// Register a local event with a given Message Sequence Number (MSN) and work request ID.
-    /////
-    ///// # Arguments
-    ///// * `msn` - Message Sequence Number to register
-    ///// * `wr_id` - Work request ID to associate with this event
-    //pub(crate) fn register_local_event(&mut self, msn: u16, wr_id: u64) {
-    //    if self.local_event.insert(msn, wr_id).is_some() {
-    //        tracing::error!("duplicate event MSN: {msn}");
-    //    }
-    //}
-
-    /// Acknowledge an event with the given MSN and queue pair number.
-    ///
-    /// # Arguments
-    /// * `msn` - Message Sequence Number to acknowledge
-    /// * `qpn` - Queue Pair Number associated with this event
-    #[allow(clippy::as_conversions)] // u16 to usize
-    pub(crate) fn ack_event(&mut self, last_msn_acked: u16, qpn: u32) {
-        let mut event_count: usize = 0;
-        {
-            let mut event_regitry_gurad = self.event_reg.events.lock();
-            let Some(queue) = event_regitry_gurad.get_mut(&qpn) else {
-                return;
-            };
-
-            while let Some(event) = queue.front().copied() {
-                let x = last_msn_acked.wrapping_sub(event.msn);
-                if x > 0 && (x as usize) < MAX_MSN_WINDOW {
-                    let _ignore = queue.pop_front();
-                    self.event_queue.push_back(event);
-                    event_count = event_count.wrapping_add(1);
-                } else {
-                    break;
-                }
-            }
-        }
-        self.notify_completion(event_count);
-    }
-
     /// Poll the event queue for the next completion event.
     ///
     /// # Returns
     /// * `Option<CompletionEvent>` - The next completion event if available, None otherwise
-    pub(crate) fn poll_event_queue(&mut self) -> Option<CompletionEvent> {
-        self.event_queue.pop_front()
-    }
-
-    /// Notifies the completion event by writing to the channel fd.
-    fn notify_completion(&mut self, count: usize) {
-        if self.cqe_count == self.num_cqe {
-            return;
-        }
-        let buf = vec![0u8; count.checked_mul(8).unwrap_or_else(|| unreachable!())];
-        self.channel
-            .write_all(&buf)
-            .unwrap_or_else(|err| unreachable!("channel not writable: {err}"));
+    pub(crate) fn poll_event_queue(&self) -> Option<CompletionEvent> {
+        self.attr.inner.lock().event_queue.pop_front()
     }
 }

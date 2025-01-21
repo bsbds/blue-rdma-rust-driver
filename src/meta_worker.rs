@@ -10,7 +10,7 @@ use std::{
 use tracing::error;
 
 use crate::{
-    completion::CqManager,
+    completion::{CqManager, MetaCqTable},
     qp::{QpManager, QpTrackerTable},
     queue::abstr::{MetaReport, PacketPos, ReportMeta},
     retransmission::message_tracker::MessageTracker,
@@ -26,12 +26,12 @@ pub(crate) struct Launch<M> {
 
 impl<M: MetaReport> Launch<M> {
     /// Creates a new `Launch`
-    pub(crate) fn new(inner: M, qp_trackers: QpTrackerTable, cq_manager: CqManager) -> Self {
+    pub(crate) fn new(inner: M, qp_trackers: QpTrackerTable, cq_table: MetaCqTable) -> Self {
         Self {
             inner: MetaWorker {
                 inner,
                 qp_trackers,
-                cq_manager,
+                cq_table,
             },
         }
     }
@@ -49,7 +49,7 @@ struct MetaWorker<T> {
     /// Manages QPs
     qp_trackers: QpTrackerTable,
     /// Manages CQs
-    cq_manager: CqManager,
+    cq_table: MetaCqTable,
 }
 
 impl<T: MetaReport> MetaWorker<T> {
@@ -128,7 +128,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     } else {
                         qp.recv_cq_handle()
                     };
-                    if let Some(cq) = cq_handle.and_then(|h| self.cq_manager.get_cq_mut(h)) {
+                    if let Some(cq) = cq_handle.and_then(|h| self.cq_table.get_mut(h)) {
                         if let Some(last_msn_acked) = last_msn_acked {
                             cq.ack_event(last_msn_acked, qp.qpn());
                         }
