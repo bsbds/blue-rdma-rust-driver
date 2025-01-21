@@ -70,6 +70,10 @@ impl<Dev: DeviceAdaptor> CommandController<Dev> {
     }
 }
 
+// FIXME: Splits `MttEntry` to multiple `CmdQueueReqDescUpdatePGT` if the entry count exceed `UPDATE_PGT_ENTRY_LIMIT`
+/// The maximum number of page table entries that can be updated in a single PCI Express burst transaction.
+const UPDATE_PGT_ENTRY_LIMIT: usize = 64;
+
 impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
     fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
         let id0 = 0;
