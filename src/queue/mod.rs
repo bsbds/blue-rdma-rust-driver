@@ -81,7 +81,11 @@ impl<A: PageAllocator<1>> DescRingBufferAllocator<A> {
 
     /// Allocates a new `DescRingBuffer`
     pub(crate) fn alloc(&mut self) -> io::Result<DescRingBuffer> {
-        let buf = self.0.alloc().map(|inner| PageBuf { inner })?;
+        let mut buf = self.0.alloc().map(|inner| PageBuf { inner })?;
+        let slice = &mut buf.inner[0..4096];
+        slice.fill(1);
+        slice.fill(0);
+        println!("buf ptr: {:x}", buf.as_ref().as_ptr() as u64);
         let ctx = RingCtx::new();
         let rb = RingBuffer::new(ctx, buf)
             .unwrap_or_else(|| unreachable!("ringbuffer creation should never fail"));

@@ -3,9 +3,15 @@
 /// Crs client implementation
 mod csr;
 
-use std::{io, iter, net::SocketAddr, thread, time::Duration};
+use std::{
+    io, iter,
+    net::{Ipv4Addr, SocketAddr},
+    thread,
+    time::Duration,
+};
 
 use csr::RpcClient;
+use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
     cmd::CommandController,
@@ -27,6 +33,7 @@ use crate::{
         virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
     },
     meta_report::MetaReportQueueHandler,
+    net::config::{MacAddress, NetworkConfig},
     queue::{
         abstr::DeviceCommand,
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
@@ -41,8 +48,8 @@ use crate::{
 
 use super::{
     proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, InitializeDeviceQueue,
-    PageAllocator,
+    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, DeviceBuilder,
+    InitializeDeviceQueue, PageAllocator,
 };
 
 #[non_exhaustive]
@@ -79,10 +86,10 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
     #[allow(clippy::indexing_slicing)] // bound is checked
     #[allow(clippy::as_conversions)] // usize to u64
     #[allow(clippy::similar_names)] // it's clear
-    fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)> {
-        let mut page_allocator = EmulatedPageAllocator::new(
-            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
-        );
+    fn initialize<A: PageAllocator<1>>(
+        &self,
+        page_allocator: A,
+    ) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)> {
         let mut allocator = DescRingBufferAllocator::new(page_allocator);
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let cli = RpcClient::new(self.rpc_server_addr)?;
@@ -133,6 +140,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .map(|worker| thread::spawn(|| worker.run()));
 
         let mrqs = iter::repeat_with(|| allocator.alloc().map(MetaReportQueue::new))
+            .take(4)
             .collect::<Result<Vec<_>, _>>()?;
         let mrq_base_pas: Vec<_> = mrqs
             .iter()
@@ -181,6 +189,38 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
 }
 
 impl EmulatedDevice {
+    #[allow(
+        clippy::as_conversions,
+        unsafe_code,
+        clippy::missing_errors_doc,
+        clippy::indexing_slicing,
+        clippy::missing_panics_doc,
+        clippy::unwrap_used,
+        clippy::unwrap_in_result
+    )]
+    #[inline]
+    pub fn run_test(rpc_server_addr: SocketAddr) -> io::Result<()> {
+        let queue_builder = EmulatedQueueBuilder::new(rpc_server_addr);
+        let builder = DeviceBuilder::new(queue_builder);
+        let page_allocator = EmulatedPageAllocator::new(
+            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
+        );
+        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
+        let network_config = NetworkConfig {
+            ip_network: IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap()),
+            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
+            mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
+        };
+        let mut device = builder
+            .initialize(network_config, page_allocator, &resolver, 128, 128)
+            .unwrap();
+        let mr = vec![0u8; 0x1000];
+        device.reg_mr_inner(mr.as_ptr() as u64, mr.len())?;
+        device.update_qp_inner(11)?;
+
+        Ok(())
+    }
+
     #[allow(
         clippy::as_conversions,
         unsafe_code,
