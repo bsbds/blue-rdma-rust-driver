@@ -5,9 +5,13 @@ use std::{
     io::Write,
     iter,
     os::fd::RawFd,
+    sync::Arc,
 };
 
 use bitvec::vec::BitVec;
+use parking_lot::Mutex;
+
+use crate::constants::MAX_MSN_WINDOW;
 
 /// Manages CQs
 pub(crate) struct CqManager {
@@ -84,23 +88,47 @@ pub(crate) struct DeviceCq {
     /// Current number of CQEs
     cqe_count: usize,
     /// Event registration
-    event_reg: rtrb::Consumer<(u16, u64)>,
+    event_reg: Arc<EventRegistry>,
     /// Event queue
     event_queue: VecDeque<CompletionEvent>,
 }
 
+#[derive(Debug)]
+pub(crate) struct EventRegistry {
+    events: Mutex<HashMap<u32, VecDeque<CompletionEvent>>>,
+}
+
+impl EventRegistry {
+    pub(crate) fn new() -> Self {
+        Self {
+            events: Mutex::new(HashMap::new()),
+        }
+    }
+
+    pub(crate) fn register(&self, qpn: u32, event: CompletionEvent) {
+        let mut events = self.events.lock();
+        events.entry(qpn).or_default().push_back(event);
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CompletionEvent {
-    /// Work request ID associated with this completion event
-    wr_id: u64,
     /// Queue pair number this completion event is for
     qpn: u32,
+    /// The MSN
+    msn: u16,
+    /// Userdata associated with this completion event, can be either `wr_id` or imm
+    user_data: u64,
 }
 
 impl CompletionEvent {
     /// Creates a new `CompletionEvent`
-    pub(crate) fn new(wr_id: u64, qpn: u32) -> Self {
-        Self { wr_id, qpn }
+    pub(crate) fn new(qpn: u32, msn: u16, user_data: u64) -> Self {
+        Self {
+            qpn,
+            msn,
+            user_data,
+        }
     }
 }
 
@@ -111,7 +139,7 @@ impl DeviceCq {
         num_cqe: usize,
         channel: File,
         context: *const c_void,
-        event_reg: rtrb::Consumer<(u16, u64)>,
+        event_reg: Arc<EventRegistry>,
     ) -> Self {
         Self {
             handle,
@@ -140,15 +168,27 @@ impl DeviceCq {
     /// # Arguments
     /// * `msn` - Message Sequence Number to acknowledge
     /// * `qpn` - Queue Pair Number associated with this event
-    pub(crate) fn ack_event(&mut self, msn: u16, qpn: u32) {
-        let Ok((current_msn, wr_id)) = self.event_reg.peek() else {
-            return;
-        };
+    #[allow(clippy::as_conversions)] // u16 to usize
+    pub(crate) fn ack_event(&mut self, last_msn_acked: u16, qpn: u32) {
+        let mut event_count: usize = 0;
+        {
+            let mut event_regitry_gurad = self.event_reg.events.lock();
+            let Some(queue) = event_regitry_gurad.get_mut(&qpn) else {
+                return;
+            };
 
-        if let Some(wr_id) = self.local_event.remove(&msn) {
-            self.event_queue.push_back(CompletionEvent::new(wr_id, qpn));
-            self.notify_completion();
+            while let Some(event) = queue.front().copied() {
+                let x = last_msn_acked.wrapping_sub(event.msn);
+                if x > 0 && (x as usize) < MAX_MSN_WINDOW {
+                    let _ignore = queue.pop_front();
+                    self.event_queue.push_back(event);
+                    event_count = event_count.wrapping_add(1);
+                } else {
+                    break;
+                }
+            }
         }
+        self.notify_completion(event_count);
     }
 
     /// Poll the event queue for the next completion event.
@@ -160,13 +200,13 @@ impl DeviceCq {
     }
 
     /// Notifies the completion event by writing to the channel fd.
-    fn notify_completion(&mut self) {
+    fn notify_completion(&mut self, count: usize) {
         if self.cqe_count == self.num_cqe {
             return;
         }
-        let event: u64 = 1;
+        let buf = vec![0u8; count.checked_mul(8).unwrap_or_else(|| unreachable!())];
         self.channel
-            .write_all(&event.to_le_bytes())
+            .write_all(&buf)
             .unwrap_or_else(|err| unreachable!("channel not writable: {err}"));
     }
 }

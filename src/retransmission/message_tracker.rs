@@ -22,13 +22,13 @@ impl MessageTracker {
     // FIXME: wrapped PSN
     /// Acknowledges messages up to the given PSN and returns the MSNs of all
     /// acknowledged messages.
-    pub(crate) fn ack(&mut self, psn: u32) -> Vec<u16> {
-        let mut acked = Vec::new();
+    pub(crate) fn ack(&mut self, psn: u32) -> Option<u16> {
+        let mut last_msn = None;
         while self.inner.first_entry().is_some_and(|e| *e.key() <= psn) {
             if let Some((_, msn)) = self.inner.pop_first() {
-                acked.push(msn);
+                last_msn = Some(msn);
             }
         }
-        acked
+        last_msn
     }
 }

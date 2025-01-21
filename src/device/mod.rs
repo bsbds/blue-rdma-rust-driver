@@ -25,6 +25,7 @@ use std::{
 use proxy::DeviceProxy;
 
 use crate::{
+    completion::CompletionEvent,
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
     net::{config::NetworkConfig, tap::TapDevice},
     qp::{DeviceQp, QpInitiators},
@@ -154,13 +155,16 @@ where
 }
 
 pub(crate) mod state {
-    use crate::qp::QpInitiators;
+    use std::sync::Arc;
+
+    use crate::{completion::EventRegistry, qp::QpInitiators};
 
     pub(crate) struct Uninitialized;
     pub(crate) struct InitializedDevice<Cmd, Send> {
         pub(crate) cmd: Cmd,
         pub(crate) send: Send,
         pub(crate) qp_states: QpInitiators,
+        pub(crate) event_reg: Arc<EventRegistry>,
     }
 }
 
@@ -216,6 +220,7 @@ where
                 cmd,
                 send,
                 qp_states: QpInitiators::new(),
+                event_reg: todo!(),
             },
         })
     }
@@ -258,17 +263,20 @@ where
             .qp_states
             .state_mut(qpn)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        let (builder, msn, base_psn) = qp
+            .next_wr(&wr)
+            .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
         let flags = wr.send_flags();
         if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
             let wr_id = wr.wr_id();
             let send_cq_handle = qp
                 .send_cq_handle()
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            todo!("register completion event");
+            self.state
+                .event_reg
+                .register(qpn, CompletionEvent::new(qpn, msn, wr_id));
         }
-        let (builder, base_psn) = qp
-            .next_wr(&wr)
-            .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
+
         let fragmenter = WrFragmenter::new(wr, builder, base_psn);
         for chunk in fragmenter {
             // TODO: Should this never fail

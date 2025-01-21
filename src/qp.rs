@@ -169,6 +169,7 @@ struct State {
     message_tracker: MessageTracker,
 }
 
+#[allow(clippy::missing_docs_in_private_items)]
 pub(crate) struct InitiatorState {
     qp_type: u8,
     qpn: u32,
@@ -214,7 +215,7 @@ impl InitiatorState {
     pub(crate) fn next_wr(
         &mut self,
         wr: &SendWrResolver,
-    ) -> Option<(WrChunkBuilder<WithQpParams>, u32)> {
+    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32)> {
         let num_psn = num_psn(self.pmtu, wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
 
@@ -228,6 +229,7 @@ impl InitiatorState {
                 self.dqp_ip,
                 self.pmtu,
             ),
+            msn,
             base_psn,
         ))
     }
@@ -275,6 +277,7 @@ impl InitiatorState {
     }
 }
 
+/// Qp state for maintaining message trackers
 pub(crate) struct TrackerState {
     /// Tracker for tracking acked PSNs
     psn: PsnTracker,

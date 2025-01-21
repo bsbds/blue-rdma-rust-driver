@@ -94,15 +94,15 @@ impl<T: MetaReport> MetaWorker<T> {
                     return;
                 };
                 if let Some(psn) = qp.ack_range(psn_now, now_bitmap, ack_msn) {
-                    let acked_msns = qp.message_tracker().ack(psn);
+                    let last_msn_acked = qp.message_tracker().ack(psn);
                     let cq_handle = if is_send_by_local_hw {
                         qp.send_cq_handle()
                     } else {
                         qp.recv_cq_handle()
                     };
                     if let Some(cq) = cq_handle.and_then(|h| self.cq_manager.get_cq_mut(h)) {
-                        for msn in acked_msns {
-                            cq.ack_event(msn, qp.qpn());
+                        if let Some(last_msn_acked) = last_msn_acked {
+                            cq.ack_event(last_msn_acked, qp.qpn());
                         }
                     }
                 }

@@ -167,6 +167,7 @@
 )]
 #![allow(unused)] // FIXME: removed clippy unused
 #![allow(clippy::todo)] // FIXME: implement all
+#![allow(clippy::missing_docs_in_private_items)]
 
 /// Device Command Control implementations
 mod cmd;
