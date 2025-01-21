@@ -41,7 +41,7 @@ use crate::{
 
 use super::{
     proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, InitializeDevice,
+    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, InitializeDeviceQueue,
     PageAllocator,
 };
 
@@ -59,11 +59,18 @@ impl DeviceAdaptor for EmulatedDevice {
     }
 }
 
-struct EmulatedQueueBuilder {
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct EmulatedQueueBuilder {
     rpc_server_addr: SocketAddr,
 }
 
-impl InitializeDevice for EmulatedQueueBuilder {
+impl EmulatedQueueBuilder {
+    pub(crate) fn new(rpc_server_addr: SocketAddr) -> Self {
+        Self { rpc_server_addr }
+    }
+}
+
+impl InitializeDeviceQueue for EmulatedQueueBuilder {
     type Cmd = CommandController<EmulatedDevice>;
     type Send = SendQueueScheduler;
     type MetaReport = MetaReportQueueHandler;

@@ -100,6 +100,7 @@ impl<'a> MttEntry<'a> {
 }
 /// Queue Pair entry
 #[allow(clippy::missing_docs_in_private_items)]
+#[derive(Default, Clone, Copy)]
 pub(crate) struct QPEntry {
     pub(crate) ip_addr: u32,
     pub(crate) qpn: u32,

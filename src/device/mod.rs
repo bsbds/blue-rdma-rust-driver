@@ -1,5 +1,6 @@
 #![allow(missing_docs, clippy::missing_docs_in_private_items)]
 #![allow(clippy::todo)] // FIXME: implement
+#![allow(clippy::missing_errors_doc)] // FIXME: add error docs
 
 /// Hardware device adaptor
 pub(crate) mod hardware;
@@ -28,8 +29,12 @@ use proxy::DeviceProxy;
 use crate::{
     completion::{CompletionEvent, CqManager, EventRegistry, MetaCqTable},
     ctx_ops::RdmaCtxOps,
-    mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
+    mem::{
+        page::{ContiguousPages, PageAllocator},
+        virt_to_phy::VirtToPhys,
+    },
     meta_worker,
+    mtt::v2::Mttv2,
     net::{config::NetworkConfig, tap::TapDevice},
     qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
     queue::abstr::{
@@ -157,7 +162,7 @@ where
     }
 }
 
-pub(crate) trait InitializeDevice {
+pub(crate) trait InitializeDeviceQueue {
     type Cmd;
     type Send;
     type MetaReport;
@@ -167,19 +172,24 @@ pub(crate) trait InitializeDevice {
     fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)>;
 }
 
-struct DeviceBuilder<B> {
+#[derive(Debug)]
+pub(crate) struct DeviceBuilder<B> {
     queue_builder: B,
 }
 
 impl<B> DeviceBuilder<B>
 where
-    B: InitializeDevice,
+    B: InitializeDeviceQueue,
     B::Send: WorkReqSend + Send + 'static,
     B::Cmd: DeviceCommand + Send + 'static,
     B::MetaReport: MetaReport + Send + 'static,
     B::SimpleNic: SimpleNicTunnel + Send + 'static,
 {
-    fn initialize<A, R>(
+    pub(crate) fn new(queue_builder: B) -> Self {
+        Self { queue_builder }
+    }
+
+    pub(crate) fn initialize<A, R>(
         &self,
         network: NetworkConfig,
         mut allocator: A,
@@ -205,6 +215,10 @@ where
         let cq_manager = CqManager::new(max_num_cqs);
         let meta_cq_table = cq_manager.new_meta_table();
         let (initiator_table, tracker_table) = qp_manager.new_split();
+        let buffer = allocator.alloc()?;
+        let buffer_phys_addr = phys_addr_resolver
+            .virt_to_phys(buffer.addr())?
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         Self::launch_backgroud(
             meta_report_queue,
             simple_nic,
@@ -219,6 +233,9 @@ where
             qp_manager,
             qp_table: initiator_table,
             cq_manager,
+            mtt: Mttv2::new_simple(),
+            buffer: todo!(),
+            buffer_phys_addr: todo!(),
         })
     }
 
@@ -244,16 +261,28 @@ pub struct BlueRdmaDevice {
     pub(crate) qp_manager: QpManager,
     pub(crate) cq_manager: CqManager,
     pub(crate) qp_table: QpInitiatorTable,
+    pub(crate) mtt: Mttv2,
+    buffer: ContiguousPages<1>,
+    buffer_phys_addr: u64,
 }
 
 impl BlueRdmaDevice {
     /// Updates Memory Translation Table entry
-    fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
+    #[inline]
+    pub fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<()> {
+        let entry =
+            self.mtt
+                .register(&mut self.buffer, self.buffer_phys_addr, addr, length, 0, 0)?;
         self.cmd_queue.update_mtt(entry)
     }
 
     /// Updates Queue Pair entry
-    fn update_qp(&self, entry: QPEntry) -> io::Result<()> {
+    #[inline]
+    pub fn update_qp_inner(&self, qpn: u32) -> io::Result<()> {
+        let entry = QPEntry {
+            qpn,
+            ..Default::default()
+        };
         self.cmd_queue.update_qp(entry)
     }
 
