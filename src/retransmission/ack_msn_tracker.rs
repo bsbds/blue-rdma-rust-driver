@@ -1,13 +1,18 @@
+use std::sync::{
+    atomic::{AtomicU16, Ordering},
+    Arc,
+};
+
 use bitvec::vec::BitVec;
+
+use crate::constants::MAX_MSN_WINDOW;
 
 /// Tracker for tracking message sequence number of ACK packets
 #[derive(Default, Debug, Clone)]
 pub(crate) struct AckMsnTracker {
-    base_msn: u16,
+    base_msn: Arc<AtomicU16>,
     inner: BitVec,
 }
-
-const MAX_MSN_WINDOW: usize = 1 << 15;
 
 impl AckMsnTracker {
     /// Acknowledges a single MSN.
@@ -18,7 +23,7 @@ impl AckMsnTracker {
     /// returned `MSN` is the new base MSN value after the advance.
     #[allow(clippy::as_conversions)] // u16 to usize
     pub(crate) fn ack(&mut self, msn: u16) -> Option<u16> {
-        let rstart = msn.wrapping_sub(self.base_msn) as usize;
+        let rstart = msn.wrapping_sub(self.base_msn()) as usize;
         let rend = rstart.wrapping_add(1);
         if rend > MAX_MSN_WINDOW {
             return None;
@@ -33,7 +38,12 @@ impl AckMsnTracker {
 
     /// Returns the current base MSN
     pub(crate) fn base_msn(&self) -> u16 {
-        self.base_msn
+        self.base_msn.load(Ordering::Acquire)
+    }
+
+    /// Sets the current base MSN
+    pub(crate) fn set_base_msn(&self, value: u16) {
+        self.base_msn.store(value, Ordering::Release)
     }
 
     /// Try to advance the base MSN
@@ -49,8 +59,10 @@ impl AckMsnTracker {
             .and_then(|pos| (pos > 0).then_some(pos))
             .map(|pos| {
                 self.inner.shift_left(pos);
-                self.base_msn = self.base_msn.wrapping_add(pos as u16);
-                self.base_msn
+                let mut msn = self.base_msn();
+                msn = msn.wrapping_add(pos as u16);
+                self.set_base_msn(msn);
+                msn
             })
     }
 }

@@ -1,3 +1,8 @@
+use std::sync::{
+    atomic::{AtomicU32, Ordering},
+    Arc,
+};
+
 // FIXME: Implement protection againt wrapped PSNs
 use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 
@@ -5,7 +10,7 @@ use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct PsnTracker {
-    base_psn: u32,
+    base_psn: Arc<AtomicU32>,
     inner: BitVec,
 }
 
@@ -18,7 +23,7 @@ impl PsnTracker {
     /// Returns `Some(PSN)` if the left edge of the PSN window is advanced, where the
     /// returned `PSN` is the new base PSN value after the advance.
     pub(crate) fn ack_range(&mut self, mut base_psn: u32, mut bitmap: u128) -> Option<u32> {
-        let rstart = (base_psn.wrapping_sub(self.base_psn) & PSN_MASK) as usize;
+        let rstart = (base_psn.wrapping_sub(self.base_psn()) & PSN_MASK) as usize;
         let rend = rstart.wrapping_add(128);
         if rend > MAX_PSN_WINDOW {
             return None;
@@ -44,7 +49,7 @@ impl PsnTracker {
     /// Returns `Some(PSN)` if the left edge of the PSN window is advanced, where the
     /// returned `PSN` is the new base PSN value after the advance.
     pub(crate) fn ack_one(&mut self, psn: u32) -> Option<u32> {
-        let rstart = (psn.wrapping_sub(self.base_psn) & PSN_MASK) as usize;
+        let rstart = (psn.wrapping_sub(self.base_psn()) & PSN_MASK) as usize;
         let rend = rstart.wrapping_add(1);
         if rend > MAX_PSN_WINDOW {
             return None;
@@ -65,12 +70,12 @@ impl PsnTracker {
     /// Returns `Some(PSN)` if the left edge of the PSN window is advanced, where the
     /// returned `PSN` is the new base PSN value after the advance.
     pub(crate) fn ack_before(&mut self, psn: u32) -> Option<u32> {
-        let rstart = (psn.wrapping_sub(self.base_psn) & PSN_MASK) as usize;
+        let rstart = (psn.wrapping_sub(self.base_psn()) & PSN_MASK) as usize;
         let rend = rstart.wrapping_add(1);
         if rend > MAX_PSN_WINDOW {
             return None;
         }
-        self.base_psn = psn;
+        self.set_base_psn(psn);
         if rend > self.inner.len() {
             self.inner.fill(false);
         } else {
@@ -82,13 +87,18 @@ impl PsnTracker {
     #[allow(clippy::as_conversions)] // u32 to usize
     /// Returns `true` if all PSNs up to and including the given PSN have been acknowledged.
     pub(crate) fn all_acked(&self, psn_to: u32) -> bool {
-        let x = self.base_psn.wrapping_sub(psn_to) & PSN_MASK;
+        let x = self.base_psn().wrapping_sub(psn_to) & PSN_MASK;
         x > 0 && (x as usize) < MAX_PSN_WINDOW
     }
 
     /// Returns the current base PSN
-    pub(crate) fn base_psn(&self) -> u32 {
-        self.base_psn
+    fn base_psn(&self) -> u32 {
+        self.base_psn.load(Ordering::Acquire)
+    }
+
+    /// Returns the current base PSN
+    fn set_base_psn(&self, value: u32) {
+        self.base_psn.store(value, Ordering::Release)
     }
 
     /// Try to advance the base PSN to the next unacknowledged PSN.
@@ -104,8 +114,10 @@ impl PsnTracker {
             .and_then(|pos| (pos > 0).then_some(pos))
             .map(|pos| {
                 self.inner.shift_left(pos);
-                self.base_psn = self.base_psn.wrapping_add(pos as u32) & PSN_MASK;
-                self.base_psn
+                let mut psn = self.base_psn();
+                psn = psn.wrapping_add(pos as u32) & PSN_MASK;
+                self.set_base_psn(psn);
+                psn
             })
     }
 }
@@ -126,26 +138,26 @@ mod tests {
     fn test_ack_range() {
         let mut tracker = PsnTracker::default();
         tracker.ack_range(0, 0b11); // PSN 0 and 1
-        assert_eq!(tracker.base_psn, 2);
+        assert_eq!(tracker.base_psn(), 2);
         assert!(tracker.inner.not_all());
 
         let mut tracker = PsnTracker {
-            base_psn: 5,
+            base_psn: Arc::new(5.into()),
             ..Default::default()
         };
         tracker.ack_range(5, 0b11);
-        assert_eq!(tracker.base_psn, 7);
+        assert_eq!(tracker.base_psn(), 7);
         assert!(tracker.inner.not_all());
 
         let mut tracker = PsnTracker {
-            base_psn: 10,
+            base_psn: Arc::new(10.into()),
             ..Default::default()
         };
         tracker.ack_range(5, 0b11);
-        assert_eq!(tracker.base_psn, 10);
+        assert_eq!(tracker.base_psn(), 10);
         assert!(tracker.inner.is_empty());
         tracker.ack_range(20, 0b11);
-        assert_eq!(tracker.base_psn, 10);
+        assert_eq!(tracker.base_psn(), 10);
         assert!(tracker.inner[10]);
         assert!(tracker.inner[11]);
     }
@@ -153,7 +165,7 @@ mod tests {
     #[test]
     fn test_all_acked() {
         let tracker = PsnTracker {
-            base_psn: 10,
+            base_psn: Arc::new(10.into()),
             ..Default::default()
         };
         assert!(tracker.all_acked(9));
@@ -164,7 +176,7 @@ mod tests {
     #[test]
     fn test_wrapping_ack() {
         let mut tracker = PsnTracker {
-            base_psn: PSN_MASK - 1,
+            base_psn: Arc::new((PSN_MASK - 1).into()),
             ..Default::default()
         };
         tracker.ack_range(0, 0b11);
