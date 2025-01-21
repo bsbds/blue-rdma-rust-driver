@@ -204,6 +204,10 @@ mod simple_nic;
 /// Device Queue Workers
 mod workers;
 
+#[allow(unsafe_code)]
+/// Context operations
+pub mod ctx_ops;
+
 #[allow(unused)]
 /// Network implementations
 pub mod net;
