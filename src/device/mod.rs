@@ -29,8 +29,9 @@ use crate::{
     completion::{CompletionEvent, EventRegistry},
     ctx_ops::RdmaCtxOps,
     mem::{page::PageAllocator, virt_to_phy::VirtToPhys},
+    meta_worker,
     net::{config::NetworkConfig, tap::TapDevice},
-    qp::{DeviceQp, QpInitiatorTable},
+    qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
         WorkReqSend, WrChunk,
@@ -183,6 +184,7 @@ where
         network: NetworkConfig,
         mut allocator: A,
         phys_addr_resolver: &R,
+        max_num_qps: u32,
     ) -> io::Result<BlueRdmaDevice>
     where
         A: PageAllocator<1>,
@@ -191,20 +193,22 @@ where
         let (cmd_queue, send_queue, meta_report_queue, simple_nic) =
             self.queue_builder.initialize()?;
         let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
-        let page = allocator.alloc()?;
-        let recv_buffer = RecvBuffer::new(page);
+        let recv_buffer_virt_addr = simple_nic.recv_buffer_virt_addr();
         let phys_addr = phys_addr_resolver
-            .virt_to_phys(recv_buffer.addr())?
+            .virt_to_phys(recv_buffer_virt_addr)?
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let meta = RecvBufferMeta::new(phys_addr);
         cmd_queue.set_network(network)?;
         cmd_queue.set_raw_packet_recv_buffer(meta)?;
-        Self::launch_backgroud(meta_report_queue, simple_nic, tap_dev, recv_buffer);
+        let qp_manager = QpManager::new(max_num_qps);
+        let (initiator_table, tracker_table) = qp_manager.new_split();
+        Self::launch_backgroud(meta_report_queue, simple_nic, tap_dev, tracker_table);
 
         Ok(BlueRdmaDevice {
             cmd_queue: Box::new(cmd_queue),
             send_queue: Box::new(send_queue),
-            qp_table: QpInitiatorTable::new(),
+            qp_manager,
+            qp_table: initiator_table,
             event_reg: todo!(),
         })
     }
@@ -214,13 +218,14 @@ where
         meta_report: B::MetaReport,
         simple_nic: B::SimpleNic,
         tap_dev: TapDevice,
-        recv_buffer: RecvBuffer,
+        tracker_table: QpTrackerTable,
     ) {
         let is_shutdown = Arc::new(AtomicBool::new(false));
-        let launch = simple_nic::Launch::new(simple_nic, tap_dev, recv_buffer);
+        let launch = simple_nic::Launch::new(simple_nic, tap_dev);
         let _handle = launch.launch(Arc::clone(&is_shutdown));
-        /// spwan the workers
-        todo!()
+        let launch_meta =
+            meta_worker::Launch::new(meta_report, tracker_table, { todo!("pass cqs") });
+        launch_meta.launch(Arc::clone(&is_shutdown));
     }
 }
 
@@ -228,6 +233,7 @@ where
 pub struct BlueRdmaDevice {
     pub(crate) cmd_queue: Box<dyn DeviceCommand + Send + 'static>,
     pub(crate) send_queue: Box<dyn WorkReqSend + Send + 'static>,
+    pub(crate) qp_manager: QpManager,
     pub(crate) qp_table: QpInitiatorTable,
     pub(crate) event_reg: Arc<EventRegistry>,
 }

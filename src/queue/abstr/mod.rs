@@ -26,7 +26,7 @@ pub(crate) trait WorkReqSend {
 }
 
 /// Metadata reporting interface
-pub(crate) trait MetaReport {
+pub(crate) trait MetaReport: Send + 'static {
     /// Tries to receive operation metadata
     fn try_recv_meta(&mut self) -> io::Result<Option<ReportMeta>>;
 }
@@ -39,7 +39,9 @@ pub(crate) trait SimpleNicTunnel: Send + 'static {
     type Receiver: FrameRx;
 
     /// Splits into send half and recv half
-    fn into_split(self, recv_buffer: RecvBuffer) -> (Self::Sender, Self::Receiver);
+    fn into_split(self) -> (Self::Sender, Self::Receiver);
+
+    fn recv_buffer_virt_addr(&self) -> u64;
 }
 
 /// Trait for transmitting frames

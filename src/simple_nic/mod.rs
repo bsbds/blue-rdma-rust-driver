@@ -81,23 +81,17 @@ pub(crate) struct Launch<Tunnel> {
     inner: Tunnel,
     /// Tap device
     tap_dev: TapDevice,
-    /// tunnel receive buffer
-    recv_buffer: RecvBuffer,
 }
 
 impl<Tunnel: SimpleNicTunnel> Launch<Tunnel> {
     /// Creates a new `Launch`
-    pub(crate) fn new(inner: Tunnel, tap_dev: TapDevice, recv_buffer: RecvBuffer) -> Self {
-        Self {
-            inner,
-            tap_dev,
-            recv_buffer,
-        }
+    pub(crate) fn new(inner: Tunnel, tap_dev: TapDevice) -> Self {
+        Self { inner, tap_dev }
     }
 
     /// Launches the worker thread that handles communication between the NIC device and tunnel
     pub(crate) fn launch(self, is_shutdown: Arc<AtomicBool>) -> worker::SimpleNicQueueHandle {
-        let (frame_tx, frame_rx) = self.inner.into_split(self.recv_buffer);
+        let (frame_tx, frame_rx) = self.inner.into_split();
         let worker = SimpleNicWorker::new(self.tap_dev.inner(), frame_tx, frame_rx, is_shutdown);
         worker.run()
     }

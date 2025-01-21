@@ -5,6 +5,7 @@ use std::sync::{
 
 use bitvec::vec::BitVec;
 use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
+use parking_lot::Mutex;
 
 use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW},
@@ -15,46 +16,12 @@ use crate::{
     send::SendWrResolver,
 };
 
-/// Initiator state tacking of all QPs
-#[derive(Debug)]
-pub(crate) struct QpInitiatorTable {
-    /// Vector maps the QPN to the initiator state of each QP
-    qps: Vec<InitiatorState>,
-}
-
-impl QpInitiatorTable {
-    /// Creates a new `QpInitiators`
-    pub(crate) fn new() -> Self {
-        todo!()
-    }
-
-    #[allow(clippy::as_conversions)] // convert u32 to usize
-    /// Gets a mutable reference to the QP associated with the given QPN
-    pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut InitiatorState> {
-        self.qps.get_mut(qpn as usize)
-    }
-}
-
-/// Message state tacking of all QPs
-pub(crate) struct QpTrackers {
-    /// Vector maps the QPN to the tracking state of each QP
-    qps: Vec<TrackerState>,
-}
-
-impl QpTrackers {
-    #[allow(clippy::as_conversions)] // convert u32 to usize
-    /// Gets a mutable reference to the QP associated with the given QPN
-    pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut TrackerState> {
-        self.qps.get_mut(qpn as usize)
-    }
-}
-
 /// Manages QPs
 pub(crate) struct QpManager {
     /// Bitmap tracking allocated QPNs
     bitmap: BitVec,
     /// QPN to `DeviceQp` mapping
-    qps: Vec<Option<DeviceQp>>,
+    qps: Vec<DeviceQp>,
 }
 
 #[allow(clippy::as_conversions, clippy::indexing_slicing)]
@@ -66,42 +33,53 @@ impl QpManager {
         bitmap.resize(size, false);
         Self {
             bitmap,
-            qps: vec![None; size],
+            qps: vec![DeviceQp::default(); size],
         }
+    }
+
+    #[allow(clippy::similar_names)]
+    pub(crate) fn new_split(&self) -> (QpInitiatorTable, QpTrackerTable) {
+        let (initiators, trackers): (Vec<_>, Vec<_>) = self
+            .qps
+            .iter()
+            .map(|qp| {
+                let shared = SharedState::default();
+                let initiator = InitiatorState {
+                    attrs: Arc::clone(&qp.attrs),
+                    msn: 0,
+                    psn: 0,
+                    shared: shared.clone(),
+                };
+                let tracker = TrackerState {
+                    attrs: Arc::clone(&qp.attrs),
+                    psn: PsnTracker::default(),
+                    ack_msn: AckMsnTracker::default(),
+                    message: MessageTracker::default(),
+                };
+                (initiator, tracker)
+            })
+            .unzip();
+
+        (
+            QpInitiatorTable { table: initiators },
+            QpTrackerTable { table: trackers },
+        )
     }
 
     /// Allocates a new QP and returns its QPN
     #[allow(clippy::cast_possible_truncation)] // no larger than u32
-    pub(crate) fn create_qp(&mut self, qp: DeviceQp) -> Option<u32> {
+    pub(crate) fn create_qp(&mut self) -> Option<u32> {
         let qpn = self.bitmap.first_zero()? as u32;
         self.bitmap.set(qpn as usize, true);
-        self.qps[qpn as usize] = Some(qp);
         Some(qpn)
     }
 
     /// Removes and returns the QP associated with the given QPN
-    pub(crate) fn destroy_qp(&mut self, qpn: u32) -> Option<DeviceQp> {
+    pub(crate) fn destroy_qp(&mut self, qpn: u32) {
         if qpn as usize >= self.max_num_qps() {
-            return None;
+            return;
         }
         self.bitmap.set(qpn as usize, false);
-        self.qps[qpn as usize].take()
-    }
-
-    /// Gets a reference to the QP associated with the given QPN
-    pub(crate) fn get_qp(&self, qpn: u32) -> Option<&DeviceQp> {
-        if qpn as usize >= self.max_num_qps() {
-            return None;
-        }
-        self.qps[qpn as usize].as_ref()
-    }
-
-    /// Gets a mutable reference to the QP associated with the given QPN
-    pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut DeviceQp> {
-        if qpn as usize >= self.max_num_qps() {
-            return None;
-        }
-        self.qps[qpn as usize].as_mut()
     }
 
     /// Returns the maximum number of Queue Pairs (QPs) supported
@@ -110,10 +88,37 @@ impl QpManager {
     }
 }
 
-#[allow(clippy::missing_docs_in_private_items)]
-#[derive(Debug, Clone)]
-/// A queue pair for building work requests
-pub(crate) struct DeviceQp {
+/// Initiator state tacking of all QPs
+#[derive(Debug)]
+pub(crate) struct QpInitiatorTable {
+    /// Vector maps the QPN to the initiator state of each QP
+    table: Vec<InitiatorState>,
+}
+
+impl QpInitiatorTable {
+    #[allow(clippy::as_conversions)] // convert u32 to usize
+    /// Gets a mutable reference to the QP associated with the given QPN
+    pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut InitiatorState> {
+        self.table.get_mut(qpn as usize)
+    }
+}
+
+/// Message state tacking of all QPs
+pub(crate) struct QpTrackerTable {
+    /// Vector maps the QPN to the tracking state of each QP
+    table: Vec<TrackerState>,
+}
+
+impl QpTrackerTable {
+    #[allow(clippy::as_conversions)] // convert u32 to usize
+    /// Gets a mutable reference to the QP associated with the given QPN
+    pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut TrackerState> {
+        self.table.get_mut(qpn as usize)
+    }
+}
+
+#[derive(Default, Debug, Clone, Copy)]
+struct QpAttr {
     qp_type: u8,
     qpn: u32,
     dqpn: u32,
@@ -122,67 +127,97 @@ pub(crate) struct DeviceQp {
     pmtu: u8,
     send_cq: Option<u32>,
     recv_cq: Option<u32>,
-    state: State,
+}
+
+#[derive(Default, Debug)]
+struct QpAttrShared {
+    inner: Mutex<QpAttr>,
+}
+
+impl QpAttrShared {
+    pub(crate) fn qp_type(&self) -> u8 {
+        self.inner.lock().qp_type
+    }
+
+    pub(crate) fn set_qp_type(&self, value: u8) {
+        self.inner.lock().qp_type = value;
+    }
+
+    pub(crate) fn qpn(&self) -> u32 {
+        self.inner.lock().qpn
+    }
+
+    pub(crate) fn set_qpn(&self, value: u32) {
+        self.inner.lock().qpn = value;
+    }
+
+    pub(crate) fn dqpn(&self) -> u32 {
+        self.inner.lock().dqpn
+    }
+
+    pub(crate) fn set_dqpn(&self, value: u32) {
+        self.inner.lock().dqpn = value;
+    }
+
+    pub(crate) fn dqp_ip(&self) -> u32 {
+        self.inner.lock().dqp_ip
+    }
+
+    pub(crate) fn set_dqp_ip(&self, value: u32) {
+        self.inner.lock().dqp_ip = value;
+    }
+
+    pub(crate) fn mac_addr(&self) -> u64 {
+        self.inner.lock().mac_addr
+    }
+
+    pub(crate) fn set_mac_addr(&self, value: u64) {
+        self.inner.lock().mac_addr = value;
+    }
+
+    pub(crate) fn pmtu(&self) -> u8 {
+        self.inner.lock().pmtu
+    }
+
+    pub(crate) fn set_pmtu(&self, value: u8) {
+        self.inner.lock().pmtu = value;
+    }
+
+    pub(crate) fn send_cq(&self) -> Option<u32> {
+        self.inner.lock().send_cq
+    }
+
+    pub(crate) fn set_send_cq(&self, value: Option<u32>) {
+        self.inner.lock().send_cq = value;
+    }
+
+    pub(crate) fn recv_cq(&self) -> Option<u32> {
+        self.inner.lock().recv_cq
+    }
+
+    pub(crate) fn set_recv_cq(&self, value: Option<u32>) {
+        self.inner.lock().recv_cq = value;
+    }
+}
+
+#[allow(clippy::missing_docs_in_private_items)]
+#[derive(Default, Debug, Clone)]
+/// A queue pair for building work requests
+pub(crate) struct DeviceQp {
+    attrs: Arc<QpAttrShared>,
 }
 
 impl DeviceQp {
-    /// Creates a new RC QP
-    #[allow(clippy::as_conversions, clippy::cast_possible_truncation)] // qp_type should smaller than u8::MAX
-    pub(crate) fn new_rc(
-        qpn: u32,
-        pmtu: u8,
-        dqpn: u32,
-        dqp_ip: u32,
-        mac_addr: u64,
-        send_cq: Option<u32>,
-        recv_cq: Option<u32>,
-    ) -> Self {
-        Self {
-            qp_type: IBV_QPT_RC as u8,
-            qpn,
-            dqpn,
-            dqp_ip,
-            mac_addr,
-            pmtu,
-            send_cq,
-            recv_cq,
-            state: State::default(),
-        }
-    }
-
     /// Returns the QPN of this QP
     pub(crate) fn qpn(&self) -> u32 {
-        self.qpn
+        self.attrs.qpn()
     }
-}
-
-/// Device Qp state
-#[derive(Default, Debug, Clone)]
-struct State {
-    /// Current MSN
-    msn: u16,
-    /// Current PSN
-    psn: u32,
-    /// Tracker for tracking acked PSNs
-    psn_tracker: PsnTracker,
-    /// Tracker for tracking message sequence number of ACK packets
-    ack_msn_tracker: AckMsnTracker,
-    /// Message ack tracker info
-    message_tracker: MessageTracker,
 }
 
 #[allow(clippy::missing_docs_in_private_items)]
 #[derive(Debug)]
 pub(crate) struct InitiatorState {
-    qp_type: u8,
-    qpn: u32,
-    dqpn: u32,
-    dqp_ip: u32,
-    mac_addr: u64,
-    pmtu: u8,
-    send_cq: Option<u32>,
-    recv_cq: Option<u32>,
-
+    attrs: Arc<QpAttrShared>,
     /// Current MSN
     msn: u16,
     /// Current PSN
@@ -193,7 +228,7 @@ pub(crate) struct InitiatorState {
 
 /// Shared state between Queue Pairs (QPs) containing atomic counters
 /// for packet sequence numbers and message sequence numbers.
-#[derive(Debug)]
+#[derive(Default, Debug, Clone)]
 struct SharedState {
     /// Current base PSN
     base_psn: Arc<AtomicU32>,
@@ -219,18 +254,18 @@ impl InitiatorState {
         &mut self,
         wr: &SendWrResolver,
     ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32)> {
-        let num_psn = num_psn(self.pmtu, wr.raddr(), wr.length())?;
+        let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
 
         Some((
             WrChunkBuilder::new().set_qp_params(
                 msn,
-                self.qp_type,
-                self.qpn,
-                self.mac_addr,
-                self.dqpn,
-                self.dqp_ip,
-                self.pmtu,
+                self.attrs.qp_type(),
+                self.attrs.qpn(),
+                self.attrs.mac_addr(),
+                self.attrs.dqpn(),
+                self.attrs.dqp_ip(),
+                self.attrs.pmtu(),
             ),
             msn,
             base_psn,
@@ -239,12 +274,12 @@ impl InitiatorState {
 
     /// Returns the send cq handle.
     pub(crate) fn send_cq_handle(&self) -> Option<u32> {
-        self.send_cq
+        self.attrs.send_cq()
     }
 
     /// Returns the recv cq handle.
     pub(crate) fn recv_cq_handle(&self) -> Option<u32> {
-        self.recv_cq
+        self.attrs.recv_cq()
     }
 
     /// Get the next MSN and PSN pair for a new request.
@@ -282,22 +317,13 @@ impl InitiatorState {
 
 /// Qp state for maintaining message trackers
 pub(crate) struct TrackerState {
+    attrs: Arc<QpAttrShared>,
     /// Tracker for tracking acked PSNs
     psn: PsnTracker,
     /// Tracker for tracking message sequence number of ACK packets
     ack_msn: AckMsnTracker,
     /// Message ack tracker info
     message: MessageTracker,
-
-    // Original qp states
-    /// QPN
-    qpn: u32,
-    /// Current PMTU
-    pmtu: u8,
-    /// Send CQ handle
-    send_cq: Option<u32>,
-    /// Recv CQ handle
-    recv_cq: Option<u32>,
 }
 
 impl TrackerState {
@@ -331,7 +357,8 @@ impl TrackerState {
     /// Calculate the number of psn required for this WR
     pub(crate) fn num_psn(&self, addr: u64, length: u32) -> Option<u32> {
         let pmtu_mask = self
-            .pmtu
+            .attrs
+            .pmtu()
             .checked_sub(1)
             .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
         let next_align_addr = addr.saturating_add(u64::from(pmtu_mask)) & !u64::from(pmtu_mask);
@@ -340,24 +367,24 @@ impl TrackerState {
         length_u64
             .checked_sub(gap)
             .unwrap_or(length_u64)
-            .div_ceil(u64::from(self.pmtu))
+            .div_ceil(u64::from(self.attrs.pmtu()))
             .try_into()
             .ok()
     }
 
     /// Returns the send cq handle.
     pub(crate) fn send_cq_handle(&self) -> Option<u32> {
-        self.send_cq
+        self.attrs.send_cq()
     }
 
     /// Returns the recv cq handle.
     pub(crate) fn recv_cq_handle(&self) -> Option<u32> {
-        self.recv_cq
+        self.attrs.recv_cq()
     }
 
     /// Returns the QPN of this QP
     pub(crate) fn qpn(&self) -> u32 {
-        self.qpn
+        self.attrs.qpn()
     }
 }
 

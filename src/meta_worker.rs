@@ -4,13 +4,14 @@ use std::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
+    thread,
 };
 
 use tracing::error;
 
 use crate::{
     completion::CqManager,
-    qp::{QpManager, QpTrackers},
+    qp::{QpManager, QpTrackerTable},
     queue::abstr::{MetaReport, PacketPos, ReportMeta},
     retransmission::message_tracker::MessageTracker,
 };
@@ -18,12 +19,35 @@ use crate::{
 /// Offset between the `now_psn` an `base_psn`
 const BASE_PSN_OFFSET: u32 = 0x70;
 
+pub(crate) struct Launch<M> {
+    /// Abstract Tunnel
+    inner: MetaWorker<M>,
+}
+
+impl<M: MetaReport> Launch<M> {
+    /// Creates a new `Launch`
+    pub(crate) fn new(inner: M, qp_trackers: QpTrackerTable, cq_manager: CqManager) -> Self {
+        Self {
+            inner: MetaWorker {
+                inner,
+                qp_trackers,
+                cq_manager,
+            },
+        }
+    }
+
+    /// Launches the worker thread that handles communication between the NIC device and tunnel
+    pub(crate) fn launch(self, is_shutdown: Arc<AtomicBool>) {
+        let _ignore = thread::spawn(|| self.inner.run(is_shutdown));
+    }
+}
+
 /// A worker for processing packet meta
 struct MetaWorker<T> {
     /// Inner meta report queue
     inner: T,
     /// Manages QPs
-    qp_trackers: QpTrackers,
+    qp_trackers: QpTrackerTable,
     /// Manages CQs
     cq_manager: CqManager,
 }

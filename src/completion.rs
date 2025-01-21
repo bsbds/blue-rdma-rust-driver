@@ -84,7 +84,7 @@ pub(crate) struct DeviceCq {
     /// File descriptor for the completion event channel
     channel: File,
     /// Opaque pointer stored the user context
-    context: *const c_void,
+    context_addr: u64,
     /// Current number of CQEs
     cqe_count: usize,
     /// Event registration
@@ -138,14 +138,14 @@ impl DeviceCq {
         handle: u32,
         num_cqe: usize,
         channel: File,
-        context: *const c_void,
+        context_addr: u64,
         event_reg: Arc<EventRegistry>,
     ) -> Self {
         Self {
             handle,
             num_cqe,
             channel,
-            context,
+            context_addr,
             cqe_count: 0,
             event_reg,
             event_queue: VecDeque::new(),
