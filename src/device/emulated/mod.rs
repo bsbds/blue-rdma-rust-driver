@@ -214,7 +214,7 @@ impl EmulatedDevice {
         let ring_ctx_cmd_queue = RingCtx::new();
         let ring_ctx_resp_queue = RingCtx::new();
         let page_allocator = EmulatedPageAllocator::new(
-            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
+            bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
         );
         let mut allocator = DescRingBufferAllocator::new(page_allocator);
         let buffer0 = allocator.alloc().unwrap_or_else(|_| unreachable!());

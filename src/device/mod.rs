@@ -343,7 +343,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let queue_builder = EmulatedQueueBuilder::new();
         let device_builder = DeviceBuilder::new(queue_builder);
         let page_allocator = EmulatedPageAllocator::new(
-            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
+            bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
         );
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let network_config = NetworkConfig {
