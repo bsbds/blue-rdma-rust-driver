@@ -35,7 +35,7 @@ use crate::{
     ctx_ops::RdmaCtxOps,
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
-        virt_to_phy::{PhysAddrResolverEmulated, VirtToPhys},
+        virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
     },
     meta_worker,
     mtt::v2::Mttv2,
@@ -209,7 +209,7 @@ where
     ) -> io::Result<BlueRdma>
     where
         A: PageAllocator<1>,
-        R: VirtToPhys,
+        R: AddressResolver,
     {
         let buffer = allocator.alloc()?;
         let buffer_phys_addr = phys_addr_resolver

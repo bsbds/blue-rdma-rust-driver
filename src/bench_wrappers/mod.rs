@@ -30,7 +30,7 @@ pub fn virt_to_phy_bench_wrapper<Vas>(virt_addrs: Vas) -> io::Result<Vec<Option<
 where
     Vas: IntoIterator<Item = *const u8>,
 {
-    virt_to_phy(virt_addrs)
+    virt_to_phy(virt_addrs.into_iter().map(|x| x as u64))
 }
 
 #[inline]
@@ -38,7 +38,7 @@ pub fn virt_to_phy_bench_range_wrapper(
     start_addr: *const u8,
     num_pages: usize,
 ) -> io::Result<Vec<Option<u64>>> {
-    virt_to_phy_range(start_addr, num_pages)
+    virt_to_phy_range(start_addr as u64, num_pages)
 }
 
 #[derive(Debug, Clone, Copy)]

@@ -81,7 +81,7 @@ impl<const N: usize> HostPageAllocator<N> {
     #[allow(clippy::as_conversions)] // casting usize ot u64 is safe
     fn ensure_consecutive(mmap: &MmapMut) -> io::Result<bool> {
         let virt_addrs = mmap.chunks(PAGE_SIZE).map(<[u8]>::as_ptr);
-        let phy_addrs = virt_to_phy_range(mmap.as_ptr(), mmap.len() >> PAGE_SIZE_BITS)?;
+        let phy_addrs = virt_to_phy_range(mmap.as_ptr() as u64, mmap.len() >> PAGE_SIZE_BITS)?;
         if phy_addrs.iter().any(Option::is_none) {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,

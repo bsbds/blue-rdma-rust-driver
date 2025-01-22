@@ -211,9 +211,10 @@ impl<PAlloc: PgtAlloc> Mtt<PAlloc> {
 
     // TODO: reuse a page for multiple registration
     /// Allocates a new page and returns a tuple containing the page and its physical address
+    #[allow(clippy::as_conversions)] // *const u8 to u64
     fn alloc_new_page() -> io::Result<(ContiguousPages<1>, u64)> {
         let mut page = HostPageAllocator::new().alloc()?;
-        let start_virt_addr = page.as_ptr();
+        let start_virt_addr = page.as_ptr() as u64;
         let start_phy_addr = virt_to_phy(Some(start_virt_addr))?
             .into_iter()
             .flatten()

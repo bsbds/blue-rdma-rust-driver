@@ -29,7 +29,7 @@ use crate::{
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator},
         slot_alloc::SlotAlloc,
-        virt_to_phy::{self, PhysAddrResolver, PhysAddrResolverEmulated, VirtToPhys},
+        virt_to_phy::{self, AddressResolver, PhysAddrResolver, PhysAddrResolverEmulated},
     },
     meta_report::MetaReportQueueHandler,
     queue::{
