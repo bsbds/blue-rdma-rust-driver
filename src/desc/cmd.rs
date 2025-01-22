@@ -58,10 +58,10 @@ struct CmdQueueReqDescUpdateMrTableChunk2 {
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct CmdQueueReqDescUpdateMrTableChunk3 {
-    pub pd_handler: u32,
+    pub reserved1: u32,
     pub acc_flags: u8,
     pub pgt_offset: u17,
-    reserved1: u7,
+    reserved2: u7,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -122,12 +122,6 @@ impl CmdQueueReqDescUpdateMrTable {
     }
     pub(crate) fn set_mr_key(&mut self, val: u32) {
         self.c2.set_mr_key(val);
-    }
-    pub(crate) fn pd_handler(&self) -> u32 {
-        self.c3.pd_handler()
-    }
-    pub(crate) fn set_pd_handler(&mut self, val: u32) {
-        self.c3.set_pd_handler(val);
     }
     pub(crate) fn acc_flags(&self) -> u8 {
         self.c3.acc_flags()
@@ -267,8 +261,8 @@ struct CmdQueueReqDescQpManagementChunk0 {
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct CmdQueueReqDescQpManagementChunk1 {
-    pub is_error: bool,
     pub is_valid: bool,
+    pub is_error: bool,
     reserved0: u6,
     pub qpn: u24,
     reserved1: u32,

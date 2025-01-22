@@ -28,31 +28,26 @@ pub(crate) enum WorkReqOpCode {
 struct SendQueueReqDescSeg0Chunk0 {
     pub common_header: RingBufDescCommonHead,
     pub msn: u16,
-    pub psn: u24,
-    pub qp_type: u4,
-    reserved0: u4,
+    pub total_len: u32,
 }
 
-#[bitsize(64)]
+#[bitsize(128)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct SendQueueReqDescSeg0Chunk1 {
-    pub dqpn: u24,
-    pub flags: u5,
-    reserved1: u3,
+    pub rkey: u32,
+    pub raddr: u64,
     pub dqp_ip: u32,
 }
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct SendQueueReqDescSeg0Chunk2 {
-    pub raddr: u64,
-}
-
-#[bitsize(64)]
-#[derive(Clone, Copy, DebugBits, FromBits)]
-struct SendQueueReqDescSeg0Chunk3 {
-    pub rkey: u32,
-    pub total_len: u32,
+    pub psn: u24,
+    pub qp_type: u4,
+    reserved0: u4,
+    pub dqpn: u24,
+    pub flags: u5,
+    reserved1: u3,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -60,7 +55,6 @@ pub(crate) struct SendQueueReqDescSeg0 {
     c0: SendQueueReqDescSeg0Chunk0,
     c1: SendQueueReqDescSeg0Chunk1,
     c2: SendQueueReqDescSeg0Chunk2,
-    c3: SendQueueReqDescSeg0Chunk3,
 }
 
 impl SendQueueReqDescSeg0 {
@@ -101,24 +95,20 @@ impl SendQueueReqDescSeg0 {
         rkey: u32,
         total_len: u32,
     ) -> Self {
-        let common_header = RingBufDescCommonHead::new_send_desc(op_code);
-        let c0 = SendQueueReqDescSeg0Chunk0::new(
-            common_header,
-            msn,
+        let mut common_header = RingBufDescCommonHead::new_send_desc(op_code);
+        common_header.set_has_next(true);
+        let c0 = SendQueueReqDescSeg0Chunk0::new(common_header, msn, total_len);
+        let c1 = SendQueueReqDescSeg0Chunk1::new(rkey, raddr, dqp_ip);
+        let c2 = SendQueueReqDescSeg0Chunk2::new(
             u24::masked_new(psn),
             u4::masked_new(qp_type),
             u4::from_u8(0),
-        );
-        let c1 = SendQueueReqDescSeg0Chunk1::new(
             u24::masked_new(dqpn),
             u5::masked_new(flags),
             u3::from_u8(0),
-            dqp_ip,
         );
-        let c2 = SendQueueReqDescSeg0Chunk2::new(raddr);
-        let c3 = SendQueueReqDescSeg0Chunk3::new(rkey, total_len);
 
-        Self { c0, c1, c2, c3 }
+        Self { c0, c1, c2 }
     }
 
     pub(crate) fn msn(&self) -> u16 {
@@ -130,35 +120,35 @@ impl SendQueueReqDescSeg0 {
     }
 
     pub(crate) fn psn(&self) -> u32 {
-        self.c0.psn().into()
+        self.c2.psn().into()
     }
 
     pub(crate) fn set_psn(&mut self, val: u32) {
-        self.c0.set_psn(u24::masked_new(val));
+        self.c2.set_psn(u24::masked_new(val));
     }
 
     pub(crate) fn qp_type(&self) -> u8 {
-        self.c0.qp_type().into()
+        self.c2.qp_type().into()
     }
 
     pub(crate) fn set_qp_type(&mut self, val: u8) {
-        self.c0.set_qp_type(u4::masked_new(val));
+        self.c2.set_qp_type(u4::masked_new(val));
     }
 
     pub(crate) fn dqpn(&self) -> u32 {
-        self.c1.dqpn().into()
+        self.c2.dqpn().into()
     }
 
     pub(crate) fn set_dqpn(&mut self, val: u32) {
-        self.c1.set_dqpn(u24::masked_new(val));
+        self.c2.set_dqpn(u24::masked_new(val));
     }
 
     pub(crate) fn flags(&self) -> u8 {
-        self.c1.flags().into()
+        self.c2.flags().into()
     }
 
     pub(crate) fn set_flags(&mut self, val: u8) {
-        self.c1.set_flags(u5::masked_new(val));
+        self.c2.set_flags(u5::masked_new(val));
     }
 
     pub(crate) fn dqp_ip(&self) -> u32 {
@@ -170,27 +160,27 @@ impl SendQueueReqDescSeg0 {
     }
 
     pub(crate) fn raddr(&self) -> u64 {
-        self.c2.raddr()
+        self.c1.raddr()
     }
 
     pub(crate) fn set_raddr(&mut self, val: u64) {
-        self.c2.set_raddr(val);
+        self.c1.set_raddr(val);
     }
 
     pub(crate) fn rkey(&self) -> u32 {
-        self.c3.rkey()
+        self.c1.rkey()
     }
 
     pub(crate) fn set_rkey(&mut self, val: u32) {
-        self.c3.set_rkey(val);
+        self.c1.set_rkey(val);
     }
 
     pub(crate) fn total_len(&self) -> u32 {
-        self.c3.total_len()
+        self.c0.total_len()
     }
 
     pub(crate) fn set_total_len(&mut self, val: u32) {
-        self.c3.set_total_len(val);
+        self.c0.set_total_len(val);
     }
 }
 
