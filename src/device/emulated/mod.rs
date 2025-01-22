@@ -3,7 +3,12 @@
 /// Crs client implementation
 mod csr;
 
-use std::{io, iter, net::SocketAddr, thread, time::Duration};
+use std::{
+    io, iter,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    thread,
+    time::Duration,
+};
 
 use csr::RpcClient;
 
@@ -59,14 +64,18 @@ impl DeviceAdaptor for EmulatedDevice {
     }
 }
 
+const RPC_SERVER_ADDR: SocketAddr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 7700);
+
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct EmulatedQueueBuilder {
     rpc_server_addr: SocketAddr,
 }
 
 impl EmulatedQueueBuilder {
-    pub(crate) fn new(rpc_server_addr: SocketAddr) -> Self {
-        Self { rpc_server_addr }
+    pub(crate) fn new() -> Self {
+        Self {
+            rpc_server_addr: RPC_SERVER_ADDR,
+        }
     }
 }
 

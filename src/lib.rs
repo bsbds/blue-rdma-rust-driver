@@ -213,7 +213,7 @@ pub mod ctx_ops;
 pub mod net;
 
 pub use device::emulated::EmulatedDevice;
-pub use device::BlueRdmaDevice;
+pub use device::BlueRdma;
 
 pub use simple_nic::SimpleNicDeviceConfig;
 

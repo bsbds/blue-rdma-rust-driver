@@ -20,9 +20,12 @@ mod constants;
 use std::{
     io,
     marker::PhantomData,
+    net::Ipv4Addr,
     sync::{atomic::AtomicBool, Arc, OnceLock},
 };
 
+use emulated::EmulatedQueueBuilder;
+use ipnetwork::{IpNetwork, Ipv4Network};
 use parking_lot::Mutex;
 use proxy::DeviceProxy;
 
@@ -30,12 +33,15 @@ use crate::{
     completion::{CompletionEvent, CqManager, EventRegistry, MetaCqTable},
     ctx_ops::RdmaCtxOps,
     mem::{
-        page::{ContiguousPages, PageAllocator},
-        virt_to_phy::VirtToPhys,
+        page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
+        virt_to_phy::{PhysAddrResolverEmulated, VirtToPhys},
     },
     meta_worker,
     mtt::v2::Mttv2,
-    net::{config::NetworkConfig, tap::TapDevice},
+    net::{
+        config::{MacAddress, NetworkConfig},
+        tap::TapDevice,
+    },
     qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
     queue::abstr::{
         DeviceCommand, MetaReport, MttEntry, QPEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
@@ -199,7 +205,7 @@ where
         phys_addr_resolver: &R,
         max_num_qps: u32,
         max_num_cqs: u32,
-    ) -> io::Result<BlueRdmaDevice>
+    ) -> io::Result<BlueRdma>
     where
         A: PageAllocator<1>,
         R: VirtToPhys,
@@ -230,7 +236,7 @@ where
             meta_cq_table,
         );
 
-        Ok(BlueRdmaDevice {
+        Ok(BlueRdma {
             cmd_queue: Box::new(cmd_queue),
             send_queue: Box::new(send_queue),
             qp_manager,
@@ -258,7 +264,7 @@ where
 }
 
 #[allow(missing_debug_implementations)]
-pub struct BlueRdmaDevice {
+pub struct BlueRdma {
     pub(crate) cmd_queue: Box<dyn DeviceCommand + Send + 'static>,
     pub(crate) send_queue: Box<dyn WorkReqSend + Send + 'static>,
     pub(crate) qp_manager: QpManager,
@@ -269,7 +275,7 @@ pub struct BlueRdmaDevice {
     buffer_phys_addr: u64,
 }
 
-impl BlueRdmaDevice {
+impl BlueRdma {
     /// Updates Memory Translation Table entry
     #[inline]
     pub fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<()> {
@@ -321,24 +327,41 @@ impl BlueRdmaDevice {
     }
 }
 
-static INSTANCE: OnceLock<Mutex<BlueRdmaDevice>> = OnceLock::new();
-
 #[allow(unsafe_code)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
-unsafe impl RdmaCtxOps for BlueRdmaDevice {
+unsafe impl RdmaCtxOps for BlueRdma {
     #[inline]
-    fn init() {
-        todo!()
-    }
+    fn init() {}
 
     #[inline]
+    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::as_conversions)] // usize to u64
     fn new(sysfs_name: *const std::ffi::c_char) -> *mut std::ffi::c_void {
-        todo!()
+        let queue_builder = EmulatedQueueBuilder::new();
+        let device_builder = DeviceBuilder::new(queue_builder);
+        let page_allocator = EmulatedPageAllocator::new(
+            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
+        );
+        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
+        let network_config = NetworkConfig {
+            ip_network: IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap()),
+            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
+            mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
+        };
+        let mut bluerdma = device_builder
+            .initialize(network_config, page_allocator, &resolver, 128, 128)
+            .unwrap();
+        Box::into_raw(Box::new(bluerdma)).cast()
     }
 
     #[inline]
+    #[allow(clippy::as_conversions)] // provider implementation guarantees pointer validity
     fn free(driver_data: *const std::ffi::c_void) {
-        todo!()
+        if !driver_data.is_null() {
+            unsafe {
+                drop(Box::from_raw(driver_data as *mut BlueRdma));
+            }
+        }
     }
 
     #[inline]
@@ -467,3 +490,16 @@ unsafe impl RdmaCtxOps for BlueRdmaDevice {
         todo!()
     }
 }
+
+#[repr(C)]
+struct BlueRdmaDevice {
+    pad: [u8; 712],
+    driver: *mut core::ffi::c_void,
+    abi_version: core::ffi::c_int,
+}
+
+//#[allow(unsafe_code)]
+//pub unsafe fn get_device(context: *mut ibverbs_sys::ibv_context) -> *mut ibverbs_sys::ibv_context {
+//    let dev_ptr = unsafe { *context }.device.cast::<BlueRdma>();
+//    todo!()
+//}
