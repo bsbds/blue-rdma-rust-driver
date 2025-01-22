@@ -267,10 +267,10 @@ struct CmdQueueReqDescQpManagementChunk0 {
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct CmdQueueReqDescQpManagementChunk1 {
-    pub qpn: u24,
-    reserved0: u6,
     pub is_error: bool,
     pub is_valid: bool,
+    reserved0: u6,
+    pub qpn: u24,
     reserved1: u32,
 }
 
@@ -321,10 +321,10 @@ impl CmdQueueReqDescQpManagement {
         let c0 =
             CmdQueueReqDescQpManagementChunk0::new(common_header, cmd_queue_common_header, ip_addr);
         let c1 = CmdQueueReqDescQpManagementChunk1::new(
-            u24::masked_new(qpn),
-            u6::from_u8(0),
             is_error,
             is_valid,
+            u6::from_u8(0),
+            u24::masked_new(qpn),
             0,
         );
         let c2 = CmdQueueReqDescQpManagementChunk2::new(
