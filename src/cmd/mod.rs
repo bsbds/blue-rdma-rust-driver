@@ -17,7 +17,7 @@ use crate::{
     mtt::v2::Mttv2,
     net::config::NetworkConfig,
     queue::{
-        abstr::{DeviceCommand, MttEntry, QPEntry, RecvBufferMeta},
+        abstr::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         DescRingBuffer,
     },
@@ -104,7 +104,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         Ok(())
     }
 
-    fn update_qp(&self, entry: QPEntry) -> io::Result<()> {
+    fn update_qp(&self, entry: QpEntry) -> io::Result<()> {
         let desc = CmdQueueReqDescQpManagement::new(
             0,
             entry.ip_addr,
@@ -213,10 +213,18 @@ impl QpUpdate<'_> {
     }
 
     /// Waits for responses to all pushed commands.
-    fn wait(self) {
-        std::iter::repeat_with(|| self.resp_queue.try_pop())
-            .flatten()
-            .take(self.num)
-            .for_each(drop);
+    fn wait(mut self) {
+        while self.num != 0 {
+            std::hint::spin_loop();
+            //println!("try: {:?}", std::time::Instant::now());
+            if let Some(resp) = self.resp_queue.try_pop() {
+                self.num = self.num.wrapping_sub(1);
+            }
+            //std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        //std::iter::repeat_with(|| self.resp_queue.try_pop())
+        //    .flatten()
+        //    .take(self.num)
+        //    .for_each(drop);
     }
 }

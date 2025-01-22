@@ -12,7 +12,7 @@ pub(crate) trait DeviceCommand {
     /// Updates Memory Translation Table entry
     fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()>;
     /// Updates Queue Pair entry
-    fn update_qp(&self, entry: QPEntry) -> io::Result<()>;
+    fn update_qp(&self, entry: QpEntry) -> io::Result<()>;
     /// Sets network parameters
     fn set_network(&self, param: NetworkConfig) -> io::Result<()>;
     /// Sets receive buffer for raw packets
@@ -100,8 +100,8 @@ impl<'a> MttEntry<'a> {
 }
 /// Queue Pair entry
 #[allow(clippy::missing_docs_in_private_items)]
-#[derive(Default, Clone, Copy)]
-pub(crate) struct QPEntry {
+#[derive(Default)]
+pub(crate) struct QpEntry {
     pub(crate) ip_addr: u32,
     pub(crate) qpn: u32,
     pub(crate) peer_qpn: u32,

@@ -82,6 +82,14 @@ impl QpManager {
         self.bitmap.set(qpn as usize, false);
     }
 
+    pub(crate) fn qp_attr(&self, qpn: u32) -> Option<QpAttr> {
+        if !self.bitmap.get(qpn as usize).map(|x| *x).unwrap_or(false) {
+            return None;
+        }
+        let qp = self.qps.get(qpn as usize)?;
+        Some(qp.attrs.inner.lock().clone())
+    }
+
     /// Returns the maximum number of Queue Pairs (QPs) supported
     fn max_num_qps(&self) -> usize {
         self.qps.len()
@@ -118,15 +126,15 @@ impl QpTrackerTable {
 }
 
 #[derive(Default, Debug, Clone, Copy)]
-struct QpAttr {
-    qp_type: u8,
-    qpn: u32,
-    dqpn: u32,
-    dqp_ip: u32,
-    mac_addr: u64,
-    pmtu: u8,
-    send_cq: Option<u32>,
-    recv_cq: Option<u32>,
+pub(crate) struct QpAttr {
+    pub(crate) qp_type: u8,
+    pub(crate) qpn: u32,
+    pub(crate) dqpn: u32,
+    pub(crate) dqp_ip: u32,
+    pub(crate) mac_addr: u64,
+    pub(crate) pmtu: u8,
+    pub(crate) send_cq: Option<u32>,
+    pub(crate) recv_cq: Option<u32>,
 }
 
 #[derive(Default, Debug)]
