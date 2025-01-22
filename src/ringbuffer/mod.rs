@@ -143,10 +143,7 @@ where
     pub(crate) fn try_pop(&mut self) -> Option<&Desc> {
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
-        //println!("tail: {tail}");
-        //println!("rb ptr: {:x}", buf.as_ptr() as u64);
         let ready = buf[tail].take_valid();
-        //println!("ready: {ready:?}");
         ready.then(|| {
             self.ctx.inc_tail();
             &buf[tail]

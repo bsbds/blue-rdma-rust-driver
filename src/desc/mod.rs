@@ -133,7 +133,6 @@ impl RingBufDescUntyped {
 impl Descriptor for RingBufDescUntyped {
     const SIZE: usize = 32;
 
-    #[allow(trivial_casts, unsafe_code)]
     fn take_valid(&mut self) -> bool {
         let valid = self.head.valid();
         self.head.set_valid(false);
