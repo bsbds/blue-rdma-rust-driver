@@ -278,11 +278,14 @@ pub struct BlueRdma {
 impl BlueRdma {
     /// Updates Memory Translation Table entry
     #[inline]
-    pub fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<()> {
+    pub fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<u32> {
         let entry =
             self.mtt
                 .register(&mut self.buffer, self.buffer_phys_addr, addr, length, 0, 0)?;
-        self.cmd_queue.update_mtt(entry)
+        let mr_key = entry.mr_key;
+        self.cmd_queue.update_mtt(entry)?;
+
+        Ok(mr_key)
     }
 
     /// Updates Queue Pair entry
@@ -329,6 +332,7 @@ impl BlueRdma {
 
 #[allow(unsafe_code)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
+#[allow(clippy::as_conversions)]
 unsafe impl RdmaCtxOps for BlueRdma {
     #[inline]
     fn init() {}
@@ -451,12 +455,31 @@ unsafe impl RdmaCtxOps for BlueRdma {
         _hca_va: u64,
         access: core::ffi::c_int,
     ) -> *mut ibverbs_sys::ibv_mr {
-        todo!()
+        let context = unsafe { (*pd) }.context;
+        let bluerdma = unsafe { get_device_mut(context) };
+        let Ok(mr_key) = bluerdma.reg_mr_inner(addr as u64, length) else {
+            return std::ptr::null_mut();
+        };
+        let ibv_mr = Box::new(ibverbs_sys::ibv_mr {
+            context,
+            pd,
+            addr,
+            length,
+            handle: 0, // TODO: implement mr handle
+            lkey: mr_key,
+            rkey: mr_key,
+        });
+        Box::into_raw(ibv_mr)
     }
 
     #[inline]
     fn dereg_mr(mr: *mut ibverbs_sys::ibv_mr) -> ::std::os::raw::c_int {
-        todo!()
+        if !mr.is_null() {
+            let mr = unsafe { Box::from_raw(mr) };
+            // TODO: implement dereg mr
+            drop(mr);
+        }
+        0
     }
 
     #[inline]
@@ -498,8 +521,10 @@ struct BlueRdmaDevice {
     abi_version: core::ffi::c_int,
 }
 
-//#[allow(unsafe_code)]
-//pub unsafe fn get_device(context: *mut ibverbs_sys::ibv_context) -> *mut ibverbs_sys::ibv_context {
-//    let dev_ptr = unsafe { *context }.device.cast::<BlueRdma>();
-//    todo!()
-//}
+#[allow(unsafe_code)]
+unsafe fn get_device_mut(context: *mut ibverbs_sys::ibv_context) -> &'static mut BlueRdma {
+    let context =
+        unsafe { context.as_mut() }.unwrap_or_else(|| unreachable!("null context pointer"));
+    unsafe { context.device.cast::<BlueRdma>().as_mut() }
+        .unwrap_or_else(|| unreachable!("null device pointer"))
+}
