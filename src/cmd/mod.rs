@@ -204,6 +204,7 @@ impl QpUpdate<'_> {
     /// Pushes a new command queue descriptor to the queue.
     fn push(&mut self, desc: CmdQueueDesc) {
         self.num = self.num.wrapping_add(1);
+        self.req_queue.push(desc);
     }
 
     /// Flushes the command queue by writing the head pointer to the CSR proxy.
@@ -213,8 +214,9 @@ impl QpUpdate<'_> {
 
     /// Waits for responses to all pushed commands.
     fn wait(self) {
-        let _resps = std::iter::repeat_with(|| self.resp_queue.try_pop())
+        std::iter::repeat_with(|| self.resp_queue.try_pop())
             .flatten()
-            .take(self.num);
+            .take(self.num)
+            .for_each(drop);
     }
 }
