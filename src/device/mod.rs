@@ -169,7 +169,10 @@ pub(crate) trait InitializeDeviceQueue {
     type SimpleNic;
 
     #[allow(clippy::type_complexity)]
-    fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)>;
+    fn initialize<A: PageAllocator<1>>(
+        &self,
+        allocator: A,
+    ) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)>;
 }
 
 #[derive(Debug)]
@@ -201,8 +204,12 @@ where
         A: PageAllocator<1>,
         R: VirtToPhys,
     {
+        let buffer = allocator.alloc()?;
+        let buffer_phys_addr = phys_addr_resolver
+            .virt_to_phys(buffer.addr())?
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let (cmd_queue, send_queue, meta_report_queue, simple_nic) =
-            self.queue_builder.initialize()?;
+            self.queue_builder.initialize(allocator)?;
         let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
         let recv_buffer_virt_addr = simple_nic.recv_buffer_virt_addr();
         let phys_addr = phys_addr_resolver
@@ -215,10 +222,6 @@ where
         let cq_manager = CqManager::new(max_num_cqs);
         let meta_cq_table = cq_manager.new_meta_table();
         let (initiator_table, tracker_table) = qp_manager.new_split();
-        let buffer = allocator.alloc()?;
-        let buffer_phys_addr = phys_addr_resolver
-            .virt_to_phys(buffer.addr())?
-            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         Self::launch_backgroud(
             meta_report_queue,
             simple_nic,
@@ -234,8 +237,8 @@ where
             qp_table: initiator_table,
             cq_manager,
             mtt: Mttv2::new_simple(),
-            buffer: todo!(),
-            buffer_phys_addr: todo!(),
+            buffer,
+            buffer_phys_addr,
         })
     }
 

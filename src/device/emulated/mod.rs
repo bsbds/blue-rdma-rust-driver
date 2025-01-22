@@ -79,10 +79,10 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
     #[allow(clippy::indexing_slicing)] // bound is checked
     #[allow(clippy::as_conversions)] // usize to u64
     #[allow(clippy::similar_names)] // it's clear
-    fn initialize(&self) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)> {
-        let mut page_allocator = EmulatedPageAllocator::new(
-            bluesimalloc::shm_start_addr()..bluesimalloc::heap_start_addr(),
-        );
+    fn initialize<A: PageAllocator<1>>(
+        &self,
+        page_allocator: A,
+    ) -> io::Result<(Self::Cmd, Self::Send, Self::MetaReport, Self::SimpleNic)> {
         let mut allocator = DescRingBufferAllocator::new(page_allocator);
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let cli = RpcClient::new(self.rpc_server_addr)?;
