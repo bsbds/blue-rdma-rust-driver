@@ -203,23 +203,23 @@ where
         &self,
         network: NetworkConfig,
         mut allocator: A,
-        phys_addr_resolver: &R,
+        addr_resolver: R,
         max_num_qps: u32,
         max_num_cqs: u32,
     ) -> io::Result<BlueRdma>
     where
         A: PageAllocator<1>,
-        R: AddressResolver,
+        R: AddressResolver + 'static,
     {
         let buffer = allocator.alloc()?;
-        let buffer_phys_addr = phys_addr_resolver
+        let buffer_phys_addr = addr_resolver
             .virt_to_phys(buffer.addr())?
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let (cmd_queue, send_queue, meta_report_queue, simple_nic) =
             self.queue_builder.initialize(allocator)?;
         let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
         let recv_buffer_virt_addr = simple_nic.recv_buffer_virt_addr();
-        let phys_addr = phys_addr_resolver
+        let phys_addr = addr_resolver
             .virt_to_phys(recv_buffer_virt_addr)?
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let meta = RecvBufferMeta::new(phys_addr);
@@ -244,6 +244,7 @@ where
             qp_table: initiator_table,
             cq_manager,
             mtt: Mttv2::new_simple(),
+            addr_resolver: Box::new(addr_resolver),
             buffer,
             buffer_phys_addr,
         })
@@ -272,6 +273,7 @@ pub struct BlueRdma {
     pub(crate) cq_manager: CqManager,
     pub(crate) qp_table: QpInitiatorTable,
     pub(crate) mtt: Mttv2,
+    addr_resolver: Box<dyn AddressResolver>,
     buffer: ContiguousPages<1>,
     buffer_phys_addr: u64,
 }
@@ -280,9 +282,15 @@ impl BlueRdma {
     /// Updates Memory Translation Table entry
     #[inline]
     fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<u32> {
-        let entry =
-            self.mtt
-                .register(&mut self.buffer, self.buffer_phys_addr, addr, length, 0, 0)?;
+        let entry = self.mtt.register(
+            self.addr_resolver.as_ref(),
+            &mut self.buffer,
+            self.buffer_phys_addr,
+            addr,
+            length,
+            0,
+            0,
+        )?;
         let mr_key = entry.mr_key;
         self.cmd_queue.update_mtt(entry)?;
 
@@ -352,7 +360,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
         };
         let mut bluerdma = device_builder
-            .initialize(network_config, page_allocator, &resolver, 128, 128)
+            .initialize(network_config, page_allocator, resolver, 128, 128)
             .unwrap();
         Box::into_raw(Box::new(bluerdma)).cast()
     }

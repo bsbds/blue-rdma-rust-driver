@@ -2,7 +2,11 @@ use std::io;
 
 use crate::{
     desc::cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
-    mem::{page::ContiguousPages, virt_to_phy::virt_to_phy_range, PAGE_SIZE},
+    mem::{
+        page::ContiguousPages,
+        virt_to_phy::{virt_to_phy_range, AddressResolver},
+        PAGE_SIZE,
+    },
     queue::abstr::MttEntry,
 };
 
@@ -33,21 +37,26 @@ impl<A: PgtAlloc> Mttv2<A> {
     }
 
     /// Register a memory region
-    pub(crate) fn register<'a>(
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn register<'a, R>(
         &mut self,
+        addr_resolver: &R,
         page_buffer: &'a mut ContiguousPages<1>,
         page_buffer_phy_addr: u64,
         addr: u64,
         length: usize,
         pd_handle: u32,
         access: u8,
-    ) -> io::Result<MttEntry<'a>> {
+    ) -> io::Result<MttEntry<'a>>
+    where
+        R: AddressResolver + ?Sized,
+    {
         Self::ensure_valid(addr, length)?;
         Self::try_pin_pages(addr, length)?;
         let num_pages = Self::get_num_page(addr, length);
         let virt_addrs = Self::get_page_start_virt_addrs(addr, length)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let phy_addrs = virt_to_phy_range(addr, num_pages)?;
+        let phy_addrs = addr_resolver.virt_to_phys_range(addr, num_pages)?;
         if phy_addrs.iter().any(Option::is_none) {
             return Err(io::Error::new(
                 io::ErrorKind::NotFound,
