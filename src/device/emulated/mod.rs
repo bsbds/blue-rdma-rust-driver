@@ -134,12 +134,18 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         sq_proxy1.write_base_addr(sq_base_pas[1]);
         sq_proxy2.write_base_addr(sq_base_pas[1]);
         sq_proxy3.write_base_addr(sq_base_pas[1]);
+        let proxies: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>> = vec![
+            Box::new(sq_proxy0),
+            Box::new(sq_proxy1),
+            Box::new(sq_proxy2),
+            Box::new(sq_proxy3),
+        ];
         let send_scheduler = SendQueueScheduler::new();
         let builder = SendWorkerBuilder::new_with_global_injector(send_scheduler.injector());
-        let workers = builder.build_workers(sqs);
-        workers
-            .into_iter()
-            .map(|worker| thread::spawn(|| worker.run()));
+        let workers = builder.build_workers(sqs, proxies);
+        for worker in workers {
+            let _handle = thread::spawn(|| worker.run());
+        }
 
         let mrqs = iter::repeat_with(|| allocator.alloc().map(MetaReportQueue::new))
             .take(4)

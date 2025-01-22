@@ -1,9 +1,10 @@
-use std::{iter, sync::Arc};
+use std::{iter, sync::Arc, time::Duration};
 
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 
 use crate::{
     desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
+    device::CsrWriterAdaptor,
     queue::{
         abstr::{WorkReqSend, WrChunk},
         send_queue::{SendQueue, SendQueueDesc},
@@ -60,7 +61,11 @@ impl SendWorkerBuilder {
         Self { global }
     }
 
-    pub(crate) fn build_workers(self, send_queues: Vec<SendQueue>) -> Vec<SendWorker> {
+    pub(crate) fn build_workers(
+        self,
+        send_queues: Vec<SendQueue>,
+        adaptors: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>>,
+    ) -> Vec<SendWorker> {
         let workers: Vec<_> = iter::repeat_with(WrWorker::new_fifo)
             .take(send_queues.len())
             .collect();
@@ -68,11 +73,13 @@ impl SendWorkerBuilder {
         workers
             .into_iter()
             .zip(send_queues)
-            .map(|(local, send_queue)| SendWorker {
+            .zip(adaptors)
+            .map(|((local, send_queue), csr_adaptor)| SendWorker {
                 local,
                 global: Arc::clone(&self.global),
                 remotes: stealers.clone().into_boxed_slice(),
                 send_queue,
+                csr_adaptor,
             })
             .collect()
     }
@@ -88,6 +95,8 @@ pub(crate) struct SendWorker {
     remotes: Box<[WrStealer]>,
     /// Queue for submitting send requests to the NIC
     send_queue: SendQueue,
+    /// Csr proxy
+    csr_adaptor: Box<dyn CsrWriterAdaptor + Send + 'static>,
 }
 
 impl SendWorker {
@@ -95,6 +104,7 @@ impl SendWorker {
     pub(crate) fn run(mut self) {
         loop {
             let Some(wr) = Self::find_task(&self.local, &self.global, &self.remotes) else {
+                std::hint::spin_loop();
                 continue;
             };
             let desc0 = SendQueueReqDescSeg0::new_rdma_write(
@@ -125,6 +135,9 @@ impl SendWorker {
             /// Retry if block
             while self.send_queue.push(SendQueueDesc::Seg0(desc0)).is_err() {}
             while self.send_queue.push(SendQueueDesc::Seg1(desc1)).is_err() {}
+            if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
+                tracing::error!("failed to flush queue pointer");
+            }
         }
     }
 

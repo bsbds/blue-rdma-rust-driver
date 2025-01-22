@@ -39,6 +39,11 @@ impl SendQueue {
     pub(crate) fn base_addr(&self) -> u64 {
         self.inner.inner.base_addr()
     }
+
+    /// Returns the head pointer of the buffer
+    pub(crate) fn head(&self) -> u32 {
+        self.inner.inner.head()
+    }
 }
 
 impl ToCardQueue for SendQueue {
