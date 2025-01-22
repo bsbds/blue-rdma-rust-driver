@@ -142,6 +142,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .map(|worker| thread::spawn(|| worker.run()));
 
         let mrqs = iter::repeat_with(|| allocator.alloc().map(MetaReportQueue::new))
+            .take(4)
             .collect::<Result<Vec<_>, _>>()?;
         let mrq_base_pas: Vec<_> = mrqs
             .iter()
