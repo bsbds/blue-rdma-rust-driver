@@ -428,9 +428,15 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let entry = QpEntry {
             qp_type: init_attr.qp_type as u8,
             qpn,
+            pmtu: ibverbs_sys::IBV_MTU_1024 as u8,
             ..Default::default()
         };
         bluerdma.update_qp_inner(entry);
+        let _ignore = bluerdma.qp_manager.update_qp_attr(qpn, |attr_mut| {
+            attr_mut.qp_type = init_attr.qp_type as u8;
+            attr_mut.qpn = qpn;
+            attr_mut.pmtu = ibverbs_sys::IBV_MTU_1024 as u8;
+        });
 
         Box::into_raw(Box::new(ibverbs_sys::ibv_qp {
             context,
@@ -472,6 +478,11 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let bluerdma = unsafe { get_device_mut(context) };
         let dgid = unsafe { attr.ah_attr.grh.dgid.raw };
         let ip_addr = u32::from_le_bytes([dgid[12], dgid[13], dgid[14], dgid[15]]);
+        let _ignore = bluerdma.qp_manager.update_qp_attr(qp.qp_num, |attr_mut| {
+            attr_mut.pmtu = attr.path_mtu as u8;
+            attr_mut.dqpn = attr.dest_qp_num;
+        });
+
         let entry = QpEntry {
             ip_addr,
             qpn: qp.qp_num,

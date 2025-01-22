@@ -83,11 +83,22 @@ impl QpManager {
     }
 
     pub(crate) fn qp_attr(&self, qpn: u32) -> Option<QpAttr> {
-        if !self.bitmap.get(qpn as usize).map(|x| *x).unwrap_or(false) {
+        if !self.bitmap.get(qpn as usize).is_some_and(|x| *x) {
             return None;
         }
         let qp = self.qps.get(qpn as usize)?;
-        Some(qp.attrs.inner.lock().clone())
+        Some(*qp.attrs.inner.lock())
+    }
+
+    pub(crate) fn update_qp_attr<F: FnMut(&mut QpAttr)>(&self, qpn: u32, mut f: F) -> bool {
+        if !self.bitmap.get(qpn as usize).is_some_and(|x| *x) {
+            return false;
+        }
+        let Some(qp) = self.qps.get(qpn as usize) else {
+            return false;
+        };
+        f(&mut qp.attrs.inner.lock());
+        true
     }
 
     /// Returns the maximum number of Queue Pairs (QPs) supported
