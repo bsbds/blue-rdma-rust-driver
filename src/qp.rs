@@ -398,6 +398,14 @@ impl TrackerState {
 
 /// Calculate the number of psn required for this WR
 fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
+    let pmtu: u16 = match u32::from(pmtu) {
+        ibverbs_sys::IBV_MTU_256 => 256,
+        ibverbs_sys::IBV_MTU_512 => 512,
+        ibverbs_sys::IBV_MTU_1024 => 1024,
+        ibverbs_sys::IBV_MTU_2048 => 2048,
+        ibverbs_sys::IBV_MTU_4096 => 4096,
+        _ => return None,
+    };
     let pmtu_mask = pmtu
         .checked_sub(1)
         .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
