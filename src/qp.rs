@@ -6,6 +6,7 @@ use std::sync::{
 use bitvec::vec::BitVec;
 use ibverbs_sys::{ibv_qp, ibv_qp_type::IBV_QPT_RC, ibv_send_wr};
 use parking_lot::Mutex;
+use rand::Rng;
 
 use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW},
@@ -15,6 +16,10 @@ use crate::{
     },
     send::SendWrResolver,
 };
+
+const MAX_QP_CNT: usize = 1024;
+const QPN_IDX_PART_WIDTH: u32 = 10; // log2(MAX_QP_CNT)
+const QPN_KEY_PART_WIDTH: u32 = 24 - QPN_IDX_PART_WIDTH;
 
 /// Manages QPs
 pub(crate) struct QpManager {
@@ -69,32 +74,37 @@ impl QpManager {
     /// Allocates a new QP and returns its QPN
     #[allow(clippy::cast_possible_truncation)] // no larger than u32
     pub(crate) fn create_qp(&mut self) -> Option<u32> {
-        let qpn = self.bitmap.first_zero()? as u32;
-        self.bitmap.set(qpn as usize, true);
+        let index = self.bitmap.first_zero()? as u32;
+        let key = rand::thread_rng().gen_range(0..1 << QPN_KEY_PART_WIDTH);
+        self.bitmap.set(index as usize, true);
+        let qpn = index << QPN_KEY_PART_WIDTH | key;
         Some(qpn)
     }
 
     /// Removes and returns the QP associated with the given QPN
     pub(crate) fn destroy_qp(&mut self, qpn: u32) {
-        if qpn as usize >= self.max_num_qps() {
+        let index = index(qpn);
+        if index >= self.max_num_qps() {
             return;
         }
-        self.bitmap.set(qpn as usize, false);
+        self.bitmap.set(index, false);
     }
 
     pub(crate) fn qp_attr(&self, qpn: u32) -> Option<QpAttr> {
-        if !self.bitmap.get(qpn as usize).is_some_and(|x| *x) {
+        let index = index(qpn);
+        if !self.bitmap.get(index).is_some_and(|x| *x) {
             return None;
         }
-        let qp = self.qps.get(qpn as usize)?;
+        let qp = self.qps.get(index)?;
         Some(*qp.attrs.inner.lock())
     }
 
     pub(crate) fn update_qp_attr<F: FnMut(&mut QpAttr)>(&self, qpn: u32, mut f: F) -> bool {
-        if !self.bitmap.get(qpn as usize).is_some_and(|x| *x) {
+        let index = index(qpn);
+        if !self.bitmap.get(index).is_some_and(|x| *x) {
             return false;
         }
-        let Some(qp) = self.qps.get(qpn as usize) else {
+        let Some(qp) = self.qps.get(index) else {
             return false;
         };
         f(&mut qp.attrs.inner.lock());
@@ -118,7 +128,7 @@ impl QpInitiatorTable {
     #[allow(clippy::as_conversions)] // convert u32 to usize
     /// Gets a mutable reference to the QP associated with the given QPN
     pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut InitiatorState> {
-        self.table.get_mut(qpn as usize)
+        self.table.get_mut(index(qpn))
     }
 }
 
@@ -132,7 +142,7 @@ impl QpTrackerTable {
     #[allow(clippy::as_conversions)] // convert u32 to usize
     /// Gets a mutable reference to the QP associated with the given QPN
     pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut TrackerState> {
-        self.table.get_mut(qpn as usize)
+        self.table.get_mut(index(qpn))
     }
 }
 
@@ -144,6 +154,7 @@ pub(crate) struct QpAttr {
     pub(crate) dqp_ip: u32,
     pub(crate) mac_addr: u64,
     pub(crate) pmtu: u8,
+    pub(crate) access_flags: u8,
     pub(crate) send_cq: Option<u32>,
     pub(crate) recv_cq: Option<u32>,
 }
@@ -200,6 +211,14 @@ impl QpAttrShared {
 
     pub(crate) fn set_pmtu(&self, value: u8) {
         self.inner.lock().pmtu = value;
+    }
+
+    pub(crate) fn access_flags(&self) -> u8 {
+        self.inner.lock().access_flags
+    }
+
+    pub(crate) fn set_access_flags(&self, value: u8) {
+        self.inner.lock().access_flags = value;
     }
 
     pub(crate) fn send_cq(&self) -> Option<u32> {
@@ -405,6 +424,11 @@ impl TrackerState {
     pub(crate) fn qpn(&self) -> u32 {
         self.attrs.qpn()
     }
+}
+
+#[allow(clippy::as_conversions)] // u32 to usize
+fn index(qpn: u32) -> usize {
+    (qpn >> QPN_KEY_PART_WIDTH) as usize
 }
 
 /// Calculate the number of psn required for this WR
