@@ -319,8 +319,8 @@ impl CmdQueueReqDescQpManagement {
         let c0 =
             CmdQueueReqDescQpManagementChunk0::new(common_header, cmd_queue_common_header, ip_addr);
         let c1 = CmdQueueReqDescQpManagementChunk1::new(
-            is_error,
             is_valid,
+            is_error,
             u6::from_u8(0),
             u24::masked_new(qpn),
             0,
