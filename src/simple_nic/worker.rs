@@ -13,7 +13,7 @@ use crate::{
     desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
     device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
-        CsrBaseAddrAdaptor, DeviceAdaptor,
+        CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
     mem::page::ContiguousPages,
     queue::{
@@ -31,12 +31,15 @@ pub(crate) struct SimpleNicController<Dev> {
 }
 
 impl<Dev: DeviceAdaptor> SimpleNicController<Dev> {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn init(
         dev: &Dev,
         tx_rb: DescRingBuffer,
         tx_rb_base_pa: u64,
         rx_rb: DescRingBuffer,
         rx_rb_base_pa: u64,
+        tx_bufffer: ContiguousPages<1>,
+        tx_buf_base_phys_addr: u64,
         rx_bufffer: ContiguousPages<1>,
     ) -> io::Result<Self> {
         let mut tx_queue = SimpleNicTxQueue::new(tx_rb);
@@ -47,13 +50,13 @@ impl<Dev: DeviceAdaptor> SimpleNicController<Dev> {
         resp_csr_proxy.write_base_addr(rx_rb_base_pa)?;
 
         Ok(Self {
-            tx: FrameTxQueue::new(tx_queue, req_csr_proxy),
+            tx: FrameTxQueue::new(tx_queue, tx_bufffer, tx_buf_base_phys_addr, req_csr_proxy),
             rx: FrameRxQueue::new(rx_queue, rx_bufffer, resp_csr_proxy),
         })
     }
 }
 
-impl<Dev: Send + 'static> SimpleNicTunnel for SimpleNicController<Dev> {
+impl<Dev: DeviceAdaptor + Send + 'static> SimpleNicTunnel for SimpleNicController<Dev> {
     type Sender = FrameTxQueue<Dev>;
 
     type Receiver = FrameRxQueue<Dev>;
@@ -77,30 +80,66 @@ pub(crate) struct FrameTxQueue<Dev> {
     inner: SimpleNicTxQueue,
     /// CSR Proxy
     csr_proxy: SimpleNicTxQueueCsrProxy<Dev>,
+    /// A contiguous memory buffer used for sending data
+    buf: ContiguousPages<1>,
+    /// Base physical address of the buffer
+    buf_base_phys_addr: u64,
+    /// Pointer to the next slot of the buffer
+    buf_head: usize,
 }
 
 impl<Dev> FrameTxQueue<Dev> {
     /// Creates a new `FrameTxQueue`
-    pub(crate) fn new(inner: SimpleNicTxQueue, csr_proxy: SimpleNicTxQueueCsrProxy<Dev>) -> Self {
-        Self { inner, csr_proxy }
+    pub(crate) fn new(
+        inner: SimpleNicTxQueue,
+        buf: ContiguousPages<1>,
+        buf_base_phys_addr: u64,
+        csr_proxy: SimpleNicTxQueueCsrProxy<Dev>,
+    ) -> Self {
+        Self {
+            inner,
+            csr_proxy,
+            buf,
+            buf_base_phys_addr,
+            buf_head: 0,
+        }
     }
 
     /// Build the descriptor from the given buffer
     #[allow(clippy::as_conversions)] // convert *const u8 to u64 is safe
-    fn build_desc(buf: &[u8]) -> Option<SimpleNicTxQueueDesc> {
+    fn build_desc(&mut self, buf: &[u8]) -> Option<SimpleNicTxQueueDesc> {
+        let addr = self.write_next(buf)?;
         let len: u32 = buf.len().try_into().ok()?;
-        Some(SimpleNicTxQueueDesc::new(buf.as_ptr() as u64, len))
+        Some(SimpleNicTxQueueDesc::new(addr, len))
+    }
+
+    #[allow(clippy::as_conversions)]
+    fn write_next(&mut self, data: &[u8]) -> Option<u64> {
+        if data.len() > FRAME_SLOT_SIZE {
+            return None;
+        }
+        let phys_addr = self.buf_base_phys_addr.wrapping_add(self.buf_head as u64);
+        self.buf
+            .get_mut(self.buf_head..self.buf_head.wrapping_add(data.len()))?
+            .copy_from_slice(data);
+        self.buf_head = self
+            .buf_head
+            .wrapping_add(FRAME_SLOT_SIZE)
+            .checked_rem(self.buf.len())?;
+        Some(phys_addr)
     }
 }
 
-impl<Dev: Send + 'static> FrameTx for FrameTxQueue<Dev> {
+impl<Dev: DeviceAdaptor + Send + 'static> FrameTx for FrameTxQueue<Dev> {
     fn send(&mut self, buf: &[u8]) -> io::Result<()> {
-        let mut desc = Self::build_desc(buf)
+        let mut desc = self
+            .build_desc(buf)
             .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
         // retry until success
         while self.inner.push(desc).is_err() {
             thread::yield_now();
         }
+        self.csr_proxy.write_head(self.inner.head());
 
         Ok(())
     }

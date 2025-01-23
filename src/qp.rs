@@ -111,14 +111,6 @@ impl QpManager {
         true
     }
 
-    pub(crate) fn insert_messsage(&self, qpn: u32, msn: u16, end_psn: u32) {
-        let index = index(qpn);
-        let Some(qp) = self.qps.get(index) else {
-            return;
-        };
-        qp.message_tracker.lock().insert(msn, end_psn);
-    }
-
     /// Returns the maximum number of Queue Pairs (QPs) supported
     fn max_num_qps(&self) -> usize {
         self.qps.len()
@@ -324,7 +316,7 @@ impl InitiatorState {
     }
 
     pub(crate) fn insert_messsage(&self, msn: u16, end_psn: u32) {
-        self.shared.message.lock().insert(msn, end_psn);
+        self.shared.message.lock().insert(msn, false, end_psn);
     }
 
     /// Returns the send cq handle.
@@ -404,12 +396,12 @@ impl TrackerState {
         self.psn.all_acked(psn)
     }
 
-    pub(crate) fn insert_messsage(&self, msn: u16, end_psn: u32) {
-        self.message.lock().insert(msn, end_psn);
+    pub(crate) fn insert_messsage(&self, msn: u16, ack_req: bool, end_psn: u32) {
+        self.message.lock().insert(msn, ack_req, end_psn);
     }
 
     /// Returns a mutable reference to the message tracker associated with this QP.
-    pub(crate) fn ack_message(&self, base_psn: u32) -> Option<u16> {
+    pub(crate) fn ack_message(&self, base_psn: u32) -> Vec<(u16, bool)> {
         self.message.lock().ack(base_psn)
     }
 
@@ -444,6 +436,11 @@ impl TrackerState {
     /// Returns the QPN of this QP
     pub(crate) fn qpn(&self) -> u32 {
         self.attrs.qpn()
+    }
+
+    /// Returns the Destination QPN of this QP
+    pub(crate) fn dqpn(&self) -> u32 {
+        self.attrs.dqpn()
     }
 }
 

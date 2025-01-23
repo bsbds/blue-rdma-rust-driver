@@ -35,6 +35,7 @@ ibverbs-sys = { path = "../rust-ibverbs/ibverbs-sys" }
 crossbeam-deque = "0.8.6"
 rtrb = "0.3.2"
 rand = "0.8.5"
+pnet = "0.35.0"
 
 
 [dev-dependencies]

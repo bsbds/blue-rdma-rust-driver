@@ -229,9 +229,10 @@ where
         let cq_manager = CqManager::new(max_num_cqs);
         let meta_cq_table = cq_manager.new_meta_table();
         let (initiator_table, tracker_table) = qp_manager.new_split();
+        let (simple_nic_tx, _simple_nic_rx) = simple_nic.into_split();
         Self::launch_backgroud(
             meta_report_queue,
-            simple_nic,
+            simple_nic_tx,
             tap_dev,
             tracker_table,
             meta_cq_table,
@@ -252,15 +253,14 @@ where
 
     fn launch_backgroud(
         meta_report: B::MetaReport,
-        simple_nic: B::SimpleNic,
+        simple_nic_tx: <B::SimpleNic as SimpleNicTunnel>::Sender,
         tap_dev: TapDevice,
         tracker_table: QpTrackerTable,
         meta_cq_table: MetaCqTable,
     ) {
         let is_shutdown = Arc::new(AtomicBool::new(false));
-        let launch = simple_nic::Launch::new(simple_nic, tap_dev);
-        let _handle = launch.launch(Arc::clone(&is_shutdown));
-        let launch_meta = meta_worker::Launch::new(meta_report, tracker_table, meta_cq_table);
+        let launch_meta =
+            meta_worker::Launch::new(meta_report, tracker_table, meta_cq_table, simple_nic_tx);
         launch_meta.launch(Arc::clone(&is_shutdown));
     }
 }

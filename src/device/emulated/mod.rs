@@ -179,7 +179,12 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         let simple_nic_rx_queue_pa = resolver
             .virt_to_phys(simple_nic_rx_queue_buffer.base_addr())?
             .unwrap_or_else(|| unreachable!());
-        let simple_nic_rx_buffer = allocator.into_inner().alloc()?;
+        let mut allocator = allocator.into_inner();
+        let simple_nic_tx_buffer = allocator.alloc()?;
+        let simple_nic_tx_buffer_base_pa = resolver
+            .virt_to_phys(simple_nic_tx_buffer.addr())?
+            .unwrap_or_else(|| unreachable!());
+        let simple_nic_rx_buffer = allocator.alloc()?;
 
         let simple_nic_controller = SimpleNicController::init(
             &dev,
@@ -187,6 +192,8 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             simple_nic_rx_queue_pa,
             simple_nic_rx_queue_buffer,
             simple_nic_rx_queue_pa,
+            simple_nic_tx_buffer,
+            simple_nic_tx_buffer_base_pa,
             simple_nic_rx_buffer,
         )?;
 

@@ -19,6 +19,10 @@ impl SimpleNicTxQueue {
             inner: ToCardQueueTyped::new(inner),
         }
     }
+
+    pub(crate) fn head(&self) -> u32 {
+        self.inner.inner.head()
+    }
 }
 
 impl ToCardQueue for SimpleNicTxQueue {
