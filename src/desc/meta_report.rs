@@ -211,6 +211,7 @@ struct MetaReportQueuePacketBasicInfoDescChunk3 {
     pub imm_data: u32,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MetaReportQueuePacketBasicInfoDesc {
     c0: MetaReportQueuePacketBasicInfoDescChunk0,
@@ -348,6 +349,7 @@ struct MetaReportQueueReadReqExtendInfoDescChunk3 {
     reserved2: u64,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MetaReportQueueReadReqExtendInfoDesc {
     c0: MetaReportQueueReadReqExtendInfoDescChunk0,
@@ -410,6 +412,7 @@ struct MetaReportQueueAckDescChunk2 {
     pub now_bitmap: u128,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MetaReportQueueAckDesc {
     c0: MetaReportQueueAckDescChunk0,
@@ -515,6 +518,7 @@ struct MetaReportQueueAckExtraDescChunk2 {
     pub pre_bitmap: u128,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct MetaReportQueueAckExtraDesc {
     c0: MetaReportQueueAckExtraDescChunk0,

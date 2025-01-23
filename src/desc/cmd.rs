@@ -64,6 +64,7 @@ struct CmdQueueReqDescUpdateMrTableChunk3 {
     reserved2: u7,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdateMrTable {
     c0: CmdQueueReqDescUpdateMrTableChunk0,
@@ -163,6 +164,7 @@ pub(crate) struct CmdQueueReqDescUpdatePGTChunk3 {
     reserved0: u64,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescUpdatePGT {
     c0: CmdQueueReqDescUpdatePGTChunk0,
@@ -215,6 +217,7 @@ impl CmdQueueReqDescUpdatePGT {
     }
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueRespDescOnlyCommonHeader {
     header: CmdQueueReqDescHeaderChunk,
@@ -287,6 +290,7 @@ struct CmdQueueReqDescQpManagementChunk3 {
     pub peer_mac_addr: u48,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescQpManagement {
     c0: CmdQueueReqDescQpManagementChunk0,
@@ -454,6 +458,7 @@ struct CmdQueueReqDescSetNetworkParamChunk3 {
     reserved2: u16,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescSetNetworkParam {
     c0: CmdQueueReqDescSetNetworkParamChunk0,
@@ -549,6 +554,7 @@ struct CmdQueueReqDescSetRawPacketReceiveMetaChunk3 {
     reserved2: u64,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CmdQueueReqDescSetRawPacketReceiveMeta {
     c0: CmdQueueReqDescSetRawPacketReceiveMetaChunk0,

@@ -55,6 +55,7 @@ struct SendQueueReqDescSeg0Chunk3 {
     reserved1: u3,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SendQueueReqDescSeg0 {
     c0: SendQueueReqDescSeg0Chunk0,
@@ -225,6 +226,7 @@ struct SendQueueReqDescSeg1Chunk3 {
     pub laddr: u64,
 }
 
+#[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct SendQueueReqDescSeg1 {
     c0: SendQueueReqDescSeg1Chunk0,

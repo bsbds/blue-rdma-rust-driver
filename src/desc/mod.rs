@@ -112,7 +112,7 @@ impl RingBufDescCommonHead {
 /// Untyped ring buffer descriptor
 ///
 /// Should have the exact same memory layout of each descriptor
-#[repr(align(8))]
+#[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct RingBufDescUntyped {
     /// Common header fields for the ring buffer descriptor
@@ -198,6 +198,7 @@ struct MetaReportQueueDescBthRethChunk3 {
     pub can_auto_ack: bool,
 }
 
+#[repr(C)]
 /// RDMA Normal Packet Header Descriptor
 #[allow(clippy::missing_docs_in_private_items)]
 pub(crate) struct MetaReportQueueDescBthReth {

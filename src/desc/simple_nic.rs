@@ -28,6 +28,7 @@ struct SimpleNicTxQueueDescChunk3 {
     reserved2: u64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct SimpleNicTxQueueDesc {
     c0: SimpleNicTxQueueDescChunk0,
@@ -90,6 +91,7 @@ struct SimpleNicRxQueueDescChunk3 {
     reserved3: u64,
 }
 
+#[repr(C)]
 #[derive(Clone, Copy)]
 pub(crate) struct SimpleNicRxQueueDesc {
     c0: SimpleNicRxQueueDescChunk0,
