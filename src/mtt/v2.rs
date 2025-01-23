@@ -79,7 +79,7 @@ impl<A: PgtAlloc> Mttv2<A> {
             page_buffer,
             addr,
             length_u32,
-            mr_key.0,
+            mr_key,
             pd_handle,
             access,
             index_u32,

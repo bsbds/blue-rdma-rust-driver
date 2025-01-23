@@ -18,6 +18,7 @@ use std::{
 use mr_alloc::MrTableAlloc;
 use parking_lot::Mutex;
 use pgt_alloc::{simple::SimplePgtAlloc, PgtAlloc};
+use rand::Rng;
 
 use crate::{
     desc::{
@@ -36,9 +37,13 @@ use crate::{
     },
 };
 
+const MAX_MR_CNT: usize = 8192;
+const LR_KEY_IDX_PART_WIDTH: u32 = 13;
+const LR_KEY_KEY_PART_WIDTH: u32 = 32 - LR_KEY_IDX_PART_WIDTH;
+
 /// Memory region key
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) struct MrKey(u32);
+pub(crate) struct MrKeyIndex(u32);
 
 /// RDMA memory region representation
 pub(crate) struct IbvMr {
@@ -49,14 +54,14 @@ pub(crate) struct IbvMr {
     /// Access permissions for the memory region
     access: u32,
     /// Memory region key
-    mr_key: MrKey,
+    mr_key: u32,
     /// Index in the page table
     index: usize,
 }
 
 impl IbvMr {
     /// Creates a new `IbvMr`
-    pub(crate) fn new(addr: u64, length: u32, access: u32, mr_key: MrKey, index: usize) -> Self {
+    pub(crate) fn new(addr: u64, length: u32, access: u32, mr_key: u32, index: usize) -> Self {
         Self {
             addr,
             length,
@@ -131,7 +136,7 @@ impl<PAlloc: PgtAlloc> Mtt<PAlloc> {
             update_mr_table_id,
             addr,
             length_u32,
-            mr_key.0,
+            mr_key,
             0,
             0,
             index_u32,
@@ -183,7 +188,7 @@ impl<PAlloc: PgtAlloc> Mtt<PAlloc> {
         }
         let update_mr_table_id = self.new_cmd_id();
         let update_mr_table =
-            CmdQueueReqDescUpdateMrTable::new(update_mr_table_id, 0, 0, mr.mr_key.0, 0, 0, 0);
+            CmdQueueReqDescUpdateMrTable::new(update_mr_table_id, 0, 0, mr.mr_key, 0, 0, 0);
         let notify_update_mr_table = self
             .reg
             .lock()
@@ -352,8 +357,10 @@ where
     ///
     /// * `Some((mr_key, page_index))`
     /// * `None` - If allocation fails
-    fn alloc(&mut self, num_pages: usize) -> Option<(MrKey, usize)> {
-        let mr_key = self.mr.alloc_mr_key()?;
+    fn alloc(&mut self, num_pages: usize) -> Option<(u32, usize)> {
+        let mr_key_idx = self.mr.alloc_mr_key_idx()?;
+        let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
+        let mr_key = mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH | key;
         let index = self.pgt.alloc(num_pages)?;
         Some((mr_key, index))
     }
@@ -365,7 +372,8 @@ where
     /// `true` if deallocation is successful, `false` otherwise
     #[allow(clippy::as_conversions)]
     fn dealloc(&mut self, mr: &IbvMr) -> bool {
-        self.mr.dealloc_mr_key(mr.mr_key);
+        let mr_key_idx = mr.mr_key >> LR_KEY_KEY_PART_WIDTH;
+        self.mr.dealloc_mr_key(MrKeyIndex(mr_key_idx));
         self.pgt.dealloc(mr.index, mr.length as usize)
     }
 }
