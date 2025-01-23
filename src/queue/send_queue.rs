@@ -50,6 +50,9 @@ impl ToCardQueue for SendQueue {
     type Desc = SendQueueDesc;
 
     fn push(&mut self, desc: Self::Desc) -> io::Result<()> {
+        let addr = self.inner.inner.base_addr();
+        let pa = addr - bluesimalloc::shm_start_addr() as u64;
+        println!("push to addr: {pa:x}, head: {}", self.head());
         self.inner.push(desc)
     }
 }

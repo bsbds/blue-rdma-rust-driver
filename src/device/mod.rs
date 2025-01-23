@@ -281,7 +281,7 @@ pub struct BlueRdma {
 impl BlueRdma {
     /// Updates Memory Translation Table entry
     #[inline]
-    fn reg_mr_inner(&mut self, addr: u64, length: usize) -> io::Result<u32> {
+    fn reg_mr_inner(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
         let entry = self.mtt.register(
             self.addr_resolver.as_ref(),
             &mut self.buffer,
@@ -289,7 +289,7 @@ impl BlueRdma {
             addr,
             length,
             0,
-            0,
+            access,
         )?;
         let mr_key = entry.mr_key;
         self.cmd_queue.update_mtt(entry)?;
@@ -335,6 +335,9 @@ impl BlueRdma {
     }
 }
 
+const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;
+const CARD_IP_ADDRESS: u32 = 0x1122_330A;
+
 #[allow(unsafe_code)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
@@ -355,13 +358,19 @@ unsafe impl RdmaCtxOps for BlueRdma {
         );
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let network_config = NetworkConfig {
-            ip_network: IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap()),
+            ip_network: IpNetwork::V4(
+                Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
+            ),
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
-            mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
+            mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
         };
         let mut bluerdma = device_builder
             .initialize(network_config, page_allocator, resolver, 128, 128)
             .unwrap();
+        let Some(qpn) = bluerdma.qp_manager.create_qp() else {
+            return ptr::null_mut();
+        };
+
         Box::into_raw(Box::new(bluerdma)).cast()
     }
 
@@ -433,18 +442,16 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let Some(qpn) = bluerdma.qp_manager.create_qp() else {
             return ptr::null_mut();
         };
-        let entry = QpEntry {
-            qp_type: init_attr.qp_type as u8,
-            qpn,
-            pmtu: ibverbs_sys::IBV_MTU_1024 as u8,
-            ..Default::default()
-        };
-        bluerdma.update_qp_inner(entry);
         let _ignore = bluerdma.qp_manager.update_qp_attr(qpn, |attr_mut| {
             attr_mut.qp_type = init_attr.qp_type as u8;
             attr_mut.qpn = qpn;
-            attr_mut.pmtu = ibverbs_sys::IBV_MTU_1024 as u8;
         });
+        let entry = QpEntry {
+            qp_type: init_attr.qp_type as u8,
+            qpn,
+            ..Default::default()
+        };
+        bluerdma.update_qp_inner(entry);
 
         Box::into_raw(Box::new(ibverbs_sys::ibv_qp {
             context,
@@ -474,6 +481,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         0
     }
 
+    #[allow(clippy::cast_sign_loss)]
     #[inline]
     fn modify_qp(
         qp: *mut ibverbs_sys::ibv_qp,
@@ -484,22 +492,35 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let attr = unsafe { *attr };
         let context = qp.context;
         let bluerdma = unsafe { get_device_mut(context) };
-        let dgid = unsafe { attr.ah_attr.grh.dgid.raw };
-        let ip_addr = u32::from_le_bytes([dgid[12], dgid[13], dgid[14], dgid[15]]);
+        let mask = attr_mask as u32;
+        //let dgid = unsafe { attr.ah_attr.grh.dgid.raw };
+        //let ip_addr = u32::from_le_bytes([dgid[12], dgid[13], dgid[14], dgid[15]]);
         let _ignore = bluerdma.qp_manager.update_qp_attr(qp.qp_num, |attr_mut| {
-            attr_mut.pmtu = attr.path_mtu as u8;
-            attr_mut.dqpn = attr.dest_qp_num;
+            if attr_mask as u32 & ibverbs_sys::ibv_qp_attr_mask::IBV_QP_DEST_QPN.0 != 0 {
+                attr_mut.dqpn = attr.dest_qp_num;
+            }
+            if attr_mask as u32 & ibverbs_sys::ibv_qp_attr_mask::IBV_QP_PATH_MTU.0 != 0 {
+                attr_mut.pmtu = attr.path_mtu as u8;
+            }
+            if attr_mask as u32 & ibverbs_sys::ibv_qp_attr_mask::IBV_QP_ACCESS_FLAGS.0 != 0 {
+                attr_mut.access_flags = attr.qp_access_flags as u8;
+            }
+            attr_mut.dqp_ip = CARD_IP_ADDRESS;
+            attr_mut.mac_addr = CARD_MAC_ADDRESS;
         });
+        let Some(qp_attr) = bluerdma.qp_manager.qp_attr(qp.qp_num) else {
+            return -1;
+        };
 
         let entry = QpEntry {
-            ip_addr,
+            ip_addr: CARD_IP_ADDRESS,
             qpn: qp.qp_num,
-            peer_qpn: attr.dest_qp_num,
-            rq_access_flags: attr.qp_access_flags as u8,
-            qp_type: qp.qp_type as u8,
-            pmtu: attr.path_mtu as u8,
-            local_udp_port: u16::from(attr.port_num),
-            peer_mac_addr: 0,
+            peer_qpn: qp_attr.dqpn,
+            rq_access_flags: qp_attr.access_flags,
+            qp_type: qp_attr.qp_type,
+            pmtu: qp_attr.pmtu,
+            local_udp_port: 0x100,
+            peer_mac_addr: CARD_MAC_ADDRESS,
         };
         bluerdma.update_qp_inner(entry);
         0
@@ -521,6 +542,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         0
     }
 
+    #[allow(clippy::cast_sign_loss)]
     #[inline]
     fn reg_mr(
         pd: *mut ibverbs_sys::ibv_pd,
@@ -531,7 +553,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
     ) -> *mut ibverbs_sys::ibv_mr {
         let context = unsafe { (*pd) }.context;
         let bluerdma = unsafe { get_device_mut(context) };
-        let Ok(mr_key) = bluerdma.reg_mr_inner(addr as u64, length) else {
+        let Ok(mr_key) = bluerdma.reg_mr_inner(addr as u64, length, access as u8) else {
             return ptr::null_mut();
         };
         let ibv_mr = Box::new(ibverbs_sys::ibv_mr {

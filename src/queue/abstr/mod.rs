@@ -156,6 +156,7 @@ impl AsRef<[u8]> for RecvBuffer {
 }
 
 /// The position of a packet
+#[derive(Debug)]
 pub(crate) enum PacketPos {
     /// First packet
     First,
@@ -169,6 +170,7 @@ pub(crate) enum PacketPos {
 
 #[allow(clippy::missing_docs_in_private_items)]
 /// Metadata from meta report queue
+#[derive(Debug)]
 pub(crate) enum ReportMeta {
     /// Write operation header
     Write {

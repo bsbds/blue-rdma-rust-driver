@@ -1,4 +1,4 @@
-use std::{io, net::IpAddr};
+use std::{io, net::IpAddr, time::Duration};
 
 use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
@@ -203,6 +203,7 @@ struct QpUpdate<'a> {
 impl QpUpdate<'_> {
     /// Pushes a new command queue descriptor to the queue.
     fn push(&mut self, desc: CmdQueueDesc) {
+        println!("update cmd: {desc:?}");
         self.num = self.num.wrapping_add(1);
         self.req_queue.push(desc);
     }
@@ -214,14 +215,18 @@ impl QpUpdate<'_> {
 
     /// Waits for responses to all pushed commands.
     fn wait(mut self) {
+        //println!("wait update");
         while self.num != 0 {
-            std::hint::spin_loop();
+            std::thread::sleep(Duration::from_millis(10));
+            //std::hint::spin_loop();
             //println!("try: {:?}", std::time::Instant::now());
             if let Some(resp) = self.resp_queue.try_pop() {
+                //println!("resp: {resp:?}");
                 self.num = self.num.wrapping_sub(1);
             }
             //std::thread::sleep(std::time::Duration::from_secs(1));
         }
+        //println!("update done");
         //std::iter::repeat_with(|| self.resp_queue.try_pop())
         //    .flatten()
         //    .take(self.num)

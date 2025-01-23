@@ -104,37 +104,32 @@ impl SendWorker {
     pub(crate) fn run(mut self) {
         loop {
             let Some(wr) = Self::find_task(&self.local, &self.global, &self.remotes) else {
+                std::thread::sleep(Duration::from_millis(10));
                 std::hint::spin_loop();
                 continue;
             };
             let desc0 = SendQueueReqDescSeg0::new_rdma_write(
-                wr.msn,
-                wr.psn,
-                wr.qp_type,
-                wr.dqpn,
-                wr.flags,
-                wr.dqp_ip,
-                wr.raddr,
-                wr.rkey,
-                wr.total_len,
+                wr.msn, wr.psn, wr.qp_type, wr.dqpn, wr.flags, wr.dqp_ip, wr.raddr, wr.rkey, 1,
             );
             let desc1 = SendQueueReqDescSeg1::new_rdma_write(
                 wr.pmtu,
-                wr.is_first,
-                wr.is_last,
+                true,
+                true,
                 wr.is_retry,
                 wr.enable_ecn,
                 wr.sqpn,
                 wr.imm,
                 wr.mac_addr,
                 wr.lkey,
-                wr.len,
+                1,
                 wr.laddr,
             );
+            println!("d0: {desc0:?}");
+            println!("d1: {desc1:?}");
 
             /// Retry if block
-            while self.send_queue.push(SendQueueDesc::Seg0(desc0)).is_err() {}
-            while self.send_queue.push(SendQueueDesc::Seg1(desc1)).is_err() {}
+            self.send_queue.push(SendQueueDesc::Seg0(desc0)).unwrap();
+            self.send_queue.push(SendQueueDesc::Seg1(desc1)).unwrap();
             if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
                 tracing::error!("failed to flush queue pointer");
             }

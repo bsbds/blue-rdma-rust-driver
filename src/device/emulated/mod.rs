@@ -11,6 +11,7 @@ use std::{
 };
 
 use csr::RpcClient;
+use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
     cmd::CommandController,
@@ -32,6 +33,7 @@ use crate::{
         virt_to_phy::{self, AddressResolver, PhysAddrResolver, PhysAddrResolverEmulated},
     },
     meta_report::MetaReportQueueHandler,
+    net::config::{MacAddress, NetworkConfig},
     queue::{
         abstr::DeviceCommand,
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
@@ -46,8 +48,8 @@ use crate::{
 
 use super::{
     proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, InitializeDeviceQueue,
-    PageAllocator,
+    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, DeviceBuilder,
+    InitializeDeviceQueue, PageAllocator,
 };
 
 #[non_exhaustive]
@@ -134,6 +136,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         sq_proxy1.write_base_addr(sq_base_pas[1]);
         sq_proxy2.write_base_addr(sq_base_pas[2]);
         sq_proxy3.write_base_addr(sq_base_pas[3]);
+
         let proxies: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>> = vec![
             Box::new(sq_proxy0),
             Box::new(sq_proxy1),
@@ -142,8 +145,8 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         ];
         let send_scheduler = SendQueueScheduler::new();
         let builder = SendWorkerBuilder::new_with_global_injector(send_scheduler.injector());
-        let workers = builder.build_workers(sqs, proxies);
-        for worker in workers {
+        let mut workers = builder.build_workers(sqs, proxies);
+        for worker in workers.drain(3..) {
             let _handle = thread::spawn(|| worker.run());
         }
 
@@ -202,54 +205,26 @@ impl EmulatedDevice {
         unsafe_code,
         clippy::missing_errors_doc,
         clippy::indexing_slicing,
-        clippy::missing_panics_doc
+        clippy::missing_panics_doc,
+        clippy::unwrap_used,
+        clippy::unwrap_in_result
     )]
     #[inline]
     pub fn run(rpc_server_addr: SocketAddr) -> io::Result<()> {
-        let cli = RpcClient::new(rpc_server_addr)?;
-        let dev = Self(cli);
-        let proxy_cmd_queue = CmdQueueCsrProxy(dev.clone());
-        let proxy_resp_queue = CmdRespQueueCsrProxy(dev.clone());
-        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
-        let ring_ctx_cmd_queue = RingCtx::new();
-        let ring_ctx_resp_queue = RingCtx::new();
+        let queue_builder = EmulatedQueueBuilder::new();
+        let device_builder = DeviceBuilder::new(queue_builder);
         let page_allocator = EmulatedPageAllocator::new(
             bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
         );
-        let mut allocator = DescRingBufferAllocator::new(page_allocator);
-        let buffer0 = allocator.alloc().unwrap_or_else(|_| unreachable!());
-        let mut buffer1 = allocator.alloc().unwrap_or_else(|_| unreachable!());
-        let phy_addr0 = resolver.virt_to_phys(buffer0.base_addr())?.unwrap_or(0);
-        let phy_addr1 = resolver.virt_to_phys(buffer1.base_addr())?.unwrap_or(0);
-        proxy_cmd_queue.write_base_addr(phy_addr0)?;
-        proxy_resp_queue.write_base_addr(phy_addr1)?;
-        let mut cmd_queue = CmdQueue::new(buffer0);
-        let desc0 =
-            CmdQueueDesc::UpdateMrTable(CmdQueueReqDescUpdateMrTable::new(7, 1, 1, 1, 1, 1, 1));
-        let desc1 = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(8, 1, 1, 1));
-        cmd_queue.push(desc0).unwrap_or_else(|_| unreachable!());
-        cmd_queue.push(desc1).unwrap_or_else(|_| unreachable!());
-        // TODO: flush
-        //cmd_queue.flush()?;
-        thread::sleep(Duration::from_secs(1));
-
-        let resps: Vec<CmdQueueRespDescOnlyCommonHeader> =
-            iter::repeat_with(|| buffer1.try_pop().copied())
-                .flatten()
-                .take(2)
-                .map(Into::into)
-                .collect();
-
-        assert_eq!(
-            resps[0].headers().cmd_queue_common_header().user_data(),
-            7,
-            "user data not match"
-        );
-        assert_eq!(
-            resps[1].headers().cmd_queue_common_header().user_data(),
-            8,
-            "user data not match"
-        );
+        let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
+        let network_config = NetworkConfig {
+            ip_network: IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap()),
+            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
+            mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
+        };
+        let mut bluerdma = device_builder
+            .initialize(network_config, page_allocator, resolver, 128, 128)
+            .unwrap();
 
         Ok(())
     }

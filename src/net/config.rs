@@ -27,6 +27,16 @@ impl From<MacAddress> for u64 {
     }
 }
 
+impl From<u64> for MacAddress {
+    #[inline]
+    fn from(mac: u64) -> MacAddress {
+        let bytes = mac.to_le_bytes();
+        let mut mac_bytes = [0u8; 6];
+        mac_bytes.copy_from_slice(&bytes[..6]);
+        MacAddress(mac_bytes)
+    }
+}
+
 /// Static network configuration containing IP network, gateway and MAC address
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
