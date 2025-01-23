@@ -61,7 +61,6 @@ impl<T: MetaReport> MetaWorker<T> {
             thread::sleep(Duration::from_millis(10));
             hint::spin_loop();
             if let Some(meta) = self.inner.try_recv_meta()? {
-                println!("meta: {meta:?}");
                 self.handle_meta(meta);
             };
         }
@@ -92,12 +91,18 @@ impl<T: MetaReport> MetaWorker<T> {
                 };
                 qp.ack_one(psn);
                 match pos {
-                    PacketPos::First | PacketPos::Only => {
+                    PacketPos::First => {
                         let psn_total = qp
                             .num_psn(raddr, total_len)
                             .unwrap_or_else(|| unreachable!("parameters should be valid"));
                         let end_psn = psn.wrapping_add(psn_total);
-                        qp.message_tracker().insert(msn, end_psn);
+                        qp.insert_messsage(msn, end_psn);
+                    }
+                    PacketPos::Only => {
+                        let send_cq = qp.send_cq_handle();
+                        if let Some(cq) = send_cq.and_then(|h| self.cq_table.get_mut(h)) {
+                            cq.ack_event(msn, qp.qpn());
+                        }
                     }
                     PacketPos::Middle | PacketPos::Last => {}
                 };
@@ -125,7 +130,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 };
                 let base_psn = psn_now.wrapping_sub(BASE_PSN_OFFSET);
                 if let Some(psn) = qp.ack_range(psn_now, now_bitmap, ack_msn) {
-                    let last_msn_acked = qp.message_tracker().ack(psn);
+                    let last_msn_acked = qp.ack_message(psn);
                     let cq_handle = if is_send_by_local_hw {
                         qp.send_cq_handle()
                     } else {

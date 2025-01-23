@@ -309,7 +309,7 @@ impl BlueRdma {
             .qp_table
             .state_mut(qpn)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let (builder, msn, base_psn) = qp
+        let (builder, msn, base_psn, end_psn) = qp
             .next_wr(&wr)
             .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
         let flags = wr.send_flags();
@@ -324,6 +324,7 @@ impl BlueRdma {
                 CompletionEvent::new(qpn, msn, wr_id),
             );
         }
+        qp.insert_messsage(msn, end_psn);
 
         let fragmenter = WrFragmenter::new(wr, builder, base_psn);
         for chunk in fragmenter {

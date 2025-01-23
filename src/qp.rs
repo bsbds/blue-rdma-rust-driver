@@ -59,7 +59,7 @@ impl QpManager {
                     attrs: Arc::clone(&qp.attrs),
                     psn: PsnTracker::default(),
                     ack_msn: AckMsnTracker::default(),
-                    message: MessageTracker::default(),
+                    message: Arc::clone(&qp.message_tracker),
                 };
                 (initiator, tracker)
             })
@@ -109,6 +109,14 @@ impl QpManager {
         };
         f(&mut qp.attrs.inner.lock());
         true
+    }
+
+    pub(crate) fn insert_messsage(&self, qpn: u32, msn: u16, end_psn: u32) {
+        let index = index(qpn);
+        let Some(qp) = self.qps.get(index) else {
+            return;
+        };
+        qp.message_tracker.lock().insert(msn, end_psn);
     }
 
     /// Returns the maximum number of Queue Pairs (QPs) supported
@@ -242,6 +250,7 @@ impl QpAttrShared {
 #[derive(Default, Debug, Clone)]
 /// A queue pair for building work requests
 pub(crate) struct DeviceQp {
+    message_tracker: Arc<Mutex<MessageTracker>>,
     attrs: Arc<QpAttrShared>,
 }
 
@@ -272,6 +281,8 @@ struct SharedState {
     base_psn: Arc<AtomicU32>,
     /// Current base MSN
     base_msn: Arc<AtomicU16>,
+    /// Message ack tracker info
+    message: Arc<Mutex<MessageTracker>>,
 }
 
 impl SharedState {
@@ -291,9 +302,10 @@ impl InitiatorState {
     pub(crate) fn next_wr(
         &mut self,
         wr: &SendWrResolver,
-    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32)> {
+    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32)> {
         let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
+        let end_psn = base_psn.wrapping_add(num_psn);
 
         Some((
             WrChunkBuilder::new().set_qp_params(
@@ -307,7 +319,12 @@ impl InitiatorState {
             ),
             msn,
             base_psn,
+            end_psn,
         ))
+    }
+
+    pub(crate) fn insert_messsage(&self, msn: u16, end_psn: u32) {
+        self.shared.message.lock().insert(msn, end_psn);
     }
 
     /// Returns the send cq handle.
@@ -361,7 +378,7 @@ pub(crate) struct TrackerState {
     /// Tracker for tracking message sequence number of ACK packets
     ack_msn: AckMsnTracker,
     /// Message ack tracker info
-    message: MessageTracker,
+    message: Arc<Mutex<MessageTracker>>,
 }
 
 impl TrackerState {
@@ -387,9 +404,13 @@ impl TrackerState {
         self.psn.all_acked(psn)
     }
 
+    pub(crate) fn insert_messsage(&self, msn: u16, end_psn: u32) {
+        self.message.lock().insert(msn, end_psn);
+    }
+
     /// Returns a mutable reference to the message tracker associated with this QP.
-    pub(crate) fn message_tracker(&mut self) -> &mut MessageTracker {
-        &mut self.message
+    pub(crate) fn ack_message(&self, base_psn: u32) -> Option<u16> {
+        self.message.lock().ack(base_psn)
     }
 
     /// Calculate the number of psn required for this WR
