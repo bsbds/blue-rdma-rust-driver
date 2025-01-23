@@ -31,17 +31,22 @@ struct SendQueueReqDescSeg0Chunk0 {
     pub total_len: u32,
 }
 
-#[bitsize(128)]
+#[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct SendQueueReqDescSeg0Chunk1 {
     pub rkey: u32,
-    pub raddr: u64,
     pub dqp_ip: u32,
 }
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
 struct SendQueueReqDescSeg0Chunk2 {
+    pub raddr: u64,
+}
+
+#[bitsize(64)]
+#[derive(Clone, Copy, DebugBits, FromBits)]
+struct SendQueueReqDescSeg0Chunk3 {
     pub psn: u24,
     pub qp_type: u4,
     reserved0: u4,
@@ -55,6 +60,7 @@ pub(crate) struct SendQueueReqDescSeg0 {
     c0: SendQueueReqDescSeg0Chunk0,
     c1: SendQueueReqDescSeg0Chunk1,
     c2: SendQueueReqDescSeg0Chunk2,
+    c3: SendQueueReqDescSeg0Chunk3,
 }
 
 impl SendQueueReqDescSeg0 {
@@ -98,8 +104,9 @@ impl SendQueueReqDescSeg0 {
         let mut common_header = RingBufDescCommonHead::new_send_desc(op_code);
         common_header.set_has_next(true);
         let c0 = SendQueueReqDescSeg0Chunk0::new(common_header, msn, total_len);
-        let c1 = SendQueueReqDescSeg0Chunk1::new(rkey, raddr, dqp_ip);
-        let c2 = SendQueueReqDescSeg0Chunk2::new(
+        let c1 = SendQueueReqDescSeg0Chunk1::new(rkey, dqp_ip);
+        let c2 = SendQueueReqDescSeg0Chunk2::new(raddr);
+        let c3 = SendQueueReqDescSeg0Chunk3::new(
             u24::masked_new(psn),
             u4::masked_new(qp_type),
             u4::from_u8(0),
@@ -108,7 +115,7 @@ impl SendQueueReqDescSeg0 {
             u3::from_u8(0),
         );
 
-        Self { c0, c1, c2 }
+        Self { c0, c1, c2, c3 }
     }
 
     pub(crate) fn msn(&self) -> u16 {
@@ -120,35 +127,35 @@ impl SendQueueReqDescSeg0 {
     }
 
     pub(crate) fn psn(&self) -> u32 {
-        self.c2.psn().into()
+        self.c3.psn().into()
     }
 
     pub(crate) fn set_psn(&mut self, val: u32) {
-        self.c2.set_psn(u24::masked_new(val));
+        self.c3.set_psn(u24::masked_new(val));
     }
 
     pub(crate) fn qp_type(&self) -> u8 {
-        self.c2.qp_type().into()
+        self.c3.qp_type().into()
     }
 
     pub(crate) fn set_qp_type(&mut self, val: u8) {
-        self.c2.set_qp_type(u4::masked_new(val));
+        self.c3.set_qp_type(u4::masked_new(val));
     }
 
     pub(crate) fn dqpn(&self) -> u32 {
-        self.c2.dqpn().into()
+        self.c3.dqpn().into()
     }
 
     pub(crate) fn set_dqpn(&mut self, val: u32) {
-        self.c2.set_dqpn(u24::masked_new(val));
+        self.c3.set_dqpn(u24::masked_new(val));
     }
 
     pub(crate) fn flags(&self) -> u8 {
-        self.c2.flags().into()
+        self.c3.flags().into()
     }
 
     pub(crate) fn set_flags(&mut self, val: u8) {
-        self.c2.set_flags(u5::masked_new(val));
+        self.c3.set_flags(u5::masked_new(val));
     }
 
     pub(crate) fn dqp_ip(&self) -> u32 {
@@ -160,11 +167,11 @@ impl SendQueueReqDescSeg0 {
     }
 
     pub(crate) fn raddr(&self) -> u64 {
-        self.c1.raddr()
+        self.c2.raddr()
     }
 
     pub(crate) fn set_raddr(&mut self, val: u64) {
-        self.c1.set_raddr(val);
+        self.c2.set_raddr(val);
     }
 
     pub(crate) fn rkey(&self) -> u32 {
