@@ -423,12 +423,32 @@ unsafe impl RdmaCtxOps for BlueRdma {
         channel: *mut ibverbs_sys::ibv_comp_channel,
         comp_vector: core::ffi::c_int,
     ) -> *mut ibverbs_sys::ibv_cq {
-        todo!()
+        let bluerdma = unsafe { get_device_mut(blue_context) };
+        let Some(handle) = bluerdma.cq_manager.create_cq() else {
+            return ptr::null_mut();
+        };
+        let cq = ibverbs_sys::ibv_cq {
+            context: blue_context,
+            channel,
+            cq_context: ptr::null_mut(),
+            handle,
+            cqe,
+            mutex: ibverbs_sys::pthread_mutex_t::default(),
+            cond: ibverbs_sys::pthread_cond_t::default(),
+            comp_events_completed: 0,
+            async_events_completed: 0,
+        };
+
+        Box::into_raw(Box::new(cq))
     }
 
     #[inline]
     fn destroy_cq(cq: *mut ibverbs_sys::ibv_cq) -> ::std::os::raw::c_int {
-        todo!()
+        let cq = unsafe { Box::from_raw(cq) };
+        let context = cq.context;
+        let bluerdma = unsafe { get_device_mut(context) };
+        bluerdma.cq_manager.destroy_cq(cq.handle);
+        0
     }
 
     #[inline]
@@ -444,7 +464,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         };
         let _ignore = bluerdma.qp_manager.update_qp_attr(qpn, |attr_mut| {
             attr_mut.qp_type = init_attr.qp_type as u8;
-            attr_mut.qpn = qpn;
+            attr_mut.send_cq = unsafe { init_attr.send_cq.as_ref() }.map(|cq| cq.handle);
+            attr_mut.recv_cq = unsafe { init_attr.recv_cq.as_ref() }.map(|cq| cq.handle);
         });
         let entry = QpEntry {
             qp_type: init_attr.qp_type as u8,
