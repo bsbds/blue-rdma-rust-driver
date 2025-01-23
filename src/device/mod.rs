@@ -626,13 +626,37 @@ unsafe impl RdmaCtxOps for BlueRdma {
         todo!()
     }
 
+    #[allow(
+        clippy::as_conversions,
+        clippy::cast_sign_loss,
+        clippy::cast_possible_wrap
+    )]
     #[inline]
     fn poll_cq(
         cq: *mut ibverbs_sys::ibv_cq,
         num_entries: i32,
         wc: *mut ibverbs_sys::ibv_wc,
     ) -> i32 {
-        todo!()
+        let cq = unsafe { *cq };
+        let context = cq.context;
+        let bluerdma = unsafe { get_device_mut(context) };
+        let Some(cq) = bluerdma.cq_manager.get_cq(cq.handle) else {
+            return 0;
+        };
+        let completions: Vec<_> = std::iter::repeat_with(|| cq.poll_event_queue())
+            .take_while(Option::is_some)
+            .take(num_entries as usize)
+            .flatten()
+            .collect();
+        let num = completions.len() as i32;
+        for (i, c) in completions.into_iter().enumerate() {
+            if let Some(wc) = unsafe { wc.add(i).as_mut() } {
+                wc.wr_id = c.user_data;
+                wc.qp_num = c.qpn;
+            }
+        }
+
+        num
     }
 }
 

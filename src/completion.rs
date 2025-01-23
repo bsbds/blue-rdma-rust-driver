@@ -196,11 +196,11 @@ impl EventRegistry {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct CompletionEvent {
     /// Queue pair number this completion event is for
-    qpn: u32,
+    pub(crate) qpn: u32,
     /// The MSN
-    msn: u16,
+    pub(crate) msn: u16,
     /// Userdata associated with this completion event, can be either `wr_id` or imm
-    user_data: u64,
+    pub(crate) user_data: u64,
 }
 
 impl CompletionEvent {

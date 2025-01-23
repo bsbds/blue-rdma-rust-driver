@@ -590,8 +590,6 @@ checksum = "fbf6a919d6cf397374f7dfeeea91d974c7c0a7221d0d0f4f20d859d329e53fcc"
 [[package]]
 name = "ibverbs-sys"
 version = "0.3.1+55.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1346fcd2f8c44e7598586861b08f477686192d44ec7f872b3d2f5863cdf50c63"
 dependencies = [
  "bindgen",
  "cmake",
