@@ -132,8 +132,8 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         let sq_proxy3 = SendQueueCsrProxy3(dev.clone());
         sq_proxy0.write_base_addr(sq_base_pas[0]);
         sq_proxy1.write_base_addr(sq_base_pas[1]);
-        sq_proxy2.write_base_addr(sq_base_pas[1]);
-        sq_proxy3.write_base_addr(sq_base_pas[1]);
+        sq_proxy2.write_base_addr(sq_base_pas[2]);
+        sq_proxy3.write_base_addr(sq_base_pas[3]);
         let proxies: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>> = vec![
             Box::new(sq_proxy0),
             Box::new(sq_proxy1),
