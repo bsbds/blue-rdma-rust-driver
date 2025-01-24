@@ -124,8 +124,6 @@ impl SendWorker {
                 1,
                 wr.laddr,
             );
-            println!("d0: {desc0:?}");
-            println!("d1: {desc1:?}");
 
             /// Retry if block
             self.send_queue.push(SendQueueDesc::Seg0(desc0)).unwrap();
