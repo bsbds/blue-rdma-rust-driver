@@ -1,5 +1,6 @@
 use std::{
     hint, io,
+    net::Ipv4Addr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
@@ -11,7 +12,12 @@ use std::{
 use bilge::prelude::*;
 use parking_lot::Mutex;
 use pnet::{
-    packet::ethernet::{EtherTypes, MutableEthernetPacket},
+    packet::{
+        ethernet::{EtherTypes, MutableEthernetPacket},
+        ip::IpNextHeaderProtocols,
+        ipv4::{Ipv4Flags, MutableIpv4Packet},
+        udp::MutableUdpPacket,
+    },
     util::MacAddr,
 };
 use tracing::error;
@@ -220,39 +226,77 @@ pub(crate) struct Bth {
 
 struct AckFrameBuilder;
 
+#[allow(
+    clippy::indexing_slicing,
+    clippy::arithmetic_side_effects,
+    clippy::as_conversions,
+    clippy::cast_possible_truncation,
+    clippy::big_endian_bytes
+)]
 impl AckFrameBuilder {
     fn build_ack(now_psn: u32, now_bitmap: u128, dqpn: u32) -> Vec<u8> {
         const TRANS_TYPE_RC: u8 = 0x00;
         const OPCODE_ACKNOWLEDGE: u8 = 0x11;
         const PAYLOAD_SIZE: usize = 48;
-        let mac = MacAddr::new(0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA);
+        let mac = MacAddr::new(0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0x0A);
         let mut payload = [0u8; PAYLOAD_SIZE];
 
         let mut bth = Bth::default();
         bth.set_opcode(u5::from_u8(OPCODE_ACKNOWLEDGE));
         bth.set_psn(u24::from_u32(now_psn));
         bth.set_dqpn(u24::from_u32(dqpn));
-        payload[..12].copy_from_slice(&bth.value.to_le_bytes());
+        bth.set_trans_type(u3::from_u8(TRANS_TYPE_RC));
+        payload[..12].copy_from_slice(&bth.value.to_be_bytes());
 
         let mut aeth_seg0 = AethSeg0::default();
         aeth_seg0.set_is_send_by_driver(true);
-        payload[12..16].copy_from_slice(&aeth_seg0.value.to_le_bytes());
-        payload[16..32].copy_from_slice(&now_bitmap.to_le_bytes());
-        payload[32..].copy_from_slice(&0u128.to_le_bytes());
+        payload[12..28].copy_from_slice(&0u128.to_be_bytes()); // prev_bitmap
+        payload[28..44].copy_from_slice(&now_bitmap.to_be_bytes());
+        payload[44..].copy_from_slice(&aeth_seg0.value.to_be_bytes());
 
         Self::build_ethernet_frame(mac, mac, &payload)
     }
 
     fn build_ethernet_frame(src_mac: MacAddr, dst_mac: MacAddr, payload: &[u8]) -> Vec<u8> {
-        const ETHERNET_HEADER_LEN: usize = 14;
-        let mut buffer = vec![0u8; ETHERNET_HEADER_LEN.wrapping_add(payload.len())];
-        let mut frame = MutableEthernetPacket::new(&mut buffer)
-            .unwrap_or_else(|| unreachable!("Failed to create ethernet packet"));
+        const CARD_IP_ADDRESS: u32 = 0x1122_330A;
+        const UDP_PORT: u16 = 4791;
+        const ETH_HEADER_LEN: usize = 14;
+        const IP_HEADER_LEN: usize = 20;
+        const UDP_HEADER_LEN: usize = 8;
 
-        frame.set_source(src_mac);
-        frame.set_destination(dst_mac);
-        frame.set_ethertype(EtherTypes::Ipv4);
-        frame.set_payload(payload);
+        let total_len = ETH_HEADER_LEN + IP_HEADER_LEN + UDP_HEADER_LEN + payload.len();
+
+        let mut buffer = vec![0u8; total_len];
+
+        let mut eth_packet = MutableEthernetPacket::new(&mut buffer)
+            .unwrap_or_else(|| unreachable!("Failed to create ethernet packet"));
+        eth_packet.set_source(src_mac);
+        eth_packet.set_destination(dst_mac);
+        eth_packet.set_ethertype(EtherTypes::Ipv4);
+
+        let mut ipv4_packet = MutableIpv4Packet::new(&mut buffer[ETH_HEADER_LEN..])
+            .unwrap_or_else(|| unreachable!("Failed to create IPv4 packet"));
+        ipv4_packet.set_version(4);
+        ipv4_packet.set_header_length(5);
+        ipv4_packet.set_dscp(0);
+        ipv4_packet.set_ecn(0);
+        ipv4_packet.set_total_length((IP_HEADER_LEN + UDP_HEADER_LEN + payload.len()) as u16);
+        ipv4_packet.set_identification(0);
+        ipv4_packet.set_flags(Ipv4Flags::DontFragment);
+        ipv4_packet.set_fragment_offset(0);
+        ipv4_packet.set_ttl(64);
+        ipv4_packet.set_next_level_protocol(IpNextHeaderProtocols::Udp);
+        ipv4_packet.set_source(Ipv4Addr::from_bits(CARD_IP_ADDRESS));
+        ipv4_packet.set_destination(Ipv4Addr::from_bits(CARD_IP_ADDRESS));
+        ipv4_packet.set_checksum(ipv4_packet.get_checksum());
+
+        let mut udp_packet = MutableUdpPacket::new(&mut buffer[ETH_HEADER_LEN + IP_HEADER_LEN..])
+            .unwrap_or_else(|| unreachable!("Failed to create UDP packet"));
+        udp_packet.set_source(UDP_PORT);
+        udp_packet.set_destination(UDP_PORT);
+        udp_packet.set_length((UDP_HEADER_LEN + payload.len()) as u16);
+        udp_packet.set_payload(payload);
+        udp_packet.set_checksum(udp_packet.get_checksum());
 
         buffer
     }
