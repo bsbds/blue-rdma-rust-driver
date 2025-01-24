@@ -206,7 +206,7 @@ where
         addr_resolver: R,
         max_num_qps: u32,
         max_num_cqs: u32,
-    ) -> io::Result<BlueRdma>
+    ) -> io::Result<BlueRdmaInner>
     where
         A: PageAllocator<1>,
         R: AddressResolver + 'static,
@@ -238,7 +238,7 @@ where
             meta_cq_table,
         );
 
-        Ok(BlueRdma {
+        Ok(BlueRdmaInner {
             cmd_queue: Box::new(cmd_queue),
             send_queue: Box::new(send_queue),
             qp_manager,
@@ -266,7 +266,7 @@ where
 }
 
 #[allow(missing_debug_implementations)]
-pub struct BlueRdma {
+pub(crate) struct BlueRdmaInner {
     pub(crate) cmd_queue: Box<dyn DeviceCommand + Send + 'static>,
     pub(crate) send_queue: Box<dyn WorkReqSend + Send + 'static>,
     pub(crate) qp_manager: QpManager,
@@ -278,7 +278,12 @@ pub struct BlueRdma {
     buffer_phys_addr: u64,
 }
 
-impl BlueRdma {
+#[allow(missing_debug_implementations)]
+pub struct BlueRdma {
+    inner: Mutex<BlueRdmaInner>,
+}
+
+impl BlueRdmaInner {
     /// Updates Memory Translation Table entry
     #[inline]
     fn reg_mr_inner(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
@@ -366,11 +371,14 @@ unsafe impl RdmaCtxOps for BlueRdma {
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
         };
-        let mut bluerdma = device_builder
+        let mut bluerdma_inner = device_builder
             .initialize(network_config, page_allocator, resolver, 128, 128)
             .unwrap();
-        let Some(qpn) = bluerdma.qp_manager.create_qp() else {
+        let Some(qpn) = bluerdma_inner.qp_manager.create_qp() else {
             return ptr::null_mut();
+        };
+        let bluerdma = BlueRdma {
+            inner: Mutex::new(bluerdma_inner),
         };
 
         Box::into_raw(Box::new(bluerdma)).cast()
@@ -450,7 +458,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         channel: *mut ibverbs_sys::ibv_comp_channel,
         comp_vector: core::ffi::c_int,
     ) -> *mut ibverbs_sys::ibv_cq {
-        let bluerdma = unsafe { get_device_mut(blue_context) };
+        let bluerdma = unsafe { get_device(blue_context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let Some(handle) = bluerdma.cq_manager.create_cq() else {
             return ptr::null_mut();
         };
@@ -473,7 +482,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
     fn destroy_cq(cq: *mut ibverbs_sys::ibv_cq) -> ::std::os::raw::c_int {
         let cq = unsafe { Box::from_raw(cq) };
         let context = cq.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         bluerdma.cq_manager.destroy_cq(cq.handle);
         0
     }
@@ -484,7 +494,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         init_attr: *mut ibverbs_sys::ibv_qp_init_attr,
     ) -> *mut ibverbs_sys::ibv_qp {
         let context = unsafe { *pd }.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let init_attr = unsafe { *init_attr };
         let Some(qpn) = bluerdma.qp_manager.create_qp() else {
             return ptr::null_mut();
@@ -523,7 +534,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
     fn destroy_qp(qp: *mut ibverbs_sys::ibv_qp) -> ::std::os::raw::c_int {
         let qp = unsafe { *qp };
         let context = qp.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let qpn = qp.qp_num;
         bluerdma.qp_manager.destroy_qp(qpn);
 
@@ -540,7 +552,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let qp = unsafe { *qp };
         let attr = unsafe { *attr };
         let context = qp.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let mask = attr_mask as u32;
         //let dgid = unsafe { attr.ah_attr.grh.dgid.raw };
         //let ip_addr = u32::from_le_bytes([dgid[12], dgid[13], dgid[14], dgid[15]]);
@@ -584,7 +597,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
     ) -> ::std::os::raw::c_int {
         let qp = unsafe { *qp };
         let context = qp.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let Some(_current_attr) = bluerdma.qp_manager.qp_attr(qp.qp_num) else {
             return -1;
         };
@@ -601,7 +615,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         access: core::ffi::c_int,
     ) -> *mut ibverbs_sys::ibv_mr {
         let context = unsafe { (*pd) }.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let Ok(mr_key) = bluerdma.reg_mr_inner(addr as u64, length, access as u8) else {
             return ptr::null_mut();
         };
@@ -636,7 +651,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let qp = unsafe { *qp };
         let wr = unsafe { *wr };
         let context = qp.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let qp_num = qp.qp_num;
         let wr = SendWrResolver::new(wr).unwrap_or_else(|_| todo!("handle invalid input"));
         bluerdma.post_send_inner(qp_num, wr);
@@ -666,7 +682,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
     ) -> i32 {
         let cq = unsafe { *cq };
         let context = cq.context;
-        let bluerdma = unsafe { get_device_mut(context) };
+        let bluerdma = unsafe { get_device(context) };
+        let mut bluerdma = bluerdma.inner.lock();
         let Some(cq) = bluerdma.cq_manager.get_cq(cq.handle) else {
             return 0;
         };
@@ -695,8 +712,8 @@ struct BlueRdmaDevice {
 }
 
 #[allow(unsafe_code)]
-unsafe fn get_device_mut(context: *mut ibverbs_sys::ibv_context) -> &'static mut BlueRdma {
+unsafe fn get_device(context: *mut ibverbs_sys::ibv_context) -> &'static BlueRdma {
     let dev_ptr = unsafe { *context }.device.cast::<BlueRdmaDevice>();
-    unsafe { (*dev_ptr).driver.cast::<BlueRdma>().as_mut() }
+    unsafe { (*dev_ptr).driver.cast::<BlueRdma>().as_ref() }
         .unwrap_or_else(|| unreachable!("null device pointer"))
 }
