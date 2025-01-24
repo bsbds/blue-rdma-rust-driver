@@ -92,6 +92,10 @@ impl WrChunkBuilder<WithIbvParams> {
             ChunkPos::First => self.inner.is_first = true,
             ChunkPos::Last => self.inner.is_last = true,
             ChunkPos::Middle => {}
+            ChunkPos::Only => {
+                self.inner.is_first = true;
+                self.inner.is_last = true;
+            }
         }
 
         WrChunkBuilder {
@@ -151,4 +155,15 @@ pub(crate) enum ChunkPos {
     First,
     Middle,
     Last,
+    Only,
+}
+
+impl ChunkPos {
+    pub(crate) fn next(self) -> Self {
+        match self {
+            ChunkPos::First | ChunkPos::Middle => ChunkPos::Middle,
+            ChunkPos::Last => ChunkPos::Last,
+            ChunkPos::Only => ChunkPos::Only,
+        }
+    }
 }

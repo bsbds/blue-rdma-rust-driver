@@ -27,6 +27,8 @@ pub(crate) struct WrFragmenter {
     chunk_pos: ChunkPos,
     /// Chunk builder
     builder: WrChunkBuilder<WithIbvParams>,
+    /// Length of the iterator
+    len: usize,
 }
 
 impl Iterator for WrFragmenter {
@@ -44,13 +46,16 @@ impl Iterator for WrFragmenter {
 
         // Chunk boundary must align with PMTU
         let chunk_end = self.laddr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
-        let chunk_size: u32 = chunk_end
+        let mut chunk_size: u32 = chunk_end
             .saturating_sub(self.laddr)
             .try_into()
             .unwrap_or_else(|_| unreachable!("chunk size should smaller than u32::MAX"));
 
         if self.rem_len <= chunk_size {
-            self.chunk_pos = ChunkPos::Last;
+            chunk_size = self.rem_len;
+            if !matches!(self.chunk_pos, ChunkPos::Only) {
+                self.chunk_pos = ChunkPos::Last;
+            }
         }
 
         let chunk = self
@@ -63,9 +68,7 @@ impl Iterator for WrFragmenter {
         self.laddr = self.laddr.checked_add(u64::from(chunk_size))?;
         self.raddr = self.raddr.checked_add(u64::from(chunk_size))?;
         self.rem_len = self.rem_len.saturating_sub(chunk_size);
-        if matches!(self.chunk_pos, ChunkPos::First) {
-            self.chunk_pos = ChunkPos::Middle;
-        }
+        self.chunk_pos = self.chunk_pos.next();
 
         Some(chunk)
     }
@@ -78,6 +81,7 @@ impl WrFragmenter {
         wr: SendWrResolver,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
+        num_psn: usize,
     ) -> Self {
         #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
         // truncation is exptected
@@ -90,13 +94,20 @@ impl WrFragmenter {
             wr.imm(),
         );
 
+        let chunk_pos = if num_psn == 1 {
+            ChunkPos::Only
+        } else {
+            ChunkPos::First
+        };
+
         Self {
             psn: base_psn,
             laddr: wr.laddr(),
             raddr: wr.raddr(),
             rem_len: wr.length(),
-            chunk_pos: ChunkPos::First,
+            chunk_pos,
             builder,
+            len: num_psn,
         }
     }
 

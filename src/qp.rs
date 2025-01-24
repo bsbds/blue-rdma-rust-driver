@@ -292,11 +292,12 @@ impl SharedState {
 }
 
 impl InitiatorState {
+    #[allow(clippy::as_conversions)] // u32 to usize
     /// Returns the next wr
     pub(crate) fn next_wr(
         &mut self,
         wr: &SendWrResolver,
-    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32)> {
+    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32, usize)> {
         let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
         let end_psn = base_psn.wrapping_add(num_psn).wrapping_sub(1);
@@ -314,6 +315,7 @@ impl InitiatorState {
             msn,
             base_psn,
             end_psn,
+            num_psn as usize,
         ))
     }
 

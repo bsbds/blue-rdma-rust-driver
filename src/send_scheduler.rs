@@ -109,19 +109,27 @@ impl SendWorker {
                 continue;
             };
             let desc0 = SendQueueReqDescSeg0::new_rdma_write(
-                wr.msn, wr.psn, wr.qp_type, wr.dqpn, wr.flags, wr.dqp_ip, wr.raddr, wr.rkey, 1,
+                wr.msn,
+                wr.psn,
+                wr.qp_type,
+                wr.dqpn,
+                wr.flags,
+                wr.dqp_ip,
+                wr.raddr,
+                wr.rkey,
+                wr.total_len,
             );
             let desc1 = SendQueueReqDescSeg1::new_rdma_write(
                 wr.pmtu,
-                true,
-                true,
+                wr.is_first,
+                wr.is_last,
                 wr.is_retry,
                 wr.enable_ecn,
                 wr.sqpn,
                 wr.imm,
                 wr.mac_addr,
                 wr.lkey,
-                1,
+                wr.len,
                 wr.laddr,
             );
 
