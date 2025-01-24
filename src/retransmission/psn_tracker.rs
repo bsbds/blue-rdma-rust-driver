@@ -8,6 +8,8 @@ use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 
 use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
 
+const DEFAULT_BASE_PSN: u32 = 0xFFFF80;
+
 #[derive(Default, Debug, Clone)]
 pub(crate) struct PsnTracker {
     base_psn: Arc<AtomicU32>,
@@ -15,6 +17,13 @@ pub(crate) struct PsnTracker {
 }
 
 impl PsnTracker {
+    pub(crate) fn new_with_default_base() -> Self {
+        Self {
+            base_psn: Arc::new(DEFAULT_BASE_PSN.into()),
+            inner: BitVec::from_bitslice(bits![1; 128]),
+        }
+    }
+
     #[allow(clippy::as_conversions)] // u32 to usize
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
     ///
