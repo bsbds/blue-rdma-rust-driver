@@ -1,6 +1,9 @@
-use std::sync::{
-    atomic::{AtomicU16, AtomicU32, AtomicU8, Ordering},
-    Arc,
+use std::{
+    iter,
+    sync::{
+        atomic::{AtomicU16, AtomicU32, AtomicU8, Ordering},
+        Arc,
+    },
 };
 
 use bitvec::vec::BitVec;
@@ -38,7 +41,7 @@ impl QpManager {
         bitmap.resize(size, false);
         Self {
             bitmap,
-            qps: vec![DeviceQp::default(); size],
+            qps: iter::repeat_with(DeviceQp::default).take(size).collect(),
         }
     }
 
