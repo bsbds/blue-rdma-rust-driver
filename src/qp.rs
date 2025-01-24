@@ -292,12 +292,11 @@ impl SharedState {
 }
 
 impl InitiatorState {
-    #[allow(clippy::as_conversions)] // u32 to usize
     /// Returns the next wr
     pub(crate) fn next_wr(
         &mut self,
         wr: &SendWrResolver,
-    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32, usize)> {
+    ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32)> {
         let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
         let end_psn = base_psn.wrapping_add(num_psn).wrapping_sub(1);
@@ -315,7 +314,6 @@ impl InitiatorState {
             msn,
             base_psn,
             end_psn,
-            num_psn as usize,
         ))
     }
 
@@ -455,14 +453,7 @@ fn index(qpn: u32) -> usize {
 
 /// Calculate the number of psn required for this WR
 fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
-    let pmtu: u16 = match u32::from(pmtu) {
-        ibverbs_sys::IBV_MTU_256 => 256,
-        ibverbs_sys::IBV_MTU_512 => 512,
-        ibverbs_sys::IBV_MTU_1024 => 1024,
-        ibverbs_sys::IBV_MTU_2048 => 2048,
-        ibverbs_sys::IBV_MTU_4096 => 4096,
-        _ => return None,
-    };
+    let pmtu = convert_ibv_mtu_to_u16(pmtu)?;
     let pmtu_mask = pmtu
         .checked_sub(1)
         .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
@@ -475,4 +466,16 @@ fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
         .div_ceil(u64::from(pmtu))
         .try_into()
         .ok()
+}
+
+pub(crate) fn convert_ibv_mtu_to_u16(ibv_mtu: u8) -> Option<u16> {
+    let pmtu = match u32::from(ibv_mtu) {
+        ibverbs_sys::IBV_MTU_256 => 256,
+        ibverbs_sys::IBV_MTU_512 => 512,
+        ibverbs_sys::IBV_MTU_1024 => 1024,
+        ibverbs_sys::IBV_MTU_2048 => 2048,
+        ibverbs_sys::IBV_MTU_4096 => 4096,
+        _ => return None,
+    };
+    Some(pmtu)
 }

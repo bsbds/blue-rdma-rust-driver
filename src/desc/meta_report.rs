@@ -156,7 +156,7 @@ pub(crate) enum MetaReportQueueDescNext {
 impl From<RingBufDescUntyped> for MetaReportQueueDescFirst {
     fn from(desc: RingBufDescUntyped) -> Self {
         let rdma_opcode = RdmaOpCode::from_u8(desc.head.op_code())
-            .unwrap_or_else(|| unreachable!("invalid opcode"));
+            .unwrap_or_else(|| unreachable!("invalid opcode, desc: {:?}", desc));
         match rdma_opcode {
             op if rdma_opcode.is_packet() => Self::PacketInfo(desc.into()),
             op if rdma_opcode.is_ack() => Self::Ack(desc.into()),

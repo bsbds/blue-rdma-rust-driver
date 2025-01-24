@@ -82,6 +82,7 @@ impl<T: MetaReport> MetaWorker<T> {
             thread::sleep(Duration::from_millis(10));
             hint::spin_loop();
             if let Some(meta) = self.inner.try_recv_meta()? {
+                println!("recv meta: {meta:?}");
                 self.handle_meta(meta);
             };
         }

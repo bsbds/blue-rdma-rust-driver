@@ -2,6 +2,8 @@
 // TODO: add field validations
 use std::marker::PhantomData;
 
+use crate::qp::convert_ibv_mtu_to_u16;
+
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct Initial;
 #[derive(Clone, Copy, Debug, Default)]
@@ -104,8 +106,8 @@ impl WrChunkBuilder<WithIbvParams> {
         }
     }
 
-    pub(crate) fn pmtu(&self) -> u8 {
-        self.inner.pmtu
+    pub(crate) fn pmtu(&self) -> u16 {
+        convert_ibv_mtu_to_u16(self.inner.pmtu).unwrap_or_else(|| unreachable!("invalid ibv_mtu"))
     }
 }
 

@@ -7,7 +7,7 @@ use ibverbs_sys::{
 use thiserror::Error;
 
 /// (Max) size of a single WR chunk
-const WR_CHUNK_SIZE: u32 = 0x10000;
+const WR_CHUNK_SIZE: u32 = 0x1000;
 
 /// A Result type for validation operations.
 type Result<T> = std::result::Result<T, ValidationError>;
@@ -27,8 +27,6 @@ pub(crate) struct WrFragmenter {
     chunk_pos: ChunkPos,
     /// Chunk builder
     builder: WrChunkBuilder<WithIbvParams>,
-    /// Length of the iterator
-    len: usize,
 }
 
 impl Iterator for WrFragmenter {
@@ -46,10 +44,15 @@ impl Iterator for WrFragmenter {
 
         // Chunk boundary must align with PMTU
         let chunk_end = self.laddr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
+        println!("chunk_end: {:x}", chunk_end);
         let mut chunk_size: u32 = chunk_end
             .saturating_sub(self.laddr)
             .try_into()
             .unwrap_or_else(|_| unreachable!("chunk size should smaller than u32::MAX"));
+        println!("laddr: {:x}", self.laddr);
+        println!("raddr: {:x}", self.raddr);
+        println!("rem size: {}", self.rem_len);
+        println!("chunk size: {chunk_size}");
 
         if self.rem_len <= chunk_size {
             chunk_size = self.rem_len;
@@ -81,7 +84,6 @@ impl WrFragmenter {
         wr: SendWrResolver,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
-        num_psn: usize,
     ) -> Self {
         #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
         // truncation is exptected
@@ -94,20 +96,13 @@ impl WrFragmenter {
             wr.imm(),
         );
 
-        let chunk_pos = if num_psn == 1 {
-            ChunkPos::Only
-        } else {
-            ChunkPos::First
-        };
-
         Self {
             psn: base_psn,
             laddr: wr.laddr(),
             raddr: wr.raddr(),
             rem_len: wr.length(),
-            chunk_pos,
+            chunk_pos: ChunkPos::First,
             builder,
-            len: num_psn,
         }
     }
 
