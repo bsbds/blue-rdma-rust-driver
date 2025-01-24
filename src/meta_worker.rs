@@ -116,7 +116,7 @@ impl<T: MetaReport> MetaWorker<T> {
                         let psn_total = qp
                             .num_psn(raddr, total_len)
                             .unwrap_or_else(|| unreachable!("parameters should be valid"));
-                        let end_psn = psn.wrapping_add(psn_total);
+                        let end_psn = psn.wrapping_add(psn_total).wrapping_sub(1);
                         qp.insert_messsage(msn, ack_req, end_psn);
                     }
                     PacketPos::Only => {
@@ -125,9 +125,8 @@ impl<T: MetaReport> MetaWorker<T> {
                             cq.ack_event(msn, qp.qpn());
                         }
                         if ack_req {
-                            let now_psn = psn.wrapping_sub(128 - BASE_PSN_OFFSET) & PSN_MASK;
-                            let ack_frame =
-                                AckFrameBuilder::build_ack(now_psn, u128::MAX, qp.dqpn());
+                            let bitmap = 1u128 << BASE_PSN_OFFSET;
+                            let ack_frame = AckFrameBuilder::build_ack(psn, bitmap, qp.dqpn());
                             if let Err(e) = self.raw_frame_tx.send(&ack_frame) {
                                 tracing::error!("failed to send ack frame");
                             }
@@ -169,11 +168,12 @@ impl<T: MetaReport> MetaWorker<T> {
                         }
                     }
                     let last_msn_acked = msns_acked.last().map(|&(m, _)| m);
-                    let cq_handle = if is_send_by_local_hw {
-                        qp.send_cq_handle()
-                    } else {
-                        qp.recv_cq_handle()
-                    };
+                    let cq_handle = qp.send_cq_handle();
+                    //let cq_handle = if is_send_by_local_hw {
+                    //    qp.send_cq_handle()
+                    //} else {
+                    //    qp.recv_cq_handle()
+                    //};
                     if let Some(cq) = cq_handle.and_then(|h| self.cq_table.get_mut(h)) {
                         if let Some(last_msn_acked) = last_msn_acked {
                             cq.ack_event(last_msn_acked, qp.qpn());

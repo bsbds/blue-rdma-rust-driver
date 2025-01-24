@@ -122,7 +122,7 @@ impl MetaCqEntry {
         let mut events = Vec::new();
         while let Some(event) = queue.front() {
             let x = last_msn_acked.wrapping_sub(event.msn);
-            if x > 0 && (x as usize) < MAX_MSN_WINDOW {
+            if (x as usize) < MAX_MSN_WINDOW {
                 events.push(queue.pop_front());
             } else {
                 break;

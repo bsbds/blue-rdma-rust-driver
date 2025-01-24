@@ -60,9 +60,9 @@ impl QpManager {
                 };
                 let tracker = TrackerState {
                     attrs: Arc::clone(&qp.attrs),
-                    psn: PsnTracker::default(),
+                    psn: PsnTracker::new_with_default_base(),
                     ack_msn: AckMsnTracker::default(),
-                    message: Arc::clone(&qp.message_tracker),
+                    message: Arc::clone(&shared.message),
                 };
                 (initiator, tracker)
             })
@@ -245,7 +245,6 @@ impl QpAttrShared {
 #[derive(Default, Debug, Clone)]
 /// A queue pair for building work requests
 pub(crate) struct DeviceQp {
-    message_tracker: Arc<Mutex<MessageTracker>>,
     attrs: Arc<QpAttrShared>,
 }
 
@@ -300,7 +299,7 @@ impl InitiatorState {
     ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32)> {
         let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;
-        let end_psn = base_psn.wrapping_add(num_psn);
+        let end_psn = base_psn.wrapping_add(num_psn).wrapping_sub(1);
 
         Some((
             WrChunkBuilder::new().set_qp_params(

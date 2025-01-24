@@ -464,6 +464,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             return ptr::null_mut();
         };
         let _ignore = bluerdma.qp_manager.update_qp_attr(qpn, |attr_mut| {
+            attr_mut.qpn = qpn;
             attr_mut.qp_type = init_attr.qp_type as u8;
             attr_mut.send_cq = unsafe { init_attr.send_cq.as_ref() }.map(|cq| cq.handle);
             attr_mut.recv_cq = unsafe { init_attr.recv_cq.as_ref() }.map(|cq| cq.handle);
