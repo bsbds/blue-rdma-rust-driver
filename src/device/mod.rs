@@ -401,21 +401,46 @@ unsafe impl RdmaCtxOps for BlueRdma {
 
     #[inline]
     fn query_device_ex(
-        blue_context: *mut ibverbs_sys::ibv_context,
+        _blue_context: *mut ibverbs_sys::ibv_context,
         _input: *const ibverbs_sys::ibv_query_device_ex_input,
         device_attr: *mut ibverbs_sys::ibv_device_attr,
         _attr_size: usize,
     ) -> ::std::os::raw::c_int {
-        todo!()
+        unsafe {
+            (*device_attr) = ibverbs_sys::ibv_device_attr {
+                max_qp: 256,
+                max_qp_wr: 4096,
+                max_sge: 32,
+                max_cq: 256,
+                max_cqe: 4096,
+                max_mr: 256,
+                max_pd: 256,
+                phys_port_cnt: 1,
+                ..Default::default()
+            };
+        }
+        0
     }
 
     #[inline]
     fn query_port(
-        blue_context: *mut ibverbs_sys::ibv_context,
-        port_num: u8,
+        _blue_context: *mut ibverbs_sys::ibv_context,
+        _port_num: u8,
         port_attr: *mut ibverbs_sys::ibv_port_attr,
     ) -> ::std::os::raw::c_int {
-        todo!()
+        unsafe {
+            (*port_attr) = ibverbs_sys::ibv_port_attr {
+                state: ibverbs_sys::ibv_port_state::IBV_PORT_ACTIVE,
+                max_mtu: ibverbs_sys::IBV_MTU_4096,
+                active_mtu: ibverbs_sys::IBV_MTU_1024,
+                gid_tbl_len: 256,
+                port_cap_flags: 0x0000_2c00,
+                max_msg_sz: 1 << 31,
+                lid: 1,
+                ..Default::default()
+            };
+        }
+        0
     }
 
     #[inline]
