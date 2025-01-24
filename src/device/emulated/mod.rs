@@ -189,7 +189,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         let simple_nic_controller = SimpleNicController::init(
             &dev,
             simple_nic_tx_queue_buffer,
-            simple_nic_rx_queue_pa,
+            simple_nic_tx_queue_pa,
             simple_nic_rx_queue_buffer,
             simple_nic_rx_queue_pa,
             simple_nic_tx_buffer,
