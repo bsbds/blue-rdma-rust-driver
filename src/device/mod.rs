@@ -697,6 +697,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             if let Some(wc) = unsafe { wc.add(i).as_mut() } {
                 wc.wr_id = c.user_data;
                 wc.qp_num = c.qpn;
+                wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
             }
         }
 
