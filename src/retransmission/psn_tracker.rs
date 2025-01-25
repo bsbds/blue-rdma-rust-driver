@@ -8,8 +8,6 @@ use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 
 use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
 
-const DEFAULT_BASE_PSN: u32 = 0xFFFF80;
-
 #[derive(Default, Debug, Clone)]
 pub(crate) struct PsnTracker {
     base_psn: Arc<AtomicU32>,
@@ -19,8 +17,8 @@ pub(crate) struct PsnTracker {
 impl PsnTracker {
     pub(crate) fn new_with_default_base() -> Self {
         Self {
-            base_psn: Arc::new(DEFAULT_BASE_PSN.into()),
-            inner: BitVec::from_bitslice(bits![1; 128]),
+            base_psn: Arc::new(0.into()),
+            inner: BitVec::default(),
         }
     }
 
@@ -31,23 +29,33 @@ impl PsnTracker {
     ///
     /// Returns `Some(PSN)` if the left edge of the PSN window is advanced, where the
     /// returned `PSN` is the new base PSN value after the advance.
-    pub(crate) fn ack_range(&mut self, mut base_psn: u32, mut bitmap: u128) -> Option<u32> {
-        let rstart = (base_psn.wrapping_sub(self.base_psn()) & PSN_MASK) as usize;
+    pub(crate) fn ack_range(&mut self, mut now_psn: u32, mut bitmap_be: u128) -> Option<u32> {
+        let (now_psn, bitmap) = self.align_to_current_base(now_psn, bitmap_be);
+        let rstart = now_psn.wrapping_sub(self.base_psn()) as usize;
         let rend = rstart.wrapping_add(128);
-        if rend > MAX_PSN_WINDOW {
-            return None;
-        }
         if rend > self.inner.len() {
             self.inner.resize(rend, false);
         }
         for i in 0..128 {
             let pos = rstart.wrapping_add(i);
-            if (bitmap >> i) & 1 == 1 {
+            if bitmap.wrapping_shr(i as u32) & 1 == 1 {
                 self.inner.set(pos, true);
             }
         }
 
         self.try_advance()
+    }
+
+    fn align_to_current_base(&mut self, now_psn: u32, mut bitmap: u128) -> (u32, u128) {
+        let base_psn = self.base_psn();
+        let x = base_psn.wrapping_sub(now_psn);
+        if x > 1 << 24 {
+            let offset = x & PSN_MASK;
+            bitmap >>= offset;
+            (base_psn, bitmap)
+        } else {
+            (now_psn, bitmap)
+        }
     }
 
     #[allow(clippy::as_conversions)] // u32 to usize
@@ -118,16 +126,15 @@ impl PsnTracker {
     /// base PSN value after the advance.
     #[allow(clippy::as_conversions)] // pos should never larger than u32::MAX
     fn try_advance(&mut self) -> Option<u32> {
-        self.inner
-            .first_zero()
-            .and_then(|pos| (pos > 0).then_some(pos))
-            .map(|pos| {
-                self.inner.shift_left(pos);
-                let mut psn = self.base_psn();
-                psn = psn.wrapping_add(pos as u32) & PSN_MASK;
-                self.set_base_psn(psn);
-                psn
-            })
+        let pos = self.inner.first_zero().unwrap_or(self.inner.len());
+        if pos == 0 {
+            return None;
+        }
+        self.inner.shift_left(pos);
+        let mut psn = self.base_psn();
+        psn = psn.wrapping_add(pos as u32) & PSN_MASK;
+        self.set_base_psn(psn);
+        Some(psn)
     }
 }
 

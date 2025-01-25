@@ -409,9 +409,8 @@ impl TrackerState {
 
     /// Calculate the number of psn required for this WR
     pub(crate) fn num_psn(&self, addr: u64, length: u32) -> Option<u32> {
-        let pmtu_mask = self
-            .attrs
-            .pmtu()
+        let pmtu = convert_ibv_mtu_to_u16(self.attrs.pmtu())?;
+        let pmtu_mask = pmtu
             .checked_sub(1)
             .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
         let next_align_addr = addr.saturating_add(u64::from(pmtu_mask)) & !u64::from(pmtu_mask);
@@ -420,7 +419,7 @@ impl TrackerState {
         length_u64
             .checked_sub(gap)
             .unwrap_or(length_u64)
-            .div_ceil(u64::from(self.attrs.pmtu()))
+            .div_ceil(u64::from(pmtu))
             .try_into()
             .ok()
     }

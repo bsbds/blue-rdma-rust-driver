@@ -333,7 +333,6 @@ impl BlueRdmaInner {
 
         let fragmenter = WrFragmenter::new(wr, builder, base_psn);
         for chunk in fragmenter {
-            println!("send chunk: {chunk:?}");
             // TODO: Should this never fail
             self.send_queue.send(chunk)?;
         }

@@ -44,15 +44,10 @@ impl Iterator for WrFragmenter {
 
         // Chunk boundary must align with PMTU
         let chunk_end = self.laddr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
-        println!("chunk_end: {:x}", chunk_end);
         let mut chunk_size: u32 = chunk_end
             .saturating_sub(self.laddr)
             .try_into()
             .unwrap_or_else(|_| unreachable!("chunk size should smaller than u32::MAX"));
-        println!("laddr: {:x}", self.laddr);
-        println!("raddr: {:x}", self.raddr);
-        println!("rem size: {}", self.rem_len);
-        println!("chunk size: {chunk_size}");
 
         if self.rem_len <= chunk_size {
             chunk_size = self.rem_len;

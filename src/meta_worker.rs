@@ -82,7 +82,6 @@ impl<T: MetaReport> MetaWorker<T> {
             thread::sleep(Duration::from_millis(10));
             hint::spin_loop();
             if let Some(meta) = self.inner.try_recv_meta()? {
-                println!("recv meta: {meta:?}");
                 self.handle_meta(meta);
             };
         }
@@ -157,13 +156,13 @@ impl<T: MetaReport> MetaWorker<T> {
                     error!("qp number: {qpn} does not exist");
                     return;
                 };
-                let base_psn = psn_now.wrapping_sub(BASE_PSN_OFFSET);
-                if let Some(psn) = qp.ack_range(psn_now, now_bitmap, ack_msn) {
+                let base_psn = psn_now.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
+                if let Some(psn) = qp.ack_range(base_psn, now_bitmap, ack_msn) {
                     let msns_acked = qp.ack_message(psn);
                     let require_ack = msns_acked.iter().any(|&(_, x)| x);
                     if require_ack {
-                        let now_psn = base_psn.wrapping_sub(128 - BASE_PSN_OFFSET) & PSN_MASK;
-                        let ack_frame = AckFrameBuilder::build_ack(now_psn, u128::MAX, qp.dqpn());
+                        //let now_psn = base_psn.wrapping_sub(128 - BASE_PSN_OFFSET) & PSN_MASK;
+                        let ack_frame = AckFrameBuilder::build_ack(psn_now, now_bitmap, qp.dqpn());
                         if let Err(e) = self.raw_frame_tx.send(&ack_frame) {
                             tracing::error!("failed to send ack frame");
                         }
