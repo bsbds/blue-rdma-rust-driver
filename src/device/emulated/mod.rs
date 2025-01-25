@@ -167,8 +167,8 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         let mrq_proxy3 = MetaReportQueueCsrProxy3(dev.clone());
         mrq_proxy0.write_base_addr(mrq_base_pas[0]);
         mrq_proxy1.write_base_addr(mrq_base_pas[1]);
-        mrq_proxy2.write_base_addr(mrq_base_pas[1]);
-        mrq_proxy3.write_base_addr(mrq_base_pas[1]);
+        mrq_proxy2.write_base_addr(mrq_base_pas[2]);
+        mrq_proxy3.write_base_addr(mrq_base_pas[3]);
         let meta_report_handler = MetaReportQueueHandler::new(mrqs);
 
         let simple_nic_tx_queue_buffer = allocator.alloc()?;
