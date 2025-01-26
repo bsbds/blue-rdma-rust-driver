@@ -344,20 +344,35 @@ impl BlueRdmaInner {
 const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;
 const CARD_IP_ADDRESS: u32 = 0x1122_330A;
 
+static HEAP_ALLOCATOR: bluesimalloc::BlueSimalloc = bluesimalloc::BlueSimalloc::new();
+
 #[allow(unsafe_code)]
 #[allow(clippy::not_unsafe_ptr_arg_deref)]
 #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
 unsafe impl RdmaCtxOps for BlueRdma {
     #[inline]
-    fn init() {
-        bluesimalloc::setup_allocator!();
-    }
+    fn init() {}
 
     #[inline]
     #[allow(clippy::unwrap_used)]
     #[allow(clippy::as_conversions)] // usize to u64
     fn new(sysfs_name: *const std::ffi::c_char) -> *mut std::ffi::c_void {
-        let queue_builder = EmulatedQueueBuilder::new();
+        let name = unsafe {
+            std::ffi::CStr::from_ptr(sysfs_name)
+                .to_string_lossy()
+                .into_owned()
+        };
+        let queue_builder = match name.as_str() {
+            "uverbs0" => {
+                bluesimalloc::init_global_allocator(0, &HEAP_ALLOCATOR);
+                EmulatedQueueBuilder::new(1)
+            }
+            "uverbs1" => {
+                bluesimalloc::init_global_allocator(1, &HEAP_ALLOCATOR);
+                EmulatedQueueBuilder::new(2)
+            }
+            _ => unreachable!("unexpected sysfs_name"),
+        };
         let device_builder = DeviceBuilder::new(queue_builder);
         let page_allocator = EmulatedPageAllocator::new(
             bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),

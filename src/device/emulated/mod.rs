@@ -74,9 +74,12 @@ pub(crate) struct EmulatedQueueBuilder {
 }
 
 impl EmulatedQueueBuilder {
-    pub(crate) fn new() -> Self {
+    #[allow(clippy::as_conversions)]
+    pub(crate) fn new(index: usize) -> Self {
+        let port = 7700 + index;
+        let addr = SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), port as u16);
         Self {
-            rpc_server_addr: RPC_SERVER_ADDR,
+            rpc_server_addr: addr,
         }
     }
 }
@@ -218,7 +221,7 @@ impl EmulatedDevice {
     )]
     #[inline]
     pub fn run(rpc_server_addr: SocketAddr) -> io::Result<()> {
-        let queue_builder = EmulatedQueueBuilder::new();
+        let queue_builder = EmulatedQueueBuilder::new(0);
         let device_builder = DeviceBuilder::new(queue_builder);
         let page_allocator = EmulatedPageAllocator::new(
             bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
