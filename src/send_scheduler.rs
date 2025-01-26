@@ -139,6 +139,8 @@ impl SendWorker {
             if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
                 tracing::error!("failed to flush queue pointer");
             }
+            let tail = self.csr_adaptor.read_tail().unwrap();
+            self.send_queue.set_tail(tail);
         }
     }
 

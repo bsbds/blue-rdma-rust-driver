@@ -429,8 +429,8 @@ unsafe impl RdmaCtxOps for BlueRdma {
         unsafe {
             (*device_attr) = ibverbs_sys::ibv_device_attr {
                 max_qp: 256,
-                max_qp_wr: 4096,
-                max_sge: 32,
+                max_qp_wr: 64,
+                max_sge: 8,
                 max_cq: 256,
                 max_cqe: 4096,
                 max_mr: 256,
@@ -614,6 +614,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let Some(_current_attr) = bluerdma.qp_manager.qp_attr(qp.qp_num) else {
             return -1;
         };
+
         0
     }
 

@@ -44,6 +44,11 @@ impl SendQueue {
     pub(crate) fn head(&self) -> u32 {
         self.inner.inner.head()
     }
+
+    /// Returns the head pointer of the buffer
+    pub(crate) fn set_tail(&mut self, tail: u32) {
+        self.inner.inner.set_tail(tail);
+    }
 }
 
 impl ToCardQueue for SendQueue {

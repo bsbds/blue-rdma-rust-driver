@@ -47,7 +47,7 @@ impl RpcClient {
         let _: usize = self.0.send(&send_buf)?;
 
         let mut recv_buf = [0; 128];
-        let recv_cnt = self.0.recv(&mut recv_buf)?;
+        let (recv_cnt, _addr) = self.0.recv_from(&mut recv_buf)?;
         // the length of CsrAccessRpcMessage is fixed,
         #[allow(clippy::indexing_slicing)]
         let response = serde_json::from_slice::<CsrAccessRpcMessage>(&recv_buf[..recv_cnt])?;

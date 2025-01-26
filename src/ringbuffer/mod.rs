@@ -159,6 +159,10 @@ where
     pub(crate) fn tail(&self) -> u32 {
         self.ctx.tail
     }
+
+    pub(crate) fn set_tail(&mut self, tail: u32) {
+        self.ctx.tail = tail;
+    }
 }
 
 impl<Buf, Desc> RingBuffer<Buf, Desc>
