@@ -217,7 +217,7 @@ where
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
         let (cmd_queue, send_queue, meta_report_queue, simple_nic) =
             self.queue_builder.initialize(allocator)?;
-        let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
+        //let tap_dev = TapDevice::create(Some(network.mac), Some(network.ip_network))?;
         let recv_buffer_virt_addr = simple_nic.recv_buffer_virt_addr();
         let phys_addr = addr_resolver
             .virt_to_phys(recv_buffer_virt_addr)?
@@ -233,7 +233,6 @@ where
         Self::launch_backgroud(
             meta_report_queue,
             simple_nic_tx,
-            tap_dev,
             tracker_table,
             meta_cq_table,
         );
@@ -254,7 +253,6 @@ where
     fn launch_backgroud(
         meta_report: B::MetaReport,
         simple_nic_tx: <B::SimpleNic as SimpleNicTunnel>::Sender,
-        tap_dev: TapDevice,
         tracker_table: QpTrackerTable,
         meta_cq_table: MetaCqTable,
     ) {
