@@ -27,6 +27,8 @@ pub(crate) struct WrFragmenter {
     chunk_pos: ChunkPos,
     /// Chunk builder
     builder: WrChunkBuilder<WithIbvParams>,
+    /// Length of the iterator
+    len: usize,
 }
 
 impl Iterator for WrFragmenter {
@@ -91,19 +93,40 @@ impl WrFragmenter {
             wr.imm(),
         );
 
+        let num_chunks = Self::num_chunks(wr.raddr(), wr.length().into(), builder.pmtu());
+        let chunk_pos = if num_chunks == 1 {
+            ChunkPos::Only
+        } else {
+            ChunkPos::First
+        };
+
         Self {
             psn: base_psn,
             laddr: wr.laddr(),
             raddr: wr.raddr(),
             rem_len: wr.length(),
-            chunk_pos: ChunkPos::First,
+            chunk_pos,
             builder,
+            len: num_chunks,
         }
     }
 
     /// Checks if the fragmentation is complete, the iteration will yeild `None`
     pub(crate) fn is_complete(&self) -> bool {
         self.rem_len == 0
+    }
+
+    fn num_chunks(addr: u64, length: u64, pmtu: u16) -> usize {
+        let pmtu_mask = pmtu
+            .checked_sub(1)
+            .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
+        let first_chunk_end = addr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
+        let first_chunk_len = first_chunk_end.wrapping_sub(addr);
+        if first_chunk_len >= length {
+            return 1;
+        }
+        let rem = length.wrapping_sub(first_chunk_len);
+        usize::try_from(rem.div_ceil(WR_CHUNK_SIZE.into())).unwrap_or_else(|_| unreachable!())
     }
 }
 
