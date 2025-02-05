@@ -14,7 +14,7 @@ use crate::{
         CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
     mem::page::ContiguousPages,
-    mtt::v2::Mttv2,
+    mtt::Mtt,
     net::config::NetworkConfig,
     queue::{
         abstr::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
