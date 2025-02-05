@@ -10,12 +10,12 @@ use std::{
 use tracing::error;
 
 use crate::{
-    device::{
+    device_protocol::{FrameRx, FrameTx},
+    mem::page::ContiguousPages,
+    protocol_impl_hardware::device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
-    device_protocol::{FrameRx, FrameTx},
-    mem::page::ContiguousPages,
 };
 
 use super::super::{

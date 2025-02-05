@@ -14,11 +14,6 @@ use csr::RpcClient;
 use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
-    device::proxy::{
-        MetaReportQueueCsrProxy0, MetaReportQueueCsrProxy1, MetaReportQueueCsrProxy2,
-        MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
-        SendQueueCsrProxy3,
-    },
     device_protocol::DeviceCommand,
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator},
@@ -32,6 +27,11 @@ use crate::{
             CmdQueueRespDescOnlyCommonHeader,
         },
         RingBufDescUntyped,
+    },
+    protocol_impl_hardware::device::proxy::{
+        MetaReportQueueCsrProxy0, MetaReportQueueCsrProxy1, MetaReportQueueCsrProxy2,
+        MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
+        SendQueueCsrProxy3,
     },
     protocol_impl_hardware::queue::{
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},

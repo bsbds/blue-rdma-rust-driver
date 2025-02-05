@@ -3,8 +3,8 @@ use std::{iter, sync::Arc, time::Duration};
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 
 use crate::{
-    device::CsrWriterAdaptor,
     device_protocol::{WorkReqSend, WrChunk},
+    protocol_impl_hardware::device::CsrWriterAdaptor,
 };
 
 use super::{

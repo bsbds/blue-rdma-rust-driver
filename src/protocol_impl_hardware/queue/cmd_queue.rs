@@ -1,12 +1,12 @@
 use std::io;
 
 use crate::{
-    device::{
+    device_protocol::DeviceCommand,
+    net::config::NetworkConfig,
+    protocol_impl_hardware::device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
-    device_protocol::DeviceCommand,
-    net::config::NetworkConfig,
     ringbuffer::{Descriptor, RingBuffer},
 };
 
@@ -115,7 +115,7 @@ mod test {
     use std::iter;
 
     use crate::{
-        device::dummy::DummyDevice, mem::page::HostPageAllocator,
+        mem::page::HostPageAllocator, protocol_impl_hardware::device::dummy::DummyDevice,
         protocol_impl_hardware::queue::DescRingBufferAllocator, ringbuffer::new_test_ring,
     };
 

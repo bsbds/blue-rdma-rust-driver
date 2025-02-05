@@ -173,8 +173,6 @@
 mod completion;
 /// Constants used throughout the driver
 mod constants;
-/// Adaptor deivce
-mod device;
 mod device_protocol;
 /// Memory operation components
 mod mem;
@@ -200,8 +198,8 @@ pub mod ctx_ops;
 /// Network implementations
 pub mod net;
 
-pub use device::emulated::EmulatedDevice;
-pub use device::BlueRdma;
+pub use protocol_impl_hardware::device::emulated::EmulatedDevice;
+pub use protocol_impl_hardware::device::BlueRdma;
 
 pub use protocol_impl_hardware::SimpleNicDeviceConfig;
 

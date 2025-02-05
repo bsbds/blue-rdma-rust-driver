@@ -1,6 +1,8 @@
 mod cmd;
 /// Descriptor definitions
 pub(crate) mod desc;
+/// Adaptor deivce
+pub(crate) mod device;
 mod meta_report;
 /// Queue implementation
 pub(crate) mod queue;

@@ -4,14 +4,14 @@ use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
 
 use crate::{
-    device::{
-        proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-        CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
-    },
     device_protocol::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
     mem::page::ContiguousPages,
     mtt::Mtt,
     net::config::NetworkConfig,
+    protocol_impl_hardware::device::{
+        proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
+        CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
+    },
 };
 
 use super::{
