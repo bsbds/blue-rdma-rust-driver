@@ -25,8 +25,8 @@ use tracing::error;
 use crate::{
     completion::{CqManager, MetaCqTable},
     constants::PSN_MASK,
-    qp::{QpManager, QpTrackerTable},
     device_protocol::{FrameTx, MetaReport, PacketPos, ReportMeta},
+    qp::{QpManager, QpTrackerTable},
     retransmission::message_tracker::MessageTracker,
 };
 
@@ -38,9 +38,9 @@ pub(crate) struct Launch<M> {
     inner: MetaWorker<M>,
 }
 
-impl<M: MetaReport> Launch<M> {
+impl<M: MetaReport + Send + 'static> Launch<M> {
     /// Creates a new `Launch`
-    pub(crate) fn new<F: FrameTx>(
+    pub(crate) fn new<F: FrameTx + Send + 'static>(
         inner: M,
         qp_trackers: QpTrackerTable,
         cq_table: MetaCqTable,
@@ -71,7 +71,7 @@ struct MetaWorker<T> {
     /// Manages CQs
     cq_table: MetaCqTable,
     /// Raw frame tx
-    raw_frame_tx: Box<dyn FrameTx>,
+    raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
 }
 
 impl<T: MetaReport> MetaWorker<T> {

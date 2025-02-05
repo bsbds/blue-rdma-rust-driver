@@ -194,6 +194,7 @@ where
     B::Cmd: DeviceCommand + Send + 'static,
     B::MetaReport: MetaReport + Send + 'static,
     B::SimpleNic: SimpleNicTunnel + Send + 'static,
+    <B::SimpleNic as SimpleNicTunnel>::Sender: Send + 'static,
 {
     pub(crate) fn new(queue_builder: B) -> Self {
         Self { queue_builder }

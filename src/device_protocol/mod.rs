@@ -25,13 +25,13 @@ pub(crate) trait WorkReqSend {
 }
 
 /// Metadata reporting interface
-pub(crate) trait MetaReport: Send + 'static {
+pub(crate) trait MetaReport {
     /// Tries to receive operation metadata
     fn try_recv_meta(&mut self) -> io::Result<Option<ReportMeta>>;
 }
 
 /// Simple NIC tunnel interface
-pub(crate) trait SimpleNicTunnel: Send + 'static {
+pub(crate) trait SimpleNicTunnel {
     /// Frame Sender
     type Sender: FrameTx;
     /// Frame Receiver
@@ -44,13 +44,13 @@ pub(crate) trait SimpleNicTunnel: Send + 'static {
 }
 
 /// Trait for transmitting frames
-pub(crate) trait FrameTx: Send + 'static {
+pub(crate) trait FrameTx {
     /// Send a buffer of bytes as a frame
     fn send(&mut self, buf: &[u8]) -> io::Result<()>;
 }
 
 /// Trait for receiving frames
-pub(crate) trait FrameRx: Send + 'static {
+pub(crate) trait FrameRx {
     /// Try to receive a frame, returning immediately if none available
     fn recv_nonblocking(&mut self) -> io::Result<&[u8]>;
 }

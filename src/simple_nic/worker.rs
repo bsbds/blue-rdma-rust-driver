@@ -201,7 +201,7 @@ struct TxWorker<Tx> {
     shutdown: Arc<AtomicBool>,
 }
 
-impl<Tx: FrameTx> TxWorker<Tx> {
+impl<Tx: FrameTx + Send + 'static> TxWorker<Tx> {
     /// Creates a new `TxWorker`
     fn new(dev: Arc<tun::Device>, frame_tx: Tx, shutdown: Arc<AtomicBool>) -> Self {
         Self {
@@ -253,7 +253,7 @@ struct RxWorker<Rx> {
     shutdown: Arc<AtomicBool>,
 }
 
-impl<Rx: FrameRx> RxWorker<Rx> {
+impl<Rx: FrameRx + Send + 'static> RxWorker<Rx> {
     /// Creates a new `RxWorker`
     fn new(dev: Arc<tun::Device>, frame_rx: Rx, shutdown: Arc<AtomicBool>) -> Self {
         Self {
@@ -310,7 +310,11 @@ pub(crate) struct SimpleNicWorker<Tx, Rx> {
     shutdown: Arc<AtomicBool>,
 }
 
-impl<Tx: FrameTx, Rx: FrameRx> SimpleNicWorker<Tx, Rx> {
+impl<Tx, Rx> SimpleNicWorker<Tx, Rx>
+where
+    Tx: FrameTx + Send + 'static,
+    Rx: FrameRx + Send + 'static,
+{
     /// Creates a new `SimpleNicWorker`
     pub(crate) fn new(
         dev: Arc<tun::Device>,
