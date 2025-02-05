@@ -202,8 +202,6 @@ mod send;
 mod send_scheduler;
 /// Simple network interface card
 mod simple_nic;
-/// Device Queue Workers
-mod workers;
 
 #[allow(unsafe_code)]
 /// Context operations
