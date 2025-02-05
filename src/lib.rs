@@ -168,6 +168,8 @@
 #![allow(unused)] // FIXME: removed clippy unused
 #![allow(clippy::todo)] // FIXME: implement all
 #![allow(clippy::missing_docs_in_private_items)]
+#![allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+#![allow(clippy::arithmetic_side_effects)]
 
 /// Completion Queue implementation
 mod completion;

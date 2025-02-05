@@ -31,7 +31,7 @@ use parking_lot::Mutex;
 use proxy::DeviceProxy;
 
 use crate::{
-    completion::{CompletionEvent, CqManager, EventRegistry, MetaCqTable},
+    completion::{CompletionEvent, CompletionQueueTable, CqManager, EventRegistry},
     ctx_ops::RdmaCtxOps,
     device_protocol::{
         DeviceCommand, MetaReport, MttEntry, QpEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
@@ -226,16 +226,11 @@ where
         cmd_queue.set_network(network)?;
         cmd_queue.set_raw_packet_recv_buffer(meta)?;
         let qp_manager = QpManager::new(max_num_qps);
-        let cq_manager = CqManager::new(max_num_cqs);
-        let meta_cq_table = cq_manager.new_meta_table();
+        let cq_manager = CqManager::new();
+        let cq_table = cq_manager.table().clone_arc();
         let (initiator_table, tracker_table) = qp_manager.new_split();
         let (simple_nic_tx, _simple_nic_rx) = simple_nic.into_split();
-        Self::launch_backgroud(
-            meta_report_queue,
-            simple_nic_tx,
-            tracker_table,
-            meta_cq_table,
-        );
+        Self::launch_backgroud(meta_report_queue, simple_nic_tx, tracker_table, cq_table);
 
         Ok(BlueRdmaInner {
             cmd_queue: Box::new(cmd_queue),
@@ -254,11 +249,11 @@ where
         meta_report: B::MetaReport,
         simple_nic_tx: <B::SimpleNic as SimpleNicTunnel>::Sender,
         tracker_table: QpTrackerTable,
-        meta_cq_table: MetaCqTable,
+        cq_table: CompletionQueueTable,
     ) {
         let is_shutdown = Arc::new(AtomicBool::new(false));
         let launch_meta =
-            meta_worker::Launch::new(meta_report, tracker_table, meta_cq_table, simple_nic_tx);
+            meta_worker::Launch::new(meta_report, tracker_table, cq_table, simple_nic_tx);
         launch_meta.launch(Arc::clone(&is_shutdown));
     }
 }
@@ -697,7 +692,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let context = cq.context;
         let bluerdma = unsafe { get_device(context) };
         let mut bluerdma = bluerdma.inner.lock();
-        let Some(cq) = bluerdma.cq_manager.get_cq(cq.handle) else {
+        let Some(cq) = bluerdma.cq_manager.table().get(cq.handle) else {
             return 0;
         };
         let completions: Vec<_> = std::iter::repeat_with(|| cq.poll_event_queue())

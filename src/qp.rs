@@ -12,17 +12,13 @@ use parking_lot::Mutex;
 use rand::Rng;
 
 use crate::{
-    constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW},
+    constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW, QPN_KEY_PART_WIDTH},
     device_protocol::{WithQpParams, WrChunkBuilder},
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
     },
     send::SendWrResolver,
 };
-
-const MAX_QP_CNT: usize = 1024;
-const QPN_IDX_PART_WIDTH: u32 = 10; // log2(MAX_QP_CNT)
-const QPN_KEY_PART_WIDTH: u32 = 24 - QPN_IDX_PART_WIDTH;
 
 /// Manages QPs
 pub(crate) struct QpManager {

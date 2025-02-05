@@ -23,7 +23,7 @@ use pnet::{
 use tracing::error;
 
 use crate::{
-    completion::{CqManager, MetaCqTable},
+    completion::{CompletionQueueTable, CqManager},
     constants::PSN_MASK,
     device_protocol::{FrameTx, MetaReport, PacketPos, ReportMeta},
     qp::{QpManager, QpTrackerTable},
@@ -43,7 +43,7 @@ impl<M: MetaReport + Send + 'static> Launch<M> {
     pub(crate) fn new<F: FrameTx + Send + 'static>(
         inner: M,
         qp_trackers: QpTrackerTable,
-        cq_table: MetaCqTable,
+        cq_table: CompletionQueueTable,
         raw_frame_tx: F,
     ) -> Self {
         Self {
@@ -69,7 +69,7 @@ struct MetaWorker<T> {
     /// Manages QPs
     qp_trackers: QpTrackerTable,
     /// Manages CQs
-    cq_table: MetaCqTable,
+    cq_table: CompletionQueueTable,
     /// Raw frame tx
     raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
 }
@@ -121,7 +121,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     }
                     PacketPos::Only => {
                         let send_cq = qp.send_cq_handle();
-                        if let Some(cq) = send_cq.and_then(|h| self.cq_table.get_mut(h)) {
+                        if let Some(cq) = send_cq.and_then(|h| self.cq_table.get(h)) {
                             cq.ack_event(msn, qp.qpn());
                         }
                         if ack_req {
@@ -174,7 +174,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     //} else {
                     //    qp.recv_cq_handle()
                     //};
-                    if let Some(cq) = cq_handle.and_then(|h| self.cq_table.get_mut(h)) {
+                    if let Some(cq) = cq_handle.and_then(|h| self.cq_table.get(h)) {
                         if let Some(last_msn_acked) = last_msn_acked {
                             cq.ack_event(last_msn_acked, qp.qpn());
                         }
