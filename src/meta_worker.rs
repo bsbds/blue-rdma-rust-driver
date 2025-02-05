@@ -26,7 +26,7 @@ use crate::{
     completion::{CqManager, MetaCqTable},
     constants::PSN_MASK,
     qp::{QpManager, QpTrackerTable},
-    queue::abstr::{FrameTx, MetaReport, PacketPos, ReportMeta},
+    device_protocol::{FrameTx, MetaReport, PacketPos, ReportMeta},
     retransmission::message_tracker::MessageTracker,
 };
 

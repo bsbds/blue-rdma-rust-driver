@@ -1,8 +1,8 @@
 use std::io;
 
-use crate::queue::{
-    abstr::{MetaReport, ReportMeta},
-    meta_report_queue::{MetaReportQueue, MetaReportQueueDesc},
+use crate::{
+    device_protocol::{MetaReport, ReportMeta},
+    queue::meta_report_queue::{MetaReportQueue, MetaReportQueueDesc},
 };
 
 /// Number of all meta report queues

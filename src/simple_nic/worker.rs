@@ -15,9 +15,9 @@ use crate::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
+    device_protocol::{FrameRx, FrameTx},
     mem::page::ContiguousPages,
     queue::{
-        abstr::{FrameRx, FrameTx},
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         DescRingBuffer,
     },

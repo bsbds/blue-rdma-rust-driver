@@ -179,6 +179,7 @@ mod constants;
 mod desc;
 /// Adaptor deivce
 mod device;
+mod device_protocol;
 /// Memory operation components
 mod mem;
 /// Meta Report Queue handling

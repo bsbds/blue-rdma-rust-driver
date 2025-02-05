@@ -12,7 +12,7 @@ use crate::{
         virt_to_phy::{virt_to_phy_range, AddressResolver},
         PAGE_SIZE,
     },
-    queue::abstr::MttEntry,
+    device_protocol::MttEntry,
 };
 
 /// Memory Translation Table implementation

@@ -19,7 +19,7 @@ use worker::SimpleNicWorker;
 
 use crate::{
     net::tap::TapDevice,
-    queue::abstr::{FrameRx, FrameTx, RecvBuffer, SimpleNicTunnel},
+    device_protocol::{FrameRx, FrameTx, RecvBuffer, SimpleNicTunnel},
 };
 
 #[allow(clippy::module_name_repetitions)]

@@ -1,4 +1,4 @@
-use crate::queue::abstr::{ChunkPos, WithIbvParams, WithQpParams, WrChunk, WrChunkBuilder};
+use crate::device_protocol::{ChunkPos, WithIbvParams, WithQpParams, WrChunk, WrChunkBuilder};
 
 use ibverbs_sys::{
     ibv_send_wr,

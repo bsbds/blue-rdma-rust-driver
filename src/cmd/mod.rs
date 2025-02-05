@@ -13,11 +13,11 @@ use crate::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
+    device_protocol::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
     mem::page::ContiguousPages,
     mtt::Mtt,
     net::config::NetworkConfig,
     queue::{
-        abstr::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         DescRingBuffer,
     },

@@ -27,6 +27,7 @@ use crate::{
         MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
         SendQueueCsrProxy3,
     },
+    device_protocol::DeviceCommand,
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator},
         slot_alloc::SlotAlloc,
@@ -35,7 +36,6 @@ use crate::{
     meta_report::MetaReportQueueHandler,
     net::config::{MacAddress, NetworkConfig},
     queue::{
-        abstr::DeviceCommand,
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         meta_report_queue::MetaReportQueue,
         send_queue::SendQueue,

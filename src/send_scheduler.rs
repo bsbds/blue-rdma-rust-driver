@@ -5,10 +5,8 @@ use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use crate::{
     desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
     device::CsrWriterAdaptor,
-    queue::{
-        abstr::{WorkReqSend, WrChunk},
-        send_queue::{SendQueue, SendQueueDesc},
-    },
+    device_protocol::{WorkReqSend, WrChunk},
+    queue::send_queue::{SendQueue, SendQueueDesc},
 };
 
 /// Injector

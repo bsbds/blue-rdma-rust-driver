@@ -33,6 +33,10 @@ use proxy::DeviceProxy;
 use crate::{
     completion::{CompletionEvent, CqManager, EventRegistry, MetaCqTable},
     ctx_ops::RdmaCtxOps,
+    device_protocol::{
+        DeviceCommand, MetaReport, MttEntry, QpEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
+        WorkReqSend, WrChunk,
+    },
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
         virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
@@ -44,10 +48,6 @@ use crate::{
         tap::TapDevice,
     },
     qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
-    queue::abstr::{
-        DeviceCommand, MetaReport, MttEntry, QpEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
-        WorkReqSend, WrChunk,
-    },
     send::{SendWrResolver, WrFragmenter},
     simple_nic,
 };

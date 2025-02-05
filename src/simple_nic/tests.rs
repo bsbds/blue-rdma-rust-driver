@@ -5,7 +5,7 @@ use std::{
 
 use ipnetwork::IpNetwork;
 
-use crate::queue::abstr::{FrameRx, FrameTx};
+use crate::device_protocol::{FrameRx, FrameTx};
 
 use super::{worker::SimpleNicWorker, SimpleNicDevice, SimpleNicDeviceConfig};
 

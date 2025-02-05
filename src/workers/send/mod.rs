@@ -1,4 +1,4 @@
-use crate::queue::abstr::WorkReqSend;
+use crate::device_protocol::WorkReqSend;
 
 struct SendWorker<SQ> {
     send_queue: SQ,

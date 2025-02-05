@@ -1,6 +1,6 @@
 use bilge::prelude::*;
 
-use crate::{desc::RingBufDescCommonHead, queue::abstr::PacketPos};
+use crate::{desc::RingBufDescCommonHead, device_protocol::PacketPos};
 
 use super::RingBufDescUntyped;
 

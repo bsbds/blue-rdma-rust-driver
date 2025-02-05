@@ -13,7 +13,7 @@ use rand::Rng;
 
 use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW},
-    queue::abstr::{WithQpParams, WrChunkBuilder},
+    device_protocol::{WithQpParams, WrChunkBuilder},
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
     },

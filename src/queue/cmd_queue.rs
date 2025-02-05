@@ -10,11 +10,12 @@ use crate::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
+    device_protocol::DeviceCommand,
     net::config::NetworkConfig,
     ringbuffer::{Descriptor, RingBuffer},
 };
 
-use super::{abstr::DeviceCommand, DescRingBuffer};
+use super::DescRingBuffer;
 
 /// Command queue for submitting commands to the device
 pub(crate) struct CmdQueue {
