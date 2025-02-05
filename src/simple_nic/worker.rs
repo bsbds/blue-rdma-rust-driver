@@ -19,7 +19,7 @@ use crate::{
     queue::{
         abstr::{FrameRx, FrameTx},
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
-        DescRingBuffer, ToCardQueue, ToHostQueue,
+        DescRingBuffer,
     },
 };
 

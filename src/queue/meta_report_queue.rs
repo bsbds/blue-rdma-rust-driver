@@ -6,7 +6,7 @@ use crate::desc::{
     MetaReportQueueReadReqExtendInfoDesc, RingBufDescUntyped,
 };
 
-use super::{DescRingBuffer, ToCardQueue, ToCardQueueTyped, ToHostQueue, ToHostQueueTyped};
+use super::DescRingBuffer;
 
 /// Meta report queue descriptors
 pub(crate) enum MetaReportQueueDesc {

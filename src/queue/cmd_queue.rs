@@ -1,6 +1,3 @@
-/// Cmd queue worker
-pub(crate) mod worker;
-
 use std::io;
 
 use crate::{

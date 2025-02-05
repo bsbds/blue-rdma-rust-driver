@@ -8,7 +8,6 @@ use crate::{
     queue::{
         abstr::{WorkReqSend, WrChunk},
         send_queue::{SendQueue, SendQueueDesc},
-        ToCardQueue,
     },
 };
 

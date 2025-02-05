@@ -2,7 +2,7 @@ use std::io;
 
 use crate::desc::{RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1};
 
-use super::{DescRingBuffer, ToCardQueue, ToCardQueueTyped};
+use super::DescRingBuffer;
 
 /// Send queue descriptor types that can be submitted
 #[derive(Debug, Clone, Copy)]
@@ -24,38 +24,32 @@ impl From<SendQueueDesc> for RingBufDescUntyped {
 
 /// A transmit queue for the simple NIC device.
 pub(crate) struct SendQueue {
-    /// Inner queue
-    inner: ToCardQueueTyped<SendQueueDesc>,
+    /// Inner ring buffer
+    inner: DescRingBuffer,
 }
 
 impl SendQueue {
     pub(crate) fn new(ring_buffer: DescRingBuffer) -> Self {
-        Self {
-            inner: ToCardQueueTyped::new(ring_buffer),
-        }
+        Self { inner: ring_buffer }
+    }
+
+    pub(crate) fn push(&mut self, desc: SendQueueDesc) -> io::Result<()> {
+        let addr = self.inner.base_addr();
+        self.inner.push(desc.into())
     }
 
     /// Returns the base address of the buffer
     pub(crate) fn base_addr(&self) -> u64 {
-        self.inner.inner.base_addr()
+        self.inner.base_addr()
     }
 
     /// Returns the head pointer of the buffer
     pub(crate) fn head(&self) -> u32 {
-        self.inner.inner.head()
+        self.inner.head()
     }
 
     /// Returns the head pointer of the buffer
     pub(crate) fn set_tail(&mut self, tail: u32) {
-        self.inner.inner.set_tail(tail);
-    }
-}
-
-impl ToCardQueue for SendQueue {
-    type Desc = SendQueueDesc;
-
-    fn push(&mut self, desc: Self::Desc) -> io::Result<()> {
-        let addr = self.inner.inner.base_addr();
-        self.inner.push(desc)
+        self.inner.set_tail(tail);
     }
 }
