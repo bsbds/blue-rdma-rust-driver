@@ -14,7 +14,6 @@ use csr::RpcClient;
 use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
-    cmd::CommandController,
     desc::{
         cmd::{
             CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
@@ -33,8 +32,11 @@ use crate::{
         slot_alloc::SlotAlloc,
         virt_to_phy::{self, AddressResolver, PhysAddrResolver, PhysAddrResolverEmulated},
     },
-    meta_report::MetaReportQueueHandler,
     net::config::{MacAddress, NetworkConfig},
+    protocol_impl_hardware::CommandController,
+    protocol_impl_hardware::MetaReportQueueHandler,
+    protocol_impl_hardware::SimpleNicController,
+    protocol_impl_hardware::{SendQueueScheduler, SendWorkerBuilder},
     queue::{
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         meta_report_queue::MetaReportQueue,
@@ -42,8 +44,6 @@ use crate::{
         DescRingBufferAllocator,
     },
     ringbuffer::{RingBuffer, RingCtx},
-    send_scheduler::{SendQueueScheduler, SendWorkerBuilder},
-    simple_nic::SimpleNicController,
 };
 
 use super::{

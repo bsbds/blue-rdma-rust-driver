@@ -49,7 +49,6 @@ use crate::{
     },
     qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
     send::{SendWrResolver, WrFragmenter},
-    simple_nic,
 };
 
 /// A trait for interacting with device hardware through CSR operations.

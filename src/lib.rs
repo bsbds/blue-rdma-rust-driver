@@ -169,8 +169,6 @@
 #![allow(clippy::todo)] // FIXME: implement all
 #![allow(clippy::missing_docs_in_private_items)]
 
-/// Device Command Control implementations
-mod cmd;
 /// Completion Queue implementation
 mod completion;
 /// Constants used throughout the driver
@@ -182,12 +180,11 @@ mod device;
 mod device_protocol;
 /// Memory operation components
 mod mem;
-/// Meta Report Queue handling
-mod meta_report;
 /// Worker for handling meta from meta report queues
 mod meta_worker;
 /// Memory translation table
 mod mtt;
+mod protocol_impl_hardware;
 /// Queue pair state
 mod qp;
 /// Queue implementation
@@ -198,10 +195,6 @@ mod retransmission;
 mod ringbuffer;
 /// Send Queue implementations
 mod send;
-/// Send queue scheduler
-mod send_scheduler;
-/// Simple network interface card
-mod simple_nic;
 
 #[allow(unsafe_code)]
 /// Context operations
@@ -214,6 +207,6 @@ pub mod net;
 pub use device::emulated::EmulatedDevice;
 pub use device::BlueRdma;
 
-pub use simple_nic::SimpleNicDeviceConfig;
+pub use protocol_impl_hardware::SimpleNicDeviceConfig;
 
 pub mod bench_wrappers;
