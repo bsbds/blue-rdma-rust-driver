@@ -1,4 +1,4 @@
-use crate::desc::{DescFromBytes, MetaReportQueueDescBthReth};
+use crate::protocol_impl_hardware::desc::{DescFromBytes, MetaReportQueueDescBthReth};
 
 pub struct MetaReportQueueDescBthRethWrapper(MetaReportQueueDescBthReth);
 

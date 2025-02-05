@@ -6,10 +6,11 @@ use std::{
 use memmap2::MmapMut;
 
 use crate::{
-    desc::RingBufDescUntyped,
     mem::page::{ContiguousPages, HostPageAllocator, PageAllocator},
     ringbuffer::{RingBuffer, RingCtx},
 };
+
+use super::super::desc::RingBufDescUntyped;
 
 /// A buffer backed by contiguous physical pages.
 pub(crate) struct PageBuf {

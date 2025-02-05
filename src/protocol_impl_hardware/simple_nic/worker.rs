@@ -10,19 +10,21 @@ use std::{
 use tracing::error;
 
 use crate::{
-    desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
     device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
     device_protocol::{FrameRx, FrameTx},
     mem::page::ContiguousPages,
+};
+
+use super::super::{
+    desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc},
     queue::{
         simple_nic::{SimpleNicRxQueue, SimpleNicTxQueue},
         DescRingBuffer,
     },
 };
-
 use super::{SimpleNicDevice, SimpleNicTunnel};
 
 pub(crate) struct SimpleNicController<Dev> {

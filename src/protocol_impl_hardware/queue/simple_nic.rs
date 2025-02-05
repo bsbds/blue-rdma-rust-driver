@@ -3,7 +3,7 @@ use std::{
     ops::{Deref, DerefMut},
 };
 
-use crate::desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc};
+use super::super::desc::simple_nic::{SimpleNicRxQueueDesc, SimpleNicTxQueueDesc};
 
 use super::DescRingBuffer;
 

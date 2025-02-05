@@ -6,13 +6,12 @@ use std::io;
 use alloc::Alloc;
 
 use crate::{
-    desc::cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
+    device_protocol::MttEntry,
     mem::{
         page::ContiguousPages,
         virt_to_phy::{virt_to_phy_range, AddressResolver},
         PAGE_SIZE,
     },
-    device_protocol::MttEntry,
 };
 
 /// Memory Translation Table implementation

@@ -1,6 +1,6 @@
 use bilge::prelude::*;
 
-use crate::desc::RingBufDescCommonHead;
+use super::RingBufDescCommonHead;
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]

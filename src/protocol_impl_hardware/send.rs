@@ -3,9 +3,12 @@ use std::{iter, sync::Arc, time::Duration};
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 
 use crate::{
-    desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
     device::CsrWriterAdaptor,
     device_protocol::{WorkReqSend, WrChunk},
+};
+
+use super::{
+    desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
     queue::send_queue::{SendQueue, SendQueueDesc},
 };
 

@@ -1,11 +1,6 @@
 use std::io;
 
 use crate::{
-    desc::{
-        CmdQueueReqDescQpManagement, CmdQueueReqDescSetNetworkParam,
-        CmdQueueReqDescSetRawPacketReceiveMeta, CmdQueueReqDescUpdateMrTable,
-        CmdQueueReqDescUpdatePGT, CmdQueueRespDescOnlyCommonHeader, RingBufDescUntyped,
-    },
     device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
@@ -15,6 +10,11 @@ use crate::{
     ringbuffer::{Descriptor, RingBuffer},
 };
 
+use super::super::desc::{
+    CmdQueueReqDescQpManagement, CmdQueueReqDescSetNetworkParam,
+    CmdQueueReqDescSetRawPacketReceiveMeta, CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
+    CmdQueueRespDescOnlyCommonHeader, RingBufDescUntyped,
+};
 use super::DescRingBuffer;
 
 /// Command queue for submitting commands to the device
@@ -115,8 +115,8 @@ mod test {
     use std::iter;
 
     use crate::{
-        device::dummy::DummyDevice, mem::page::HostPageAllocator, queue::DescRingBufferAllocator,
-        ringbuffer::new_test_ring,
+        device::dummy::DummyDevice, mem::page::HostPageAllocator,
+        protocol_impl_hardware::queue::DescRingBufferAllocator, ringbuffer::new_test_ring,
     };
 
     use super::*;

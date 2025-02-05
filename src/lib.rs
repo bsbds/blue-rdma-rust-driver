@@ -173,8 +173,6 @@
 mod completion;
 /// Constants used throughout the driver
 mod constants;
-/// Descriptor definitions
-mod desc;
 /// Adaptor deivce
 mod device;
 mod device_protocol;
@@ -187,8 +185,6 @@ mod mtt;
 mod protocol_impl_hardware;
 /// Queue pair state
 mod qp;
-/// Queue implementation
-pub(crate) mod queue;
 /// Packet retransmission implementations
 mod retransmission;
 /// RDMA ring buffer implementation

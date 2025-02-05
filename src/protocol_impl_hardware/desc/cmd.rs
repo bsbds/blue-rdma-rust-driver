@@ -1,6 +1,6 @@
 use bilge::prelude::*;
 
-use crate::desc::RingBufDescCommonHead;
+use super::RingBufDescCommonHead;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 #[repr(u8)]

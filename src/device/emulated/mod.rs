@@ -14,13 +14,6 @@ use csr::RpcClient;
 use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
-    desc::{
-        cmd::{
-            CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
-            CmdQueueRespDescOnlyCommonHeader,
-        },
-        RingBufDescUntyped,
-    },
     device::proxy::{
         MetaReportQueueCsrProxy0, MetaReportQueueCsrProxy1, MetaReportQueueCsrProxy2,
         MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
@@ -33,16 +26,23 @@ use crate::{
         virt_to_phy::{self, AddressResolver, PhysAddrResolver, PhysAddrResolverEmulated},
     },
     net::config::{MacAddress, NetworkConfig},
-    protocol_impl_hardware::CommandController,
-    protocol_impl_hardware::MetaReportQueueHandler,
-    protocol_impl_hardware::SimpleNicController,
-    protocol_impl_hardware::{SendQueueScheduler, SendWorkerBuilder},
-    queue::{
+    protocol_impl_hardware::desc::{
+        cmd::{
+            CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT,
+            CmdQueueRespDescOnlyCommonHeader,
+        },
+        RingBufDescUntyped,
+    },
+    protocol_impl_hardware::queue::{
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         meta_report_queue::MetaReportQueue,
         send_queue::SendQueue,
         DescRingBufferAllocator,
     },
+    protocol_impl_hardware::CommandController,
+    protocol_impl_hardware::MetaReportQueueHandler,
+    protocol_impl_hardware::SimpleNicController,
+    protocol_impl_hardware::{SendQueueScheduler, SendWorkerBuilder},
     ringbuffer::{RingBuffer, RingCtx},
 };
 

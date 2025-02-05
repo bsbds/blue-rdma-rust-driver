@@ -1,8 +1,8 @@
 use bilge::prelude::*;
 
-use crate::{desc::RingBufDescCommonHead, device_protocol::PacketPos};
+use crate::device_protocol::PacketPos;
 
-use super::RingBufDescUntyped;
+use super::{RingBufDescCommonHead, RingBufDescUntyped};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

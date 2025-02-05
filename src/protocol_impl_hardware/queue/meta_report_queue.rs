@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::desc::{
+use crate::protocol_impl_hardware::desc::{
     MetaReportQueueAckDesc, MetaReportQueueAckExtraDesc, MetaReportQueueDescFirst,
     MetaReportQueueDescNext, MetaReportQueuePacketBasicInfoDesc,
     MetaReportQueueReadReqExtendInfoDesc, RingBufDescUntyped,

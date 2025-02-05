@@ -4,11 +4,6 @@ use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
 
 use crate::{
-    desc::{
-        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
-        CmdQueueReqDescQpManagement, CmdQueueReqDescSetNetworkParam,
-        CmdQueueReqDescSetRawPacketReceiveMeta,
-    },
     device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
@@ -17,6 +12,14 @@ use crate::{
     mem::page::ContiguousPages,
     mtt::Mtt,
     net::config::NetworkConfig,
+};
+
+use super::{
+    desc::{
+        cmd::{CmdQueueReqDescUpdateMrTable, CmdQueueReqDescUpdatePGT},
+        CmdQueueReqDescQpManagement, CmdQueueReqDescSetNetworkParam,
+        CmdQueueReqDescSetRawPacketReceiveMeta,
+    },
     queue::{
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         DescRingBuffer,

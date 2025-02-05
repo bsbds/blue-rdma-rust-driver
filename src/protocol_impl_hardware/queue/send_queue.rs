@@ -1,6 +1,8 @@
 use std::io;
 
-use crate::desc::{RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1};
+use crate::protocol_impl_hardware::desc::{
+    RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1,
+};
 
 use super::DescRingBuffer;
 
