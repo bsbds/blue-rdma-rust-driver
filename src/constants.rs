@@ -15,3 +15,6 @@ pub(crate) const QPN_IDX_PART_WIDTH: u32 = 10; // log2(MAX_QP_CNT)
 pub(crate) const QPN_KEY_PART_WIDTH: u32 = 24 - QPN_IDX_PART_WIDTH;
 
 pub(crate) const MAX_CQ_CNT: usize = 1024;
+
+/// Maximum number of outstanding send work requests (WRs) that can be posted to a Queue Pair (QP).
+pub(crate) const MAX_SEND_WR: usize = 0x8000;
