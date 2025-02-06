@@ -101,7 +101,7 @@ impl PacketTracker {
     }
 
     /// Returns the current base PSN
-    fn base_psn(&self) -> u32 {
+    pub(crate) fn base_psn(&self) -> u32 {
         self.base_psn.load(Ordering::Acquire)
     }
 

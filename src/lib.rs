@@ -185,6 +185,7 @@ mod mtt;
 mod protocol_impl_hardware;
 /// Queue pair state
 mod qp;
+mod queue_pair;
 /// Packet retransmission implementations
 mod retransmission;
 /// RDMA ring buffer implementation
