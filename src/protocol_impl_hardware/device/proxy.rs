@@ -10,15 +10,18 @@ use crate::protocol_impl_hardware::device::{
     CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, RingBufferCsrAddr, ToCard, ToHost,
 };
 
-use super::constants::{
-    CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_HIGH,
-    CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_LOW,
-    CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_HEAD, CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_TAIL,
-    CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_HIGH,
-    CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_LOW,
-    CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_HEAD, CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_TAIL,
-    NUM_QPS, QP_RECV_ADDR_HIGH, QP_RECV_ADDR_LOW, QP_RECV_HEAD, QP_RECV_TAIL, QP_WQE_ADDR_HIGH,
-    QP_WQE_ADDR_LOW, QP_WQE_HEAD, QP_WQE_TAIL,
+use super::{
+    constants::{
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_HIGH,
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_LOW,
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_HEAD, CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_TAIL,
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_HIGH,
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_LOW,
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_HEAD, CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_TAIL,
+        NUM_QPS, QP_RECV_ADDR_HIGH, QP_RECV_ADDR_LOW, QP_RECV_HEAD, QP_RECV_TAIL, QP_WQE_ADDR_HIGH,
+        QP_WQE_ADDR_LOW, QP_WQE_HEAD, QP_WQE_TAIL,
+    },
+    mode::Mode,
 };
 
 /// Trait for proxying access to an underlying RDMA device.
@@ -222,8 +225,13 @@ impl<Dev> DeviceProxy for MetaReportQueueProxy<Dev> {
     }
 }
 
-pub(crate) fn build_send_queue_proxies<Dev: Clone>(dev: Dev) -> Vec<SendQueueProxy<Dev>> {
-    (0..NUM_QPS)
+pub(crate) fn build_send_queue_proxies<Dev: Clone>(
+    dev: Dev,
+    mode: Mode,
+) -> Vec<SendQueueProxy<Dev>> {
+    mode.channel_ids()
+        .iter()
+        .copied()
         .map(|id| SendQueueProxy {
             dev: dev.clone(),
             id,
@@ -233,8 +241,11 @@ pub(crate) fn build_send_queue_proxies<Dev: Clone>(dev: Dev) -> Vec<SendQueuePro
 
 pub(crate) fn build_meta_report_queue_proxies<Dev: Clone>(
     dev: Dev,
+    mode: Mode,
 ) -> Vec<MetaReportQueueProxy<Dev>> {
-    (0..NUM_QPS)
+    mode.channel_ids()
+        .iter()
+        .copied()
         .map(|id| MetaReportQueueProxy {
             dev: dev.clone(),
             id,

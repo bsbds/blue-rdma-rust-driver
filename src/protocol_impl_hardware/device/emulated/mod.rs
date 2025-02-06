@@ -44,9 +44,7 @@ use crate::{
 };
 
 use super::{
-    proxy::{build_meta_report_queue_proxies, build_send_queue_proxies, CmdQueueCsrProxy, CmdRespQueueCsrProxy},
-    CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, DeviceBuilder,
-    InitializeDeviceQueue, PageAllocator,
+    mode::Mode, proxy::{build_meta_report_queue_proxies, build_send_queue_proxies, CmdQueueCsrProxy, CmdRespQueueCsrProxy}, CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, DeviceBuilder, InitializeDeviceQueue, PageAllocator
 };
 
 #[non_exhaustive]
@@ -115,9 +113,9 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             cmd_resp_queue_buffer,
             cmdrespq_base_pa,
         )?;
-
+        let mode = Mode::default();
         let sqs = iter::repeat_with(|| allocator.alloc().map(SendQueue::new))
-            .take(4)
+            .take(mode.num_channel())
             .collect::<Result<Vec<_>, _>>()?;
         let sq_base_pas: Vec<_> = sqs
             .iter()
@@ -127,7 +125,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .into_iter()
             .flatten()
             .collect();
-        let mut sq_proxies = build_send_queue_proxies(dev.clone());
+        let mut sq_proxies = build_send_queue_proxies(dev.clone(), mode);
         for (proxy, pa) in sq_proxies.iter_mut().zip(sq_base_pas) {
             proxy.write_base_addr(pa);
         }
@@ -139,7 +137,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
         }
 
         let mrqs = iter::repeat_with(|| allocator.alloc().map(MetaReportQueue::new))
-            .take(4)
+            .take(mode.num_channel())
             .collect::<Result<Vec<_>, _>>()?;
         let mrq_base_pas: Vec<_> = mrqs
             .iter()
@@ -149,7 +147,7 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .into_iter()
             .flatten()
             .collect();
-        let mut mrq_proxies = build_meta_report_queue_proxies(dev.clone());
+        let mut mrq_proxies = build_meta_report_queue_proxies(dev.clone(), mode);
         for (proxy, pa) in mrq_proxies.iter_mut().zip(mrq_base_pas) {
             proxy.write_base_addr(pa);
         }
