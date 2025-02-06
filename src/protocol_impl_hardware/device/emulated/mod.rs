@@ -29,10 +29,7 @@ use crate::{
         RingBufDescUntyped,
     },
     protocol_impl_hardware::device::proxy::{
-        MetaReportQueueCsrProxy0, MetaReportQueueCsrProxy1, MetaReportQueueCsrProxy2,
-        MetaReportQueueCsrProxy3, SendQueueCsrProxy0, SendQueueCsrProxy1, SendQueueCsrProxy2,
-        SendQueueCsrProxy3,
-    },
+            },
     protocol_impl_hardware::queue::{
         cmd_queue::{CmdQueue, CmdQueueDesc, CmdRespQueue},
         meta_report_queue::MetaReportQueue,
@@ -47,7 +44,7 @@ use crate::{
 };
 
 use super::{
-    proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
+    proxy::{build_meta_report_queue_proxies, build_send_queue_proxies, CmdQueueCsrProxy, CmdRespQueueCsrProxy},
     CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor, DeviceBuilder,
     InitializeDeviceQueue, PageAllocator,
 };
@@ -130,25 +127,13 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .into_iter()
             .flatten()
             .collect();
-        // TODO: use loop
-        let sq_proxy0 = SendQueueCsrProxy0(dev.clone());
-        let sq_proxy1 = SendQueueCsrProxy1(dev.clone());
-        let sq_proxy2 = SendQueueCsrProxy2(dev.clone());
-        let sq_proxy3 = SendQueueCsrProxy3(dev.clone());
-        sq_proxy0.write_base_addr(sq_base_pas[0]);
-        sq_proxy1.write_base_addr(sq_base_pas[1]);
-        sq_proxy2.write_base_addr(sq_base_pas[2]);
-        sq_proxy3.write_base_addr(sq_base_pas[3]);
-
-        let proxies: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>> = vec![
-            Box::new(sq_proxy0),
-            Box::new(sq_proxy1),
-            Box::new(sq_proxy2),
-            Box::new(sq_proxy3),
-        ];
+        let mut sq_proxies = build_send_queue_proxies(dev.clone());
+        for (proxy, pa) in sq_proxies.iter_mut().zip(sq_base_pas) {
+            proxy.write_base_addr(pa);
+        }
         let send_scheduler = SendQueueScheduler::new();
         let builder = SendWorkerBuilder::new_with_global_injector(send_scheduler.injector());
-        let mut workers = builder.build_workers(sqs, proxies);
+        let mut workers = builder.build_workers(sqs, sq_proxies);
         for worker in workers.drain(3..) {
             let _handle = thread::spawn(|| worker.run());
         }
@@ -164,14 +149,10 @@ impl InitializeDeviceQueue for EmulatedQueueBuilder {
             .into_iter()
             .flatten()
             .collect();
-        let mrq_proxy0 = MetaReportQueueCsrProxy0(dev.clone());
-        let mrq_proxy1 = MetaReportQueueCsrProxy1(dev.clone());
-        let mrq_proxy2 = MetaReportQueueCsrProxy2(dev.clone());
-        let mrq_proxy3 = MetaReportQueueCsrProxy3(dev.clone());
-        mrq_proxy0.write_base_addr(mrq_base_pas[0]);
-        mrq_proxy1.write_base_addr(mrq_base_pas[1]);
-        mrq_proxy2.write_base_addr(mrq_base_pas[2]);
-        mrq_proxy3.write_base_addr(mrq_base_pas[3]);
+        let mut mrq_proxies = build_meta_report_queue_proxies(dev.clone());
+        for (proxy, pa) in mrq_proxies.iter_mut().zip(mrq_base_pas) {
+            proxy.write_base_addr(pa);
+        }
         let meta_report_handler = MetaReportQueueHandler::new(mrqs);
 
         let simple_nic_tx_queue_buffer = allocator.alloc()?;

@@ -80,13 +80,13 @@ pub(crate) trait DeviceAdaptor: Clone {
 /// Trait for types that have ring buffer CSR addresses
 pub(crate) trait RingBufferCsrAddr {
     /// Memory address of the head pointer register
-    const HEAD: usize;
+    fn head(&self) -> usize;
     /// Memory address of the tail pointer register
-    const TAIL: usize;
+    fn tail(&self) -> usize;
     /// Memory address of the low 32 bits of the base address register
-    const BASE_ADDR_LOW: usize;
+    fn base_addr_low(&self) -> usize;
     /// Memory address of the high 32 bits of the base address register
-    const BASE_ADDR_HIGH: usize;
+    fn base_addr_high(&self) -> usize;
 }
 
 /// Marker trait for ring buffers that transfer data from host to card
@@ -125,11 +125,11 @@ where
     <T as DeviceProxy>::Device: DeviceAdaptor,
 {
     fn write_head(&self, data: u32) -> io::Result<()> {
-        self.device().write_csr(T::HEAD, data)
+        self.device().write_csr(self.head(), data)
     }
 
     fn read_tail(&self) -> io::Result<u32> {
-        self.device().read_csr(T::TAIL)
+        self.device().read_csr(self.tail())
     }
 }
 
@@ -139,11 +139,11 @@ where
     <T as DeviceProxy>::Device: DeviceAdaptor,
 {
     fn write_tail(&self, data: u32) -> io::Result<()> {
-        self.device().write_csr(Self::TAIL, data)
+        self.device().write_csr(self.tail(), data)
     }
 
     fn read_head(&self) -> io::Result<u32> {
-        self.device().read_csr(Self::HEAD)
+        self.device().read_csr(self.head())
     }
 }
 
@@ -154,17 +154,17 @@ where
 {
     #[allow(clippy::arithmetic_side_effects)]
     fn read_base_addr(&self) -> io::Result<u64> {
-        let lo = self.device().read_csr(Self::BASE_ADDR_LOW)?;
-        let hi = self.device().read_csr(Self::BASE_ADDR_HIGH)?;
+        let lo = self.device().read_csr(self.base_addr_low())?;
+        let hi = self.device().read_csr(self.base_addr_high())?;
         Ok(u64::from(lo) + (u64::from(hi) << 32))
     }
 
     #[allow(clippy::as_conversions)]
     fn write_base_addr(&self, phys_addr: u64) -> io::Result<()> {
         self.device()
-            .write_csr(Self::BASE_ADDR_LOW, (phys_addr & 0xFFFF_FFFF) as u32)?;
+            .write_csr(self.base_addr_low(), (phys_addr & 0xFFFF_FFFF) as u32)?;
         self.device()
-            .write_csr(Self::BASE_ADDR_HIGH, (phys_addr >> 32) as u32)
+            .write_csr(self.base_addr_high(), (phys_addr >> 32) as u32)
     }
 }
 

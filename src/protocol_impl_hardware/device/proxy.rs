@@ -17,7 +17,7 @@ use super::constants::{
     CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_HIGH,
     CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_LOW,
     CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_HEAD, CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_TAIL,
-    QP_RECV_ADDR_HIGH, QP_RECV_ADDR_LOW, QP_RECV_HEAD, QP_RECV_TAIL, QP_WQE_ADDR_HIGH,
+    NUM_QPS, QP_RECV_ADDR_HIGH, QP_RECV_ADDR_LOW, QP_RECV_HEAD, QP_RECV_TAIL, QP_WQE_ADDR_HIGH,
     QP_WQE_ADDR_LOW, QP_WQE_HEAD, QP_WQE_TAIL,
 };
 
@@ -36,10 +36,21 @@ pub(crate) struct CmdQueueCsrProxy<Dev>(pub(crate) Dev);
 impl<Dev> ToCard for CmdQueueCsrProxy<Dev> {}
 
 impl<Dev> RingBufferCsrAddr for CmdQueueCsrProxy<Dev> {
-    const HEAD: usize = CSR_ADDR_CMD_REQ_QUEUE_HEAD;
-    const TAIL: usize = CSR_ADDR_CMD_REQ_QUEUE_TAIL;
-    const BASE_ADDR_LOW: usize = CSR_ADDR_CMD_REQ_QUEUE_ADDR_LOW;
-    const BASE_ADDR_HIGH: usize = CSR_ADDR_CMD_REQ_QUEUE_ADDR_HIGH;
+    fn head(&self) -> usize {
+        CSR_ADDR_CMD_REQ_QUEUE_HEAD
+    }
+
+    fn tail(&self) -> usize {
+        CSR_ADDR_CMD_REQ_QUEUE_TAIL
+    }
+
+    fn base_addr_low(&self) -> usize {
+        CSR_ADDR_CMD_REQ_QUEUE_ADDR_LOW
+    }
+
+    fn base_addr_high(&self) -> usize {
+        CSR_ADDR_CMD_REQ_QUEUE_ADDR_HIGH
+    }
 }
 
 impl<Dev> DeviceProxy for CmdQueueCsrProxy<Dev> {
@@ -56,10 +67,21 @@ pub(crate) struct CmdRespQueueCsrProxy<Dev>(pub(crate) Dev);
 impl<Dev> ToHost for CmdRespQueueCsrProxy<Dev> {}
 
 impl<Dev> RingBufferCsrAddr for CmdRespQueueCsrProxy<Dev> {
-    const HEAD: usize = CSR_ADDR_CMD_RESP_QUEUE_HEAD;
-    const TAIL: usize = CSR_ADDR_CMD_RESP_QUEUE_TAIL;
-    const BASE_ADDR_LOW: usize = CSR_ADDR_CMD_RESP_QUEUE_ADDR_LOW;
-    const BASE_ADDR_HIGH: usize = CSR_ADDR_CMD_RESP_QUEUE_ADDR_HIGH;
+    fn head(&self) -> usize {
+        CSR_ADDR_CMD_RESP_QUEUE_HEAD
+    }
+
+    fn tail(&self) -> usize {
+        CSR_ADDR_CMD_RESP_QUEUE_TAIL
+    }
+
+    fn base_addr_low(&self) -> usize {
+        CSR_ADDR_CMD_RESP_QUEUE_ADDR_LOW
+    }
+
+    fn base_addr_high(&self) -> usize {
+        CSR_ADDR_CMD_RESP_QUEUE_ADDR_HIGH
+    }
 }
 
 impl<Dev> DeviceProxy for CmdRespQueueCsrProxy<Dev> {
@@ -76,10 +98,21 @@ pub(crate) struct SimpleNicTxQueueCsrProxy<Dev>(pub(crate) Dev);
 impl<Dev> ToCard for SimpleNicTxQueueCsrProxy<Dev> {}
 
 impl<Dev> RingBufferCsrAddr for SimpleNicTxQueueCsrProxy<Dev> {
-    const HEAD: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_HEAD;
-    const TAIL: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_TAIL;
-    const BASE_ADDR_LOW: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_LOW;
-    const BASE_ADDR_HIGH: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_HIGH;
+    fn head(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_HEAD
+    }
+
+    fn tail(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_TAIL
+    }
+
+    fn base_addr_low(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_LOW
+    }
+
+    fn base_addr_high(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_TX_Q_RINGBUF_BASE_ADDR_HIGH
+    }
 }
 
 impl<Dev> DeviceProxy for SimpleNicTxQueueCsrProxy<Dev> {
@@ -96,10 +129,21 @@ pub(crate) struct SimpleNicRxQueueCsrProxy<Dev>(pub(crate) Dev);
 impl<Dev> ToHost for SimpleNicRxQueueCsrProxy<Dev> {}
 
 impl<Dev> RingBufferCsrAddr for SimpleNicRxQueueCsrProxy<Dev> {
-    const HEAD: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_HEAD;
-    const TAIL: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_TAIL;
-    const BASE_ADDR_LOW: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_LOW;
-    const BASE_ADDR_HIGH: usize = CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_HIGH;
+    fn head(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_HEAD
+    }
+
+    fn tail(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_TAIL
+    }
+
+    fn base_addr_low(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_LOW
+    }
+
+    fn base_addr_high(&self) -> usize {
+        CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_BASE_ADDR_HIGH
+    }
 }
 
 impl<Dev> DeviceProxy for SimpleNicRxQueueCsrProxy<Dev> {
@@ -110,58 +154,90 @@ impl<Dev> DeviceProxy for SimpleNicRxQueueCsrProxy<Dev> {
     }
 }
 
-macro_rules! impl_send_queue {
-    ($name:ident, $n:literal) => {
-        #[derive(Clone, Debug)]
-        pub(crate) struct $name<Dev>(pub(crate) Dev);
-
-        impl<Dev> ToCard for $name<Dev> {}
-
-        impl<Dev> RingBufferCsrAddr for $name<Dev> {
-            const HEAD: usize = QP_WQE_HEAD[$n];
-            const TAIL: usize = QP_WQE_TAIL[$n];
-            const BASE_ADDR_LOW: usize = QP_WQE_ADDR_LOW[$n];
-            const BASE_ADDR_HIGH: usize = QP_WQE_ADDR_HIGH[$n];
-        }
-
-        impl<Dev> DeviceProxy for $name<Dev> {
-            type Device = Dev;
-            fn device(&self) -> &Self::Device {
-                &self.0
-            }
-        }
-    };
+pub(crate) struct SendQueueProxy<Dev> {
+    dev: Dev,
+    id: usize,
 }
 
-macro_rules! impl_meta_report_queue {
-    ($name:ident, $n:literal) => {
-        #[derive(Clone, Debug)]
-        pub(crate) struct $name<Dev>(pub(crate) Dev);
+impl<Dev> ToCard for SendQueueProxy<Dev> {}
 
-        impl<Dev> ToHost for $name<Dev> {}
+#[allow(clippy::indexing_slicing)] // static
+impl<Dev> RingBufferCsrAddr for SendQueueProxy<Dev> {
+    fn head(&self) -> usize {
+        QP_WQE_HEAD[self.id]
+    }
 
-        impl<Dev> RingBufferCsrAddr for $name<Dev> {
-            const HEAD: usize = QP_RECV_HEAD[$n];
-            const TAIL: usize = QP_RECV_TAIL[$n];
-            const BASE_ADDR_LOW: usize = QP_RECV_ADDR_LOW[$n];
-            const BASE_ADDR_HIGH: usize = QP_RECV_ADDR_HIGH[$n];
-        }
+    fn tail(&self) -> usize {
+        QP_WQE_TAIL[self.id]
+    }
 
-        impl<Dev> DeviceProxy for $name<Dev> {
-            type Device = Dev;
-            fn device(&self) -> &Self::Device {
-                &self.0
-            }
-        }
-    };
+    fn base_addr_low(&self) -> usize {
+        QP_WQE_ADDR_LOW[self.id]
+    }
+
+    fn base_addr_high(&self) -> usize {
+        QP_WQE_ADDR_HIGH[self.id]
+    }
 }
 
-impl_send_queue!(SendQueueCsrProxy0, 0);
-impl_send_queue!(SendQueueCsrProxy1, 1);
-impl_send_queue!(SendQueueCsrProxy2, 2);
-impl_send_queue!(SendQueueCsrProxy3, 3);
+impl<Dev> DeviceProxy for SendQueueProxy<Dev> {
+    type Device = Dev;
 
-impl_meta_report_queue!(MetaReportQueueCsrProxy0, 0);
-impl_meta_report_queue!(MetaReportQueueCsrProxy1, 1);
-impl_meta_report_queue!(MetaReportQueueCsrProxy2, 2);
-impl_meta_report_queue!(MetaReportQueueCsrProxy3, 3);
+    fn device(&self) -> &Self::Device {
+        &self.dev
+    }
+}
+
+pub(crate) struct MetaReportQueueProxy<Dev> {
+    dev: Dev,
+    id: usize,
+}
+
+impl<Dev> ToHost for MetaReportQueueProxy<Dev> {}
+
+#[allow(clippy::indexing_slicing)] // static
+impl<Dev> RingBufferCsrAddr for MetaReportQueueProxy<Dev> {
+    fn head(&self) -> usize {
+        QP_RECV_HEAD[self.id]
+    }
+
+    fn tail(&self) -> usize {
+        QP_RECV_TAIL[self.id]
+    }
+
+    fn base_addr_low(&self) -> usize {
+        QP_RECV_ADDR_LOW[self.id]
+    }
+
+    fn base_addr_high(&self) -> usize {
+        QP_RECV_ADDR_HIGH[self.id]
+    }
+}
+
+impl<Dev> DeviceProxy for MetaReportQueueProxy<Dev> {
+    type Device = Dev;
+
+    fn device(&self) -> &Self::Device {
+        &self.dev
+    }
+}
+
+pub(crate) fn build_send_queue_proxies<Dev: Clone>(dev: Dev) -> Vec<SendQueueProxy<Dev>> {
+    (0..NUM_QPS)
+        .map(|id| SendQueueProxy {
+            dev: dev.clone(),
+            id,
+        })
+        .collect()
+}
+
+pub(crate) fn build_meta_report_queue_proxies<Dev: Clone>(
+    dev: Dev,
+) -> Vec<MetaReportQueueProxy<Dev>> {
+    (0..NUM_QPS)
+        .map(|id| MetaReportQueueProxy {
+            dev: dev.clone(),
+            id,
+        })
+        .collect()
+}

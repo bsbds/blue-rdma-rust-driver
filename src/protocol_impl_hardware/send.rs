@@ -9,6 +9,7 @@ use crate::{
 
 use super::{
     desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
+    device::{proxy::SendQueueProxy, DeviceAdaptor},
     queue::send_queue::{SendQueue, SendQueueDesc},
 };
 
@@ -61,11 +62,11 @@ impl SendWorkerBuilder {
         Self { global }
     }
 
-    pub(crate) fn build_workers(
+    pub(crate) fn build_workers<Dev>(
         self,
         send_queues: Vec<SendQueue>,
-        adaptors: Vec<Box<dyn CsrWriterAdaptor + Send + 'static>>,
-    ) -> Vec<SendWorker> {
+        adaptors: Vec<SendQueueProxy<Dev>>,
+    ) -> Vec<SendWorker<Dev>> {
         let workers: Vec<_> = iter::repeat_with(WrWorker::new_fifo)
             .take(send_queues.len())
             .collect();
@@ -86,7 +87,7 @@ impl SendWorkerBuilder {
 }
 
 /// Worker thread for processing send work requests
-pub(crate) struct SendWorker {
+pub(crate) struct SendWorker<Dev> {
     /// Local work request queue for this worker
     local: WrWorker,
     /// Global work request injector shared across workers
@@ -96,10 +97,10 @@ pub(crate) struct SendWorker {
     /// Queue for submitting send requests to the NIC
     send_queue: SendQueue,
     /// Csr proxy
-    csr_adaptor: Box<dyn CsrWriterAdaptor + Send + 'static>,
+    csr_adaptor: SendQueueProxy<Dev>,
 }
 
-impl SendWorker {
+impl<Dev: DeviceAdaptor> SendWorker<Dev> {
     /// Run the worker
     pub(crate) fn run(mut self) {
         loop {
