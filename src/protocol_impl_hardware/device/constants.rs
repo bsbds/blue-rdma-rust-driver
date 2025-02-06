@@ -82,3 +82,5 @@ pub(super) const CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_HEAD: usize =
     generate_csr_addr(BlockStart::SimpleNic, 0, true, CsrIndex::Head);
 pub(super) const CSR_ADDR_OFFSET_SIMPLE_NIC_RX_Q_RINGBUF_TAIL: usize =
     generate_csr_addr(BlockStart::SimpleNic, 0, true, CsrIndex::Tail);
+
+pub(super) const CSR_DEVICE_MODE_ADDR: usize = 0;
