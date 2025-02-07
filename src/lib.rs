@@ -183,6 +183,7 @@ mod mem;
 mod message_worker;
 /// Worker for handling meta from meta report queues
 mod meta_worker;
+mod meta_worker_v2;
 /// Memory translation table
 mod mtt;
 mod protocol_impl_hardware;

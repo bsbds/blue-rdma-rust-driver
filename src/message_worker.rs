@@ -7,12 +7,12 @@ use crate::{
     tracker::{MessageMeta, MessageTracker, MessageTrackerTable},
 };
 
-enum Task {
+pub(crate) enum Task {
     AppendMessage { qpn: u32, meta: MessageMeta },
     UpdateBasePsn { qpn: u32, psn: u32 },
 }
 
-struct MessageWorker {
+pub(crate) struct MessageWorker {
     tracker_table: MessageTrackerTable,
     task_rx: flume::Receiver<Task>,
     comp_tx: flume::Sender<Completion>,

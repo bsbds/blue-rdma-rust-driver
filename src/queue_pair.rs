@@ -175,6 +175,21 @@ pub(crate) struct TrackerTable {
     inner: Box<[Tracker]>,
 }
 
+impl TrackerTable {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: iter::repeat_with(Tracker::default)
+                .take(MAX_QP_CNT)
+                .collect(),
+        }
+    }
+
+    pub(crate) fn get_mut(&mut self, qpn: u32) -> Option<&mut Tracker> {
+        self.inner.get_mut(index(qpn))
+    }
+}
+
+#[derive(Default)]
 pub(crate) struct Tracker {
     psn: PacketTracker,
     ack: AckTracker,
@@ -182,8 +197,8 @@ pub(crate) struct Tracker {
 
 impl Tracker {
     /// Acknowledges a single PSN.
-    pub(crate) fn ack_one(&mut self, psn: u32) {
-        let _ignore = self.psn.ack_one(psn);
+    pub(crate) fn ack_one(&mut self, psn: u32) -> Option<u32> {
+        self.psn.ack_one(psn)
     }
 
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
