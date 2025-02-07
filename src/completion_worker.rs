@@ -9,13 +9,24 @@ use crate::{
 };
 
 struct CompletionWorker {
-    worker_type: WorkerType,
     cq_table: CompletionQueueTable,
     qp_table: QueuePairAttrTable,
     completion_rx: flume::Receiver<Completion>,
 }
 
 impl CompletionWorker {
+    fn new(
+        cq_table: CompletionQueueTable,
+        qp_table: QueuePairAttrTable,
+        completion_rx: flume::Receiver<Completion>,
+    ) -> Self {
+        Self {
+            cq_table,
+            qp_table,
+            completion_rx,
+        }
+    }
+
     fn spawn(self) {
         let _handle = std::thread::Builder::new()
             .name("completion-worker".into())
@@ -29,9 +40,10 @@ impl CompletionWorker {
                 error!("invalid qpn");
                 continue;
             };
-            let Some(cqh) = (match self.worker_type {
-                WorkerType::Send => attr.send_cq,
-                WorkerType::Recv => attr.recv_cq,
+            let Some(cqh) = (if completion.is_send {
+                attr.send_cq
+            } else {
+                attr.recv_cq
             }) else {
                 continue;
             };
@@ -47,15 +59,23 @@ impl CompletionWorker {
 pub(crate) struct Completion {
     qpn: u32,
     msn: u16,
+    is_send: bool,
 }
 
 impl Completion {
-    pub(crate) fn new(qpn: u32, msn: u16) -> Self {
-        Self { qpn, msn }
+    pub(crate) fn new_send(qpn: u32, msn: u16) -> Self {
+        Self {
+            qpn,
+            msn,
+            is_send: true,
+        }
     }
-}
 
-pub(crate) enum WorkerType {
-    Send,
-    Recv,
+    pub(crate) fn new_recv(qpn: u32, msn: u16) -> Self {
+        Self {
+            qpn,
+            msn,
+            is_send: false,
+        }
+    }
 }
