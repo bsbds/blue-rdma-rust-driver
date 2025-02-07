@@ -171,13 +171,16 @@
 #![allow(clippy::as_conversions, clippy::cast_possible_truncation)]
 #![allow(clippy::arithmetic_side_effects)]
 
+mod ack_responder;
 /// Completion Queue implementation
 mod completion;
+mod completion_worker;
 /// Constants used throughout the driver
 mod constants;
 mod device_protocol;
 /// Memory operation components
 mod mem;
+mod message_worker;
 /// Worker for handling meta from meta report queues
 mod meta_worker;
 /// Memory translation table

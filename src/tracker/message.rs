@@ -1,9 +1,28 @@
-use std::{cmp::Ordering, collections::VecDeque};
+use std::{cmp::Ordering, collections::VecDeque, iter};
 
-use crate::constants::MAX_SEND_WR;
+use crate::constants::{MAX_QP_CNT, MAX_SEND_WR};
 
 use super::msn::Msn;
 
+pub(crate) struct MessageTrackerTable {
+    inner: Box<[MessageTracker]>,
+}
+
+impl MessageTrackerTable {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: iter::repeat_with(MessageTracker::default)
+                .take(MAX_QP_CNT)
+                .collect(),
+        }
+    }
+
+    pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut MessageTracker> {
+        self.inner.get_mut(qpn as usize)
+    }
+}
+
+#[derive(Debug, Default)]
 pub(crate) struct MessageTracker {
     inner: VecDeque<MessageMeta>,
 }
@@ -33,6 +52,7 @@ impl MessageTracker {
     }
 }
 
+#[derive(Default, Debug, Clone, Copy)]
 pub(crate) struct MessageMeta {
     msn: Msn,
     psn: u32,
@@ -44,15 +64,15 @@ impl MessageMeta {
         Self { msn, psn, ack_req }
     }
 
-    pub(crate) fn msn(&self) -> Msn {
+    pub(crate) fn msn(self) -> Msn {
         self.msn
     }
 
-    pub(crate) fn psn(&self) -> u32 {
+    pub(crate) fn psn(self) -> u32 {
         self.psn
     }
 
-    pub(crate) fn ack_req(&self) -> bool {
+    pub(crate) fn ack_req(self) -> bool {
         self.ack_req
     }
 }
