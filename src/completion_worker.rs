@@ -12,9 +12,7 @@ struct CompletionWorker {
     worker_type: WorkerType,
     cq_table: CompletionQueueTable,
     qp_table: QueuePairAttrTable,
-    registration_table: HashMap<Completion, CompletionEvent>,
     completion_rx: flume::Receiver<Completion>,
-    registration_rx: flume::Receiver<Registration>,
 }
 
 impl CompletionWorker {
@@ -26,7 +24,6 @@ impl CompletionWorker {
     }
 
     fn run(mut self) {
-        let reg: Vec<_> = self.registration_rx.try_iter().collect();
         while let Ok(completion) = self.completion_rx.recv() {
             let Some(attr) = self.qp_table.get(completion.qpn) else {
                 error!("invalid qpn");
@@ -45,11 +42,6 @@ impl CompletionWorker {
             cq.ack_event(completion.msn, completion.qpn);
         }
     }
-}
-
-pub(crate) struct Registration {
-    cq_handle: u32,
-    event: CompletionEvent,
 }
 
 pub(crate) struct Completion {
