@@ -1,8 +1,10 @@
 #![allow(clippy::module_name_repetitions)] // exported
 
-use std::{io, net::IpAddr};
+use std::{io, net::IpAddr, str::FromStr};
 
 use ipnetwork::IpNetwork;
+use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 /// Trait for network devices that can provide MAC address and DHCP resolution
 pub trait NetworkResolver: Send + Sync + 'static {
@@ -17,6 +19,63 @@ pub trait NetworkResolver: Send + Sync + 'static {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct MacAddress(pub [u8; 6]);
+
+impl FromStr for MacAddress {
+    type Err = ParseMacAddressError;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes: Vec<&str> = s.split(':').collect();
+        if bytes.len() != 6 {
+            return Err(ParseMacAddressError);
+        }
+
+        let mut addr = [0u8; 6];
+        for (x, byte) in addr.iter_mut().zip(bytes) {
+            *x = u8::from_str_radix(byte, 16).map_err(|_err| ParseMacAddressError)?;
+        }
+
+        Ok(MacAddress(addr))
+    }
+}
+
+/// Parse error
+#[non_exhaustive]
+#[derive(Debug, Error, Clone, Copy)]
+#[error("invalid MAC address")]
+pub struct ParseMacAddressError;
+
+impl<'de> Deserialize<'de> for MacAddress {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let s = <String>::deserialize(deserializer)?;
+        MacAddress::from_str(&s).map_err(serde::de::Error::custom)
+    }
+}
+
+impl Serialize for MacAddress {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
+impl std::fmt::Display for MacAddress {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        )
+    }
+}
 
 impl From<MacAddress> for u64 {
     #[inline]
@@ -38,7 +97,7 @@ impl From<u64> for MacAddress {
 }
 
 /// Static network configuration containing IP network, gateway and MAC address
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct NetworkConfig {
     /// IP network (address and subnet)
@@ -68,11 +127,7 @@ impl NetworkMode {
     /// For DHCP mode, resolves configuration using the device.
     pub(crate) fn resolve(&self) -> io::Result<NetworkConfig> {
         match *self {
-            NetworkMode::Static(config) => Ok(NetworkConfig {
-                ip_network: config.ip_network,
-                gateway: config.gateway,
-                mac: config.mac,
-            }),
+            NetworkMode::Static(ref config) => Ok(config.clone()),
             NetworkMode::Dynamic { ref device } => device.resolve_dynamic(),
         }
     }

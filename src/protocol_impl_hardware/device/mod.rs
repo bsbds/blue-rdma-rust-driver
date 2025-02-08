@@ -20,6 +20,8 @@ pub(crate) mod adaptor;
 /// Device mode reader
 pub(crate) mod mode;
 
+mod config;
+
 pub(crate) use adaptor::*;
 
 /// Memory-mapped I/O addresses of device registers
