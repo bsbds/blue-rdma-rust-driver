@@ -26,8 +26,10 @@ pub(crate) struct CompletionQueue {
     num_cqe: usize,
     /// File descriptor for the completion event channel
     channel: Option<Mutex<File>>,
-    /// Event registration
-    event_registry: EventRegistry,
+    /// Local Event registration
+    local_event_registry: EventRegistry,
+    /// Remote Event registration
+    remote_event_registry: EventRegistry,
     /// Completion queue
     completion: Mutex<VecDeque<CompletionEvent>>,
 }
@@ -47,8 +49,10 @@ impl CompletionQueue {
     /// * `msn` - Message Sequence Number to acknowledge
     /// * `qpn` - Queue Pair Number associated with this event
     #[allow(clippy::as_conversions)] // u16 to usize
-    pub(crate) fn ack_event(&self, last_msn_acked: u16, qpn: u32) {
-        let events = self.event_registry.remove_completions(qpn, last_msn_acked);
+    pub(crate) fn ack_event(&self, last_msn_acked: u16, qpn: u32, is_local: bool) {
+        let events = self
+            .registry(is_local)
+            .remove_completions(qpn, last_msn_acked);
         let mut event_count = events.len();
         for event in events {
             self.completion.lock().push_back(event);
@@ -61,6 +65,14 @@ impl CompletionQueue {
                 .lock()
                 .write_all(&buf)
                 .unwrap_or_else(|err| unreachable!("channel not writable: {err}"));
+        }
+    }
+
+    fn registry(&self, is_local: bool) -> &EventRegistry {
+        if is_local {
+            &self.local_event_registry
+        } else {
+            &self.remote_event_registry
         }
     }
 }
@@ -110,9 +122,15 @@ impl CqManager {
         }
     }
 
-    pub(crate) fn register_event(&self, handle: u32, qpn: u32, event: CompletionEvent) {
+    pub(crate) fn register_event(
+        &self,
+        handle: u32,
+        qpn: u32,
+        event: CompletionEvent,
+        is_local: bool,
+    ) {
         if let Some(cq) = self.cq_table.get(handle) {
-            cq.event_registry.register(qpn, event);
+            cq.registry(is_local).register(qpn, event);
         }
     }
 

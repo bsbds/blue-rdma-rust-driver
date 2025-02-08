@@ -122,7 +122,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     PacketPos::Only => {
                         let send_cq = qp.send_cq_handle();
                         if let Some(cq) = send_cq.and_then(|h| self.cq_table.get(h)) {
-                            cq.ack_event(msn, qp.qpn());
+                            cq.ack_event(msn, qp.qpn(), false);
                         }
                         if ack_req {
                             let bitmap = 1u128 << BASE_PSN_OFFSET;
@@ -176,7 +176,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     //};
                     if let Some(cq) = cq_handle.and_then(|h| self.cq_table.get(h)) {
                         if let Some(last_msn_acked) = last_msn_acked {
-                            cq.ack_event(last_msn_acked, qp.qpn());
+                            cq.ack_event(last_msn_acked, qp.qpn(), false);
                         }
                     }
                 }

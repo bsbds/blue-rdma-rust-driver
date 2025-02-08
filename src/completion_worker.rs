@@ -51,7 +51,7 @@ impl CompletionWorker {
                 continue;
             };
             // TODO: Move completion registration and notification into the worker
-            cq.ack_event(completion.msn, completion.qpn);
+            cq.ack_event(completion.msn, completion.qpn, completion.is_send);
         }
     }
 }

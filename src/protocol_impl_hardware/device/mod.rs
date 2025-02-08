@@ -211,6 +211,7 @@ impl BlueRdmaInner {
                 send_cq_handle,
                 qpn,
                 CompletionEvent::new(qpn, msn, wr_id),
+                true,
             );
         }
         qp.insert_messsage(msn, end_psn);
