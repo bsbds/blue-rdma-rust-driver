@@ -14,7 +14,10 @@ use std::{
 use bitvec::vec::BitVec;
 use parking_lot::Mutex;
 
-use crate::constants::{MAX_CQ_CNT, MAX_MSN_WINDOW, MAX_QP_CNT};
+use crate::{
+    constants::{MAX_CQ_CNT, MAX_MSN_WINDOW, MAX_QP_CNT},
+    qp::qpn_index,
+};
 
 #[derive(Default)]
 pub(crate) struct CompletionQueue {
@@ -172,7 +175,7 @@ impl Default for EventRegistry {
 impl EventRegistry {
     pub(crate) fn remove_completions(&self, qpn: u32, last_msn_acked: u16) -> Vec<CompletionEvent> {
         let mut events = Vec::new();
-        if let Some(queue) = self.table.get(qpn as usize) {
+        if let Some(queue) = self.table.get(qpn_index(qpn)) {
             let mut guard = queue.lock();
             while let Some(event) = guard.front() {
                 let x = last_msn_acked.wrapping_sub(event.msn);
@@ -187,7 +190,7 @@ impl EventRegistry {
     }
 
     pub(crate) fn register(&self, qpn: u32, event: CompletionEvent) {
-        if let Some(queue) = self.table.get(qpn as usize) {
+        if let Some(queue) = self.table.get(qpn_index(qpn)) {
             queue.lock().push_back(event);
         }
     }

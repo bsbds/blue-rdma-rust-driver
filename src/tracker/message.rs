@@ -1,6 +1,9 @@
 use std::{cmp::Ordering, collections::VecDeque, iter};
 
-use crate::constants::{MAX_QP_CNT, MAX_SEND_WR};
+use crate::{
+    constants::{MAX_QP_CNT, MAX_SEND_WR},
+    qp::qpn_index,
+};
 
 use super::msn::Msn;
 
@@ -18,7 +21,7 @@ impl MessageTrackerTable {
     }
 
     pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut MessageTracker> {
-        self.inner.get_mut(qpn as usize)
+        self.inner.get_mut(qpn_index(qpn))
     }
 }
 

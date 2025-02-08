@@ -82,7 +82,7 @@ impl QpManager {
 
     /// Removes and returns the QP associated with the given QPN
     pub(crate) fn destroy_qp(&mut self, qpn: u32) {
-        let index = index(qpn);
+        let index = qpn_index(qpn);
         if index >= self.max_num_qps() {
             return;
         }
@@ -90,7 +90,7 @@ impl QpManager {
     }
 
     pub(crate) fn qp_attr(&self, qpn: u32) -> Option<QpAttr> {
-        let index = index(qpn);
+        let index = qpn_index(qpn);
         if !self.bitmap.get(index).is_some_and(|x| *x) {
             return None;
         }
@@ -99,7 +99,7 @@ impl QpManager {
     }
 
     pub(crate) fn update_qp_attr<F: FnMut(&mut QpAttr)>(&self, qpn: u32, mut f: F) -> bool {
-        let index = index(qpn);
+        let index = qpn_index(qpn);
         if !self.bitmap.get(index).is_some_and(|x| *x) {
             return false;
         }
@@ -127,7 +127,7 @@ impl QpInitiatorTable {
     #[allow(clippy::as_conversions)] // convert u32 to usize
     /// Gets a mutable reference to the QP associated with the given QPN
     pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut InitiatorState> {
-        self.table.get_mut(index(qpn))
+        self.table.get_mut(qpn_index(qpn))
     }
 }
 
@@ -141,7 +141,7 @@ impl QpTrackerTable {
     #[allow(clippy::as_conversions)] // convert u32 to usize
     /// Gets a mutable reference to the QP associated with the given QPN
     pub(crate) fn state_mut(&mut self, qpn: u32) -> Option<&mut TrackerState> {
-        self.table.get_mut(index(qpn))
+        self.table.get_mut(qpn_index(qpn))
     }
 }
 
@@ -442,7 +442,7 @@ impl TrackerState {
 }
 
 #[allow(clippy::as_conversions)] // u32 to usize
-fn index(qpn: u32) -> usize {
+pub(crate) fn qpn_index(qpn: u32) -> usize {
     (qpn >> QPN_KEY_PART_WIDTH) as usize
 }
 
