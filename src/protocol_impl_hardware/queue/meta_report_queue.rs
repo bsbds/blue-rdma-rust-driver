@@ -1,9 +1,23 @@
-use std::io;
+use std::{
+    io,
+    sync::{atomic::AtomicBool, Arc},
+};
 
-use crate::protocol_impl_hardware::desc::{
-    MetaReportQueueAckDesc, MetaReportQueueAckExtraDesc, MetaReportQueueDescFirst,
-    MetaReportQueueDescNext, MetaReportQueuePacketBasicInfoDesc,
-    MetaReportQueueReadReqExtendInfoDesc, RingBufDescUntyped,
+use crate::{
+    mem::PageWithPhysAddr,
+    message_worker::Task,
+    meta_worker_v2::MetaWorker,
+    protocol_impl_hardware::{
+        desc::{
+            MetaReportQueueAckDesc, MetaReportQueueAckExtraDesc, MetaReportQueueDescFirst,
+            MetaReportQueueDescNext, MetaReportQueuePacketBasicInfoDesc,
+            MetaReportQueueReadReqExtendInfoDesc, RingBufDescUntyped,
+        },
+        device::{
+            mode::Mode, proxy::build_meta_report_queue_proxies, CsrBaseAddrAdaptor, DeviceAdaptor,
+        },
+        MetaReportQueueHandler,
+    },
 };
 
 use super::DescRingBuffer;
@@ -80,4 +94,34 @@ impl MetaReportQueue {
             }
         }
     }
+}
+
+pub(crate) fn init_and_spawn_meta_worker<Dev>(
+    dev: &Dev,
+    pages: Vec<PageWithPhysAddr>,
+    mode: Mode,
+    sender_task_tx: flume::Sender<Task>,
+    receiver_task_tx: flume::Sender<Task>,
+    is_shutdown: Arc<AtomicBool>,
+) -> io::Result<()>
+where
+    Dev: Clone + DeviceAdaptor + Send + 'static,
+{
+    let mut mrq_proxies = build_meta_report_queue_proxies(dev.clone(), mode);
+    for (proxy, page) in mrq_proxies.iter_mut().zip(pages.iter()) {
+        proxy.write_base_addr(page.phys_addr)?;
+    }
+    let mrqs: Vec<_> = pages
+        .into_iter()
+        .map(|p| MetaReportQueue::new(DescRingBuffer::new(p.page)))
+        .collect();
+
+    MetaWorker::new(
+        MetaReportQueueHandler::new(mrqs),
+        sender_task_tx,
+        receiver_task_tx,
+    )
+    .spawn(is_shutdown);
+
+    Ok(())
 }

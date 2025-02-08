@@ -1,3 +1,5 @@
+use std::io;
+
 /// Tools for converting virtual address to physicall address
 pub(crate) mod virt_to_phy;
 
@@ -37,4 +39,24 @@ pub(crate) fn assert_equal_page_size() {
 )]
 pub(crate) fn page_size() -> usize {
     unsafe { libc::sysconf(libc::_SC_PAGESIZE) as usize }
+}
+
+pub(crate) struct PageWithPhysAddr {
+    pub(crate) page: page::ContiguousPages<1>,
+    pub(crate) phys_addr: u64,
+}
+
+impl PageWithPhysAddr {
+    pub(crate) fn alloc<A, R>(allocator: &mut A, resolver: &R) -> io::Result<Self>
+    where
+        A: page::PageAllocator<1>,
+        R: virt_to_phy::AddressResolver,
+    {
+        let page = allocator.alloc()?;
+        let phys_addr = resolver
+            .virt_to_phys(page.addr())?
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+
+        Ok(Self { page, phys_addr })
+    }
 }

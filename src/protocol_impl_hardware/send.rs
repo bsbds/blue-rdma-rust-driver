@@ -1,16 +1,24 @@
-use std::{iter, sync::Arc, time::Duration};
+use std::{io, iter, sync::Arc, time::Duration};
 
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 
 use crate::{
     device_protocol::{WorkReqSend, WrChunk},
+    mem::PageWithPhysAddr,
     protocol_impl_hardware::device::CsrWriterAdaptor,
 };
 
 use super::{
     desc::{SendQueueReqDescSeg0, SendQueueReqDescSeg1},
-    device::{proxy::SendQueueProxy, DeviceAdaptor},
-    queue::send_queue::{SendQueue, SendQueueDesc},
+    device::{
+        mode::Mode,
+        proxy::{build_send_queue_proxies, SendQueueProxy},
+        CsrBaseAddrAdaptor, DeviceAdaptor,
+    },
+    queue::{
+        send_queue::{SendQueue, SendQueueDesc},
+        DescRingBuffer,
+    },
 };
 
 /// Injector
@@ -47,7 +55,7 @@ impl SendQueueScheduler {
 }
 
 impl WorkReqSend for SendQueueScheduler {
-    fn send(&self, op: WrChunk) -> std::io::Result<()> {
+    fn send(&self, op: WrChunk) -> io::Result<()> {
         self.send_wr_task(op);
         Ok(())
     }
@@ -75,7 +83,9 @@ impl SendWorkerBuilder {
             .into_iter()
             .zip(send_queues)
             .zip(adaptors)
-            .map(|((local, send_queue), csr_adaptor)| SendWorker {
+            .enumerate()
+            .map(|(id, ((local, send_queue), csr_adaptor))| SendWorker {
+                id,
                 local,
                 global: Arc::clone(&self.global),
                 remotes: stealers.clone().into_boxed_slice(),
@@ -88,6 +98,8 @@ impl SendWorkerBuilder {
 
 /// Worker thread for processing send work requests
 pub(crate) struct SendWorker<Dev> {
+    /// id of the worker
+    id: usize,
     /// Local work request queue for this worker
     local: WrWorker,
     /// Global work request injector shared across workers
@@ -100,7 +112,14 @@ pub(crate) struct SendWorker<Dev> {
     csr_adaptor: SendQueueProxy<Dev>,
 }
 
-impl<Dev: DeviceAdaptor> SendWorker<Dev> {
+impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
+    pub(crate) fn spawn(self) {
+        let _handle = std::thread::Builder::new()
+            .name(format!("send-worker-{}", self.id))
+            .spawn(move || self.run())
+            .unwrap_or_else(|err| unreachable!("Failed to spawn thread: {err}"));
+    }
+
     /// Run the worker
     pub(crate) fn run(mut self) {
         loop {
@@ -163,4 +182,43 @@ impl<Dev: DeviceAdaptor> SendWorker<Dev> {
             .and_then(Steal::success)
         })
     }
+}
+
+pub(crate) fn spawn_send_workers<Dev>(
+    dev: &Dev,
+    pages: Vec<PageWithPhysAddr>,
+    mode: Mode,
+    global_injector: Arc<WrInjector>,
+) -> io::Result<()>
+where
+    Dev: DeviceAdaptor + Clone + Send + 'static,
+{
+    let mut sq_proxies = build_send_queue_proxies(dev.clone(), mode);
+    for (proxy, page) in sq_proxies.iter_mut().zip(pages.iter()) {
+        proxy.write_base_addr(page.phys_addr);
+    }
+    let send_queues: Vec<_> = pages
+        .into_iter()
+        .map(|p| SendQueue::new(DescRingBuffer::new(p.page)))
+        .collect();
+    let workers: Vec<_> = iter::repeat_with(WrWorker::new_fifo)
+        .take(send_queues.len())
+        .collect();
+    let stealers: Vec<_> = workers.iter().map(WrWorker::stealer).collect();
+    workers
+        .into_iter()
+        .zip(send_queues)
+        .zip(sq_proxies)
+        .enumerate()
+        .map(|(id, ((local, send_queue), csr_adaptor))| SendWorker {
+            id,
+            local,
+            global: Arc::clone(&global_injector),
+            remotes: stealers.clone().into_boxed_slice(),
+            send_queue,
+            csr_adaptor,
+        })
+        .for_each(SendWorker::spawn);
+
+    Ok(())
 }

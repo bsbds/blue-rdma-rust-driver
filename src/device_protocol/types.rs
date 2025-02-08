@@ -50,7 +50,7 @@ impl<'a> MttEntry<'a> {
 /// Queue Pair entry
 #[allow(clippy::missing_docs_in_private_items)]
 #[derive(Default)]
-pub(crate) struct QpEntry {
+pub(crate) struct UpdateQp {
     pub(crate) ip_addr: u32,
     pub(crate) qpn: u32,
     pub(crate) peer_qpn: u32,

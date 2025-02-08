@@ -20,6 +20,8 @@ pub(crate) mod adaptor;
 /// Device mode reader
 pub(crate) mod mode;
 
+pub(crate) mod ops_impl;
+
 mod config;
 
 pub(crate) use adaptor::*;
@@ -44,7 +46,7 @@ use crate::{
     completion::{CompletionEvent, CompletionQueueTable, CqManager, EventRegistry},
     ctx_ops::RdmaCtxOps,
     device_protocol::{
-        DeviceCommand, MetaReport, MttEntry, QpEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
+        DeviceCommand, MetaReport, MttEntry, RecvBuffer, RecvBufferMeta, SimpleNicTunnel, UpdateQp,
         WorkReqSend, WrChunk,
     },
     mem::{
@@ -190,7 +192,7 @@ impl BlueRdmaInner {
 
     /// Updates Queue Pair entry
     #[inline]
-    fn update_qp_inner(&self, entry: QpEntry) -> io::Result<()> {
+    fn update_qp_inner(&self, entry: UpdateQp) -> io::Result<()> {
         self.cmd_queue.update_qp(entry)
     }
 
@@ -407,7 +409,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             attr_mut.send_cq = unsafe { init_attr.send_cq.as_ref() }.map(|cq| cq.handle);
             attr_mut.recv_cq = unsafe { init_attr.recv_cq.as_ref() }.map(|cq| cq.handle);
         });
-        let entry = QpEntry {
+        let entry = UpdateQp {
             qp_type: init_attr.qp_type as u8,
             qpn,
             ..Default::default()
@@ -475,7 +477,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             return -1;
         };
 
-        let entry = QpEntry {
+        let entry = UpdateQp {
             ip_addr: CARD_IP_ADDRESS,
             qpn: qp.qp_num,
             peer_qpn: qp_attr.dqpn,

@@ -11,7 +11,7 @@ use tracing::error;
 
 use crate::{
     device_protocol::{FrameRx, FrameTx},
-    mem::page::ContiguousPages,
+    mem::{page::ContiguousPages, PageWithPhysAddr},
     protocol_impl_hardware::device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
@@ -54,6 +54,26 @@ impl<Dev: DeviceAdaptor> SimpleNicController<Dev> {
         Ok(Self {
             tx: FrameTxQueue::new(tx_queue, tx_bufffer, tx_buf_base_phys_addr, req_csr_proxy),
             rx: FrameRxQueue::new(rx_queue, rx_bufffer, resp_csr_proxy),
+        })
+    }
+
+    pub(crate) fn init_v2(
+        dev: &Dev,
+        tx_page: PageWithPhysAddr,
+        rx_page: PageWithPhysAddr,
+        tx_buffer: PageWithPhysAddr,
+        rx_buffer: PageWithPhysAddr,
+    ) -> io::Result<Self> {
+        let mut tx_queue = SimpleNicTxQueue::new(DescRingBuffer::new(tx_page.page));
+        let mut rx_queue = SimpleNicRxQueue::new(DescRingBuffer::new(rx_page.page));
+        let req_csr_proxy = SimpleNicTxQueueCsrProxy(dev.clone());
+        let resp_csr_proxy = SimpleNicRxQueueCsrProxy(dev.clone());
+        req_csr_proxy.write_base_addr(tx_page.phys_addr)?;
+        resp_csr_proxy.write_base_addr(rx_page.phys_addr)?;
+
+        Ok(Self {
+            tx: FrameTxQueue::new(tx_queue, tx_buffer.page, tx_buffer.phys_addr, req_csr_proxy),
+            rx: FrameRxQueue::new(rx_queue, rx_buffer.page, resp_csr_proxy),
         })
     }
 }

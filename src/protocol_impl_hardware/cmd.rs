@@ -4,8 +4,8 @@ use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
 
 use crate::{
-    device_protocol::{DeviceCommand, MttEntry, QpEntry, RecvBufferMeta},
-    mem::page::ContiguousPages,
+    device_protocol::{DeviceCommand, MttEntry, RecvBufferMeta, UpdateQp},
+    mem::{page::ContiguousPages, PageWithPhysAddr},
     mtt::Mtt,
     net::config::NetworkConfig,
     protocol_impl_hardware::device::{
@@ -62,6 +62,29 @@ impl<Dev: DeviceAdaptor> CommandController<Dev> {
         })
     }
 
+    /// Creates a new command controller instance
+    ///
+    /// # Returns
+    /// A new `CommandController` with an initialized command queue
+    pub(crate) fn init_v2(
+        dev: &Dev,
+        req_page: PageWithPhysAddr,
+        resp_page: PageWithPhysAddr,
+    ) -> io::Result<Self> {
+        let mut req_queue = CmdQueue::new(DescRingBuffer::new(req_page.page));
+        let mut resp_queue = CmdRespQueue::new(DescRingBuffer::new(resp_page.page));
+        let req_csr_proxy = CmdQueueCsrProxy(dev.clone());
+        let resp_csr_proxy = CmdRespQueueCsrProxy(dev.clone());
+        req_csr_proxy.write_base_addr(req_page.phys_addr)?;
+        resp_csr_proxy.write_base_addr(resp_page.phys_addr)?;
+
+        Ok(Self {
+            cmd_qp: Mutex::new(CmdQp::new(req_queue, resp_queue)),
+            req_csr_proxy,
+            resp_csr_proxy,
+        })
+    }
+
     /// Flush cmd request queue pointer to device
     pub(crate) fn flush_req_queue(&self, req_queue: &CmdQueue) -> io::Result<()> {
         self.req_csr_proxy.write_head(req_queue.head())
@@ -107,7 +130,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         Ok(())
     }
 
-    fn update_qp(&self, entry: QpEntry) -> io::Result<()> {
+    fn update_qp(&self, entry: UpdateQp) -> io::Result<()> {
         let desc = CmdQueueReqDescQpManagement::new(
             0,
             entry.ip_addr,

@@ -21,7 +21,7 @@ use crate::{
 const BASE_PSN_OFFSET: u32 = 0x70;
 
 /// A worker for processing packet meta
-struct MetaWorker<T> {
+pub(crate) struct MetaWorker<T> {
     /// Inner meta report queue
     inner: T,
     send_table: TrackerTable,

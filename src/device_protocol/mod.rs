@@ -11,7 +11,7 @@ pub(crate) trait DeviceCommand {
     /// Updates Memory Translation Table entry
     fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()>;
     /// Updates Queue Pair entry
-    fn update_qp(&self, entry: QpEntry) -> io::Result<()>;
+    fn update_qp(&self, entry: UpdateQp) -> io::Result<()>;
     /// Sets network parameters
     fn set_network(&self, param: NetworkConfig) -> io::Result<()>;
     /// Sets receive buffer for raw packets

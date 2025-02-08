@@ -42,6 +42,11 @@ impl<A: PageAllocator<1>> DescRingBufferAllocator<A> {
         Self(page_allocator)
     }
 
+    /// Creates a new `DescRingBufferAllocator` with given page allocator
+    pub(crate) fn new_borrowed(page_allocator: &mut A) -> DescRingBufferAllocator<&mut A> {
+        DescRingBufferAllocator(page_allocator)
+    }
+
     /// Allocates a new `DescRingBuffer`
     pub(crate) fn alloc(&mut self) -> io::Result<DescRingBuffer> {
         let buf = self.0.alloc().map(|inner| PageBuf { inner })?;
@@ -67,6 +72,14 @@ impl DescRingBufferAllocator<HostPageAllocator<1>> {
 pub(crate) struct DescRingBuffer(RingBuffer<PageBuf, RingBufDescUntyped>);
 
 impl DescRingBuffer {
+    pub(crate) fn new(buf: ContiguousPages<1>) -> Self {
+        let ctx = RingCtx::new();
+        let page_buf = PageBuf { inner: buf };
+        let rb = RingBuffer::new(ctx, page_buf)
+            .unwrap_or_else(|| unreachable!("ringbuffer creation should never fail"));
+        Self(rb)
+    }
+
     /// Returns the base address of the buffer
     pub(crate) fn base_addr(&self) -> u64 {
         self.0.base_addr()
