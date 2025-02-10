@@ -8,14 +8,14 @@ use crate::{
     tracker::MessageMeta,
 };
 
-struct CompletionWorker {
+pub(crate) struct CompletionWorker {
     cq_table: CompletionQueueTable,
     qp_table: QueuePairAttrTable,
     completion_rx: flume::Receiver<Completion>,
 }
 
 impl CompletionWorker {
-    fn new(
+    pub(crate) fn new(
         cq_table: CompletionQueueTable,
         qp_table: QueuePairAttrTable,
         completion_rx: flume::Receiver<Completion>,
@@ -27,7 +27,7 @@ impl CompletionWorker {
         }
     }
 
-    fn spawn(self) {
+    pub(crate) fn spawn(self) {
         let _handle = std::thread::Builder::new()
             .name("completion-worker".into())
             .spawn(move || self.run())

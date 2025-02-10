@@ -89,6 +89,7 @@ impl QpManager {
     pub(crate) fn new(table: QueuePairAttrTable) -> Self {
         let mut bitmap = BitVec::with_capacity(MAX_QP_CNT);
         bitmap.resize(MAX_QP_CNT, false);
+        bitmap.set(0, true);
         Self { bitmap, table }
     }
 
@@ -119,22 +120,39 @@ impl QpManager {
         self.table.get(qpn)
     }
 
-    pub(crate) fn update_qp<F: FnMut(&mut QueuePairAttr)>(&self, qpn: u32, mut f: F) -> bool {
+    pub(crate) fn update_qp<F, T>(&self, qpn: u32, mut f: F) -> Option<T>
+    where
+        F: FnMut(&mut QueuePairAttr) -> T,
+    {
         let index = index(qpn);
         if !self.bitmap.get(index).is_some_and(|x| *x) {
-            return false;
+            return None;
         }
-        if self.table.map_qp_mut(qpn, f).is_none() {
-            return false;
-        }
-        true
+        self.table.map_qp_mut(qpn, f)
     }
 }
 
+#[derive(Debug)]
 pub(crate) struct SenderTable {
     inner: Box<[Mutex<Sender>]>,
 }
 
+impl SenderTable {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: iter::repeat_with(Mutex::default).take(MAX_QP_CNT).collect(),
+        }
+    }
+
+    pub(crate) fn map_qp_mut<F, T>(&self, qpn: u32, mut f: F) -> Option<T>
+    where
+        F: FnMut(&mut Sender) -> T,
+    {
+        Some(f(&mut self.inner.get(index(qpn))?.lock()))
+    }
+}
+
+#[derive(Default, Debug)]
 pub(crate) struct Sender {
     msn: u16,
     psn: u32,
@@ -144,7 +162,7 @@ pub(crate) struct Sender {
 
 impl Sender {
     #[allow(clippy::similar_names)]
-    fn next_wr(&mut self, num_psn: u32) -> Option<(u16, u32)> {
+    pub(crate) fn next_wr(&mut self, num_psn: u32) -> Option<(u16, u32)> {
         let outstanding_num_psn = self.psn.wrapping_sub(self.base_psn_acked);
         let outstanding_num_msn = self.msn.wrapping_sub(self.base_msn_acked);
         if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW
@@ -224,7 +242,7 @@ fn index(qpn: u32) -> usize {
 }
 
 /// Calculate the number of psn required for this WR
-fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
+pub(crate) fn num_psn(pmtu: u8, addr: u64, length: u32) -> Option<u32> {
     let pmtu = convert_ibv_mtu_to_u16(pmtu)?;
     let pmtu_mask = pmtu
         .checked_sub(1)

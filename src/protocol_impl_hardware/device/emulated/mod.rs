@@ -51,6 +51,12 @@ use super::{
 #[derive(Clone, Debug)]
 pub struct EmulatedDevice(RpcClient);
 
+impl EmulatedDevice {
+    pub(crate) fn new_with_addr(addr: &str) -> Self {
+        EmulatedDevice(RpcClient::new(addr.parse().expect("invalid socket addr")).expect("failed to connect to emulator"))
+    }
+}
+
 impl DeviceAdaptor for EmulatedDevice {
     fn read_csr(&self, addr: usize) -> io::Result<u32> {
         self.0.read_csr(addr)

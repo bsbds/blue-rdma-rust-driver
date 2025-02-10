@@ -22,6 +22,8 @@ pub(crate) mod mode;
 
 pub(crate) mod ops_impl;
 
+pub(crate) mod ffi_impl;
+
 mod config;
 
 pub(crate) use adaptor::*;

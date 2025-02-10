@@ -188,14 +188,14 @@ pub(crate) fn spawn_send_workers<Dev>(
     dev: &Dev,
     pages: Vec<PageWithPhysAddr>,
     mode: Mode,
-    global_injector: Arc<WrInjector>,
+    global_injector: &Arc<WrInjector>,
 ) -> io::Result<()>
 where
     Dev: DeviceAdaptor + Clone + Send + 'static,
 {
     let mut sq_proxies = build_send_queue_proxies(dev.clone(), mode);
     for (proxy, page) in sq_proxies.iter_mut().zip(pages.iter()) {
-        proxy.write_base_addr(page.phys_addr);
+        proxy.write_base_addr(page.phys_addr)?;
     }
     let send_queues: Vec<_> = pages
         .into_iter()
@@ -213,7 +213,7 @@ where
         .map(|(id, ((local, send_queue), csr_adaptor))| SendWorker {
             id,
             local,
-            global: Arc::clone(&global_injector),
+            global: Arc::clone(global_injector),
             remotes: stealers.clone().into_boxed_slice(),
             send_queue,
             csr_adaptor,

@@ -119,7 +119,7 @@ impl ReceiverMessageWorker {
     }
 }
 
-pub(crate) fn spawn_bi_workers(
+pub(crate) fn spawn_message_workers(
     sender_task_rx: flume::Receiver<Task>,
     receiver_task_rx: flume::Receiver<Task>,
     comp_tx: flume::Sender<Completion>,
