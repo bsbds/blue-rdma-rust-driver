@@ -86,9 +86,12 @@ impl PacketTracker {
     }
 
     fn rstart(&self, psn: u32) -> i32 {
-        let now_psn_int = psn as i32;
-        let base_psn_int = self.base_psn as i32;
-        now_psn_int - base_psn_int
+        let x = self.base_psn.wrapping_sub(psn) & PSN_MASK;
+        if x > 0 && (x as usize) < MAX_PSN_WINDOW {
+            -(x as i32)
+        } else {
+            x as i32
+        }
     }
 
     /// Try to advance the base PSN to the next unacknowledged PSN.
@@ -106,7 +109,7 @@ impl PacketTracker {
         self.inner.shift_left(pos);
         let mut psn = self.base_psn;
         self.base_psn = self.base_psn.wrapping_add(pos as u32) & PSN_MASK;
-        Some(psn)
+        Some(self.base_psn)
     }
 }
 

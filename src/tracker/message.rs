@@ -49,6 +49,8 @@ impl MessageTracker {
         while let Some(elem) = self.inner.front() {
             if elem.psn < base_psn {
                 elements.push(self.inner.pop_front().unwrap_or_else(|| unreachable!()));
+            } else {
+                break;
             }
         }
         elements

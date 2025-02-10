@@ -7,6 +7,7 @@ use crate::{
     tracker::{MessageMeta, MessageTracker, MessageTrackerTable},
 };
 
+#[derive(Debug)]
 pub(crate) enum Task {
     AppendMessage { qpn: u32, meta: MessageMeta },
     UpdateBasePsn { qpn: u32, psn: u32 },

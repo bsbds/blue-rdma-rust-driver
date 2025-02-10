@@ -5,6 +5,7 @@ use std::{
         Arc,
     },
     thread,
+    time::Duration,
 };
 
 use tracing::error;
@@ -56,7 +57,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
     /// Run the handler loop
     fn run(mut self, is_shutdown: Arc<AtomicBool>) -> io::Result<()> {
         while !is_shutdown.load(Ordering::Relaxed) {
-            hint::spin_loop();
+            thread::sleep(Duration::from_millis(1));
             if let Some(meta) = self.inner.try_recv_meta()? {
                 self.handle_meta(meta);
             };

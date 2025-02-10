@@ -12,6 +12,7 @@ use parking_lot::Mutex;
 use qp_attr::{IbvQpAttr, IbvQpInitAttr};
 
 use crate::{
+    ack_responder::AckResponder,
     completion::{CompletionEvent, CompletionQueueTable, CqManager, EventRegistry},
     completion_worker::CompletionWorker,
     ctx_ops::RdmaCtxOps,
@@ -132,9 +133,12 @@ where
             Arc::clone(&is_shutdown),
         )?;
         spawn_message_workers(sender_task_rx, receiver_task_rx, comp_tx, ack_tx);
-        CompletionWorker::new(cq_table, qp_attr_table, comp_rx).spawn();
+        CompletionWorker::new(cq_table, qp_attr_table.clone_arc(), comp_rx).spawn();
         cmd_controller.set_network(network_config)?;
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
+
+        let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
+        AckResponder::new(qp_attr_table, ack_rx, Box::new(simple_nic_tx)).spawn();
 
         Ok(Self {
             device,
@@ -262,7 +266,9 @@ where
             qp.pmtu,
         );
         let flags = wr.send_flags();
+        let mut ack_req = false;
         if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
+            ack_req = true;
             let wr_id = wr.wr_id();
             let send_cq_handle = qp
                 .send_cq
@@ -276,7 +282,7 @@ where
         }
         self.sender_task_tx.send(Task::AppendMessage {
             qpn,
-            meta: MessageMeta::new(Msn(msn), psn, false),
+            meta: MessageMeta::new(Msn(msn), psn, ack_req),
         });
         let builder = WrChunkBuilder::new().set_qp_params(
             msn,

@@ -26,16 +26,28 @@ impl Ack {
     }
 }
 
-struct AckResponder {
+pub(crate) struct AckResponder {
     qp_table: QueuePairAttrTable,
     rx: flume::Receiver<Ack>,
     raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
 }
 
 impl AckResponder {
-    fn spawn(self) {
+    pub(crate) fn new(
+        qp_table: QueuePairAttrTable,
+        rx: flume::Receiver<Ack>,
+        raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
+    ) -> Self {
+        Self {
+            qp_table,
+            rx,
+            raw_frame_tx,
+        }
+    }
+
+    pub(crate) fn spawn(self) {
         let _handle = std::thread::Builder::new()
-            .name("message-worker".into())
+            .name("ack-responder-worker".into())
             .spawn(move || self.run())
             .unwrap_or_else(|err| unreachable!("Failed to spawn rx thread: {err}"));
     }
@@ -47,7 +59,7 @@ impl AckResponder {
                 continue;
             };
             // FIXME: ack message
-            let ack_frame = AckFrameBuilder::build_ack(ack.last_psn, 1, dqpn);
+            let ack_frame = AckFrameBuilder::build_ack(ack.last_psn, u128::MAX, dqpn);
             if let Err(e) = self.raw_frame_tx.send(&ack_frame) {
                 error!("failed to send ack frame");
             }
