@@ -242,6 +242,10 @@ impl WrChunkBuilder<WithQpParams> {
             _state: PhantomData,
         }
     }
+
+    pub(crate) fn pmtu(&self) -> u16 {
+        convert_ibv_mtu_to_u16(self.inner.pmtu).unwrap_or_else(|| unreachable!("invalid ibv_mtu"))
+    }
 }
 
 impl WrChunkBuilder<WithIbvParams> {

@@ -11,10 +11,12 @@ use std::{
 use tracing::error;
 
 use crate::{
+    ack_responder::AckResponse,
     constants::PSN_MASK,
     device_protocol::{MetaReport, PacketPos, ReportMeta},
     message_worker::Task,
     queue_pair::TrackerTable,
+    timeout_retransmit::RetransmitTask,
     tracker::{MessageMeta, Msn},
 };
 
@@ -29,6 +31,8 @@ pub(crate) struct MetaWorker<T> {
     recv_table: TrackerTable,
     sender_task_tx: flume::Sender<Task>,
     receiver_task_tx: flume::Sender<Task>,
+    ack_tx: flume::Sender<AckResponse>,
+    retransmit_tx: flume::Sender<RetransmitTask>,
 }
 
 impl<T: MetaReport + Send + 'static> MetaWorker<T> {
@@ -36,11 +40,15 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         inner: T,
         sender_task_tx: flume::Sender<Task>,
         receiver_task_tx: flume::Sender<Task>,
+        ack_tx: flume::Sender<AckResponse>,
+        retransmit_tx: flume::Sender<RetransmitTask>,
     ) -> Self {
         Self {
             inner,
+            ack_tx,
             sender_task_tx,
             receiver_task_tx,
+            retransmit_tx,
             send_table: TrackerTable::new(),
             recv_table: TrackerTable::new(),
         }
@@ -81,7 +89,9 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
                 rkey,
                 imm,
             } => {
-                self.handle_header_write(pos, msn, psn, solicited, ack_req, dqpn, total_len, raddr);
+                self.handle_header_write(
+                    pos, msn, psn, solicited, ack_req, dqpn, total_len, raddr, is_retry,
+                );
             }
             ReportMeta::Ack {
                 qpn,
@@ -109,6 +119,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         dqpn: u32,
         total_len: u32,
         raddr: u64,
+        is_retry: bool,
     ) {
         let Some(tracker) = self.recv_table.get_mut(dqpn) else {
             error!("qp number: d{dqpn} does not exist");
@@ -126,6 +137,15 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
             let task = Task::UpdateBasePsn { qpn: dqpn, psn };
             self.receiver_task_tx.send(task);
         }
+
+        /// Timeout of an `AckReq` message, notify retransmission
+        if matches!(pos, PacketPos::Last) && is_retry && ack_req {
+            let _ignore = self.ack_tx.send(AckResponse::Nak {
+                qpn: dqpn,
+                base_psn: tracker.base_psn(),
+                ack_req_packet_psn: psn,
+            });
+        }
     }
 
     fn handle_ack(
@@ -139,6 +159,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         let (table, task_tx) = if is_send_by_local_hw {
             (&mut self.recv_table, &self.receiver_task_tx)
         } else {
+            let _ignore = self.retransmit_tx.send(RetransmitTask::ReceiveACK { qpn });
             (&mut self.send_table, &self.sender_task_tx)
         };
         let Some(tracker) = table.get_mut(qpn) else {

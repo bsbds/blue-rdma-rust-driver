@@ -1,4 +1,7 @@
-use crate::device_protocol::{ChunkPos, WithIbvParams, WithQpParams, WrChunk, WrChunkBuilder};
+use crate::{
+    constants::PSN_MASK,
+    device_protocol::{ChunkPos, WithIbvParams, WithQpParams, WrChunk, WrChunkBuilder},
+};
 
 use ibverbs_sys::{
     ibv_send_wr,
@@ -29,6 +32,10 @@ pub(crate) struct WrFragmenter {
     builder: WrChunkBuilder<WithIbvParams>,
     /// Length of the iterator
     len: usize,
+    /// Chunk size
+    chunk_size: u32,
+    /// whether the current message is a retry
+    is_retry: bool,
 }
 
 impl Iterator for WrFragmenter {
@@ -45,7 +52,7 @@ impl Iterator for WrFragmenter {
             .unwrap_or_else(|| unreachable!("pmtu should be greater than 1"));
 
         // Chunk boundary must align with PMTU
-        let chunk_end = self.laddr.saturating_add(WR_CHUNK_SIZE.into()) & !u64::from(pmtu_mask);
+        let chunk_end = self.laddr.saturating_add(self.chunk_size.into()) & !u64::from(pmtu_mask);
         let mut chunk_size: u32 = chunk_end
             .saturating_sub(self.laddr)
             .try_into()
@@ -108,6 +115,48 @@ impl WrFragmenter {
             chunk_pos,
             builder,
             len: num_chunks,
+            chunk_size: WR_CHUNK_SIZE,
+            is_retry: false,
+        }
+    }
+
+    /// Creates a new `WrFragmenter`
+    #[allow(unsafe_code)]
+    fn new_custom(
+        wr: SendWrResolver,
+        builder: WrChunkBuilder<WithQpParams>,
+        base_psn: u32,
+        chunk_size: u32,
+        is_retry: bool,
+    ) -> Self {
+        #[allow(clippy::as_conversions, clippy::cast_possible_truncation)]
+        // truncation is exptected
+        // behavior
+        let builder = builder.set_ibv_params(
+            wr.send_flags() as u8,
+            wr.rkey(),
+            wr.length(),
+            wr.lkey(),
+            wr.imm(),
+        );
+
+        let num_chunks = Self::num_chunks(wr.raddr(), wr.length().into(), builder.pmtu());
+        let chunk_pos = if num_chunks == 1 {
+            ChunkPos::Only
+        } else {
+            ChunkPos::First
+        };
+
+        Self {
+            psn: base_psn,
+            laddr: wr.laddr(),
+            raddr: wr.raddr(),
+            rem_len: wr.length(),
+            chunk_pos,
+            builder,
+            len: num_chunks,
+            chunk_size,
+            is_retry,
         }
     }
 
@@ -127,6 +176,75 @@ impl WrFragmenter {
         }
         let rem = length.wrapping_sub(first_chunk_len);
         usize::try_from(rem.div_ceil(WR_CHUNK_SIZE.into())).unwrap_or_else(|_| unreachable!())
+    }
+}
+
+pub(crate) struct WrPacketFragmenter {
+    wr: SendWrResolver,
+    builder: WrChunkBuilder<WithQpParams>,
+    base_psn: u32,
+}
+
+impl WrPacketFragmenter {
+    pub(crate) fn new(
+        wr: SendWrResolver,
+        builder: WrChunkBuilder<WithQpParams>,
+        base_psn: u32,
+    ) -> Self {
+        Self {
+            wr,
+            builder,
+            base_psn,
+        }
+    }
+
+    pub(crate) fn packets(self) -> Vec<WrChunk> {
+        WrFragmenter::new_custom(
+            self.wr,
+            self.builder,
+            self.base_psn,
+            self.builder.pmtu().into(),
+            // used for retransmission
+            true,
+        )
+        .collect()
+    }
+
+    pub(crate) fn last(self) -> WrChunk {
+        self.packets()
+            .into_iter()
+            .last()
+            .unwrap_or_else(|| unreachable!("empty message"))
+    }
+
+    pub(crate) fn packets_alt(self) -> Vec<WrChunk> {
+        let builder = self.builder.set_ibv_params(
+            self.wr.send_flags() as u8,
+            self.wr.rkey(),
+            self.wr.length(),
+            self.wr.lkey(),
+            self.wr.imm(),
+        );
+        let pmtu = u64::from(builder.pmtu());
+        let length = self.wr.length();
+        let start_addr = self.wr.raddr();
+        let end_addr = start_addr + u64::from(length);
+        let mut addr = start_addr;
+        let mut laddr = self.wr.laddr();
+        let mut psn = self.base_psn;
+        let mut chunks = Vec::new();
+        while addr < end_addr {
+            let end = ((addr + pmtu) & !(pmtu - 1)).min(end_addr);
+            let len = end - addr;
+            let chunk = builder
+                .set_chunk_meta(psn, laddr, addr, len as u32, ChunkPos::Middle)
+                .build();
+            chunks.push(chunk);
+            psn = (psn + 1) & PSN_MASK;
+            addr += len;
+            laddr += len;
+        }
+        chunks
     }
 }
 

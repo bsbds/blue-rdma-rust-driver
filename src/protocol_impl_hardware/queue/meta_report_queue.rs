@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::{
+    ack_responder::AckResponse,
     mem::PageWithPhysAddr,
     message_worker::Task,
     meta_worker_v2::MetaWorker,
@@ -18,6 +19,7 @@ use crate::{
         },
         MetaReportQueueHandler,
     },
+    timeout_retransmit::RetransmitTask,
 };
 
 use super::DescRingBuffer;
@@ -102,6 +104,8 @@ pub(crate) fn init_and_spawn_meta_worker<Dev>(
     mode: Mode,
     sender_task_tx: flume::Sender<Task>,
     receiver_task_tx: flume::Sender<Task>,
+    ack_tx: flume::Sender<AckResponse>,
+    retransmit_tx: flume::Sender<RetransmitTask>,
     is_shutdown: Arc<AtomicBool>,
 ) -> io::Result<()>
 where
@@ -120,6 +124,8 @@ where
         MetaReportQueueHandler::new(mrqs),
         sender_task_tx,
         receiver_task_tx,
+        ack_tx,
+        retransmit_tx,
     )
     .spawn(is_shutdown);
 

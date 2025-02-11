@@ -1,7 +1,7 @@
 use tracing::error;
 
 use crate::{
-    ack_responder::Ack,
+    ack_responder::AckResponse,
     completion::CompletionQueueTable,
     completion_worker::Completion,
     tracker::{MessageMeta, MessageTracker, MessageTrackerTable},
@@ -23,7 +23,7 @@ pub(crate) struct ReceiverMessageWorker {
     tracker_table: MessageTrackerTable,
     task_rx: flume::Receiver<Task>,
     comp_tx: flume::Sender<Completion>,
-    ack_tx: flume::Sender<Ack>,
+    ack_tx: flume::Sender<AckResponse>,
 }
 
 impl SenderMessageWorker {
@@ -61,6 +61,7 @@ impl SenderMessageWorker {
                     for message in completed {
                         self.comp_tx
                             .send(Completion::new_send(qpn, message.msn().0));
+                        if message.ack_req() {}
                     }
                 }
             }
@@ -72,7 +73,7 @@ impl ReceiverMessageWorker {
     pub(crate) fn new(
         task_rx: flume::Receiver<Task>,
         comp_tx: flume::Sender<Completion>,
-        ack_tx: flume::Sender<Ack>,
+        ack_tx: flume::Sender<AckResponse>,
     ) -> Self {
         Self {
             tracker_table: MessageTrackerTable::new(),
@@ -109,9 +110,11 @@ impl ReceiverMessageWorker {
                         self.comp_tx
                             .send(Completion::new_recv(qpn, message.msn().0));
                         if message.ack_req() {
-                            let _ignore =
-                                self.ack_tx
-                                    .send(Ack::new(qpn, message.msn().0, message.psn()));
+                            let _ignore = self.ack_tx.send(AckResponse::Ack {
+                                qpn,
+                                msn: message.msn().0,
+                                last_psn: message.psn(),
+                            });
                         }
                     }
                 }
@@ -124,7 +127,7 @@ pub(crate) fn spawn_message_workers(
     sender_task_rx: flume::Receiver<Task>,
     receiver_task_rx: flume::Receiver<Task>,
     comp_tx: flume::Sender<Completion>,
-    ack_tx: flume::Sender<Ack>,
+    ack_tx: flume::Sender<AckResponse>,
 ) {
     let sender_worker = SenderMessageWorker::new(sender_task_rx, comp_tx.clone());
     let receiver_worker = ReceiverMessageWorker::new(receiver_task_rx, comp_tx, ack_tx);

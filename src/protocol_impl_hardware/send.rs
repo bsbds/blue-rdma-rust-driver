@@ -41,6 +41,12 @@ impl SendQueueScheduler {
         }
     }
 
+    pub(crate) fn clone_arc(&self) -> Self {
+        Self {
+            injector: Arc::clone(&self.injector),
+        }
+    }
+
     pub(crate) fn injector(&self) -> Arc<WrInjector> {
         Arc::clone(&self.injector)
     }

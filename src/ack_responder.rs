@@ -14,28 +14,37 @@ use tracing::error;
 
 use crate::{device_protocol::FrameTx, queue_pair::QueuePairAttrTable};
 
-pub(crate) struct Ack {
-    qpn: u32,
-    msn: u16,
-    last_psn: u32,
+pub(crate) enum AckResponse {
+    Ack {
+        qpn: u32,
+        msn: u16,
+        last_psn: u32,
+    },
+    Nak {
+        qpn: u32,
+        base_psn: u32,
+        ack_req_packet_psn: u32,
+    },
 }
 
-impl Ack {
-    pub(crate) fn new(qpn: u32, msn: u16, last_psn: u32) -> Self {
-        Self { qpn, msn, last_psn }
+impl AckResponse {
+    fn qpn(&self) -> u32 {
+        match *self {
+            AckResponse::Ack { qpn, .. } | AckResponse::Nak { qpn, .. } => qpn,
+        }
     }
 }
 
 pub(crate) struct AckResponder {
     qp_table: QueuePairAttrTable,
-    rx: flume::Receiver<Ack>,
+    rx: flume::Receiver<AckResponse>,
     raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
 }
 
 impl AckResponder {
     pub(crate) fn new(
         qp_table: QueuePairAttrTable,
-        rx: flume::Receiver<Ack>,
+        rx: flume::Receiver<AckResponse>,
         raw_frame_tx: Box<dyn FrameTx + Send + 'static>,
     ) -> Self {
         Self {
@@ -53,14 +62,31 @@ impl AckResponder {
     }
 
     fn run(mut self) {
-        while let Ok(ack) = self.rx.recv() {
-            let Some(dqpn) = self.qp_table.get(ack.qpn).map(|attr| attr.dqpn) else {
+        const NUM_BITS_STRIDE: u8 = 16;
+        while let Ok(x) = self.rx.recv() {
+            let Some(dqpn) = self.qp_table.get(x.qpn()).map(|attr| attr.dqpn) else {
                 error!("invalid qpn");
                 continue;
             };
-            // FIXME: ack message
-            let ack_frame = AckFrameBuilder::build_ack(ack.last_psn, u128::MAX, dqpn);
-            if let Err(e) = self.raw_frame_tx.send(&ack_frame) {
+            let frame = match x {
+                AckResponse::Ack { qpn, msn, last_psn } => {
+                    AckFrameBuilder::build_ack(last_psn, u128::MAX, 0, 0, dqpn, false)
+                }
+                AckResponse::Nak {
+                    qpn,
+                    base_psn,
+                    ack_req_packet_psn,
+                } => AckFrameBuilder::build_ack(
+                    ack_req_packet_psn,
+                    0,
+                    base_psn,
+                    // all packets before base_psn(exclude) is received
+                    u128::MAX >> NUM_BITS_STRIDE,
+                    dqpn,
+                    true,
+                ),
+            };
+            if let Err(e) = self.raw_frame_tx.send(&frame) {
                 error!("failed to send ack frame");
             }
         }
@@ -77,7 +103,14 @@ struct AckFrameBuilder;
     clippy::big_endian_bytes
 )]
 impl AckFrameBuilder {
-    fn build_ack(now_psn: u32, now_bitmap: u128, dqpn: u32) -> Vec<u8> {
+    fn build_ack(
+        now_psn: u32,
+        now_bitmap: u128,
+        pre_psn: u32,
+        prev_bitmap: u128,
+        dqpn: u32,
+        is_packet_loss: bool,
+    ) -> Vec<u8> {
         const TRANS_TYPE_RC: u8 = 0x00;
         const OPCODE_ACKNOWLEDGE: u8 = 0x11;
         const PAYLOAD_SIZE: usize = 48;
@@ -93,7 +126,9 @@ impl AckFrameBuilder {
 
         let mut aeth_seg0 = AethSeg0::default();
         aeth_seg0.set_is_send_by_driver(true);
-        payload[12..28].copy_from_slice(&0u128.to_be_bytes()); // prev_bitmap
+        aeth_seg0.set_is_packet_loss(is_packet_loss);
+        aeth_seg0.set_pre_psn(u24::from_u32(pre_psn));
+        payload[12..28].copy_from_slice(&prev_bitmap.to_be_bytes()); // prev_bitmap
         payload[28..44].copy_from_slice(&now_bitmap.to_be_bytes());
         payload[44..].copy_from_slice(&aeth_seg0.value.to_be_bytes());
 

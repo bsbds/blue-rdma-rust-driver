@@ -41,7 +41,8 @@ use crate::{
     },
     qp::{DeviceQp, QpInitiatorTable, QpTrackerTable},
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
-    send::{SendWrResolver, WrFragmenter},
+    send::{SendWrResolver, WrFragmenter, WrPacketFragmenter},
+    timeout_retransmit::{RetransmitTask, TimeoutRetransmitWorker},
     tracker::{MessageMeta, Msn},
 };
 
@@ -76,6 +77,7 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     cq_manager: CqManager,
     sender_table: SenderTable,
     sender_task_tx: flume::Sender<Task>,
+    retransmit_tx: flume::Sender<RetransmitTask>,
     cmd_controller: CommandController<H::Adaptor>,
     send_scheduler: SendQueueScheduler,
 }
@@ -109,6 +111,7 @@ where
         let (receiver_task_tx, receiver_task_rx) = flume::unbounded();
         let (comp_tx, comp_rx) = flume::unbounded();
         let (ack_tx, ack_rx) = flume::unbounded();
+        let (retransmit_tx, retransmit_rx) = flume::unbounded();
         let rx_buffer = alloc_page()?;
         let rx_buffer_pa = rx_buffer.phys_addr;
         let qp_attr_table = QueuePairAttrTable::new();
@@ -130,6 +133,8 @@ where
             mode,
             sender_task_tx_c,
             receiver_task_tx,
+            ack_tx.clone(),
+            retransmit_tx.clone(),
             Arc::clone(&is_shutdown),
         )?;
         spawn_message_workers(sender_task_rx, receiver_task_rx, comp_tx, ack_tx);
@@ -139,6 +144,7 @@ where
 
         let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
         AckResponder::new(qp_attr_table, ack_rx, Box::new(simple_nic_tx)).spawn();
+        TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc()).spawn();
 
         Ok(Self {
             device,
@@ -148,6 +154,7 @@ where
             cq_manager,
             sender_table: SenderTable::new(),
             sender_task_tx,
+            retransmit_tx,
             mtt_buffer: alloc_page()?,
             mtt: Mtt::new(),
         })
@@ -293,6 +300,16 @@ where
             qp.dqp_ip,
             qp.pmtu,
         );
+
+        if ack_req {
+            let builder = WrPacketFragmenter::new(wr, builder, psn);
+            let last_packet_chunk = builder.last();
+            let _ignore = self.retransmit_tx.send(RetransmitTask::NewAckReq {
+                qpn,
+                last_packet_chunk,
+            });
+        }
+
         let fragmenter = WrFragmenter::new(wr, builder, psn);
         for chunk in fragmenter {
             // TODO: Should this never fail

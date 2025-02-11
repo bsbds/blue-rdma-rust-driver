@@ -3,6 +3,7 @@ use std::time::{self, Duration, Instant};
 use thiserror::Error;
 
 const INIT_RETRY_COUNT: usize = 5;
+const DEFAULT_LOCAL_ACK_TIMEOUT: u8 = 4;
 
 #[derive(Debug)]
 pub(crate) struct TransportTimer {
@@ -63,6 +64,18 @@ impl TransportTimer {
 
     fn restart(&mut self) {
         self.last_start = Some(Instant::now());
+    }
+}
+
+impl Default for TransportTimer {
+    fn default() -> Self {
+        let timeout_nanos = Some(4096u64 << DEFAULT_LOCAL_ACK_TIMEOUT);
+
+        Self {
+            timeout_interval: timeout_nanos.map(Duration::from_nanos),
+            last_start: None,
+            retry_counter: INIT_RETRY_COUNT,
+        }
     }
 }
 
