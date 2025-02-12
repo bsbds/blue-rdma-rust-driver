@@ -248,12 +248,22 @@ impl WrPacketFragmenter {
     }
 }
 
-/// A resolver and validator for `ibv_send_wr`
+/// A resolver and validator for send work requests
 #[derive(Clone, Copy)]
-pub(crate) struct SendWrResolver(ibv_send_wr);
+pub(crate) struct SendWrResolver {
+    wr_id: u64,
+    send_flags: u32,
+    laddr: u64,
+    length: u32,
+    lkey: u32,
+    raddr: u64,
+    rkey: u32,
+    imm_data: u32,
+    opcode: u32,
+}
 
-#[allow(unsafe_code)] // SAFETY: The sg_list pointer is guaranteed to be valid if num_sge > 0
 impl SendWrResolver {
+    #[allow(unsafe_code)]
     /// Creates a new resolver from the given work request.
     /// Returns None if the input is invalid
     pub(crate) fn new(wr: ibv_send_wr) -> Result<Self> {
@@ -261,51 +271,77 @@ impl SendWrResolver {
             IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {}
             _ => return Err(ValidationError::unimplemented("opcode not supported")),
         }
-        let num_sge: usize = usize::try_from(wr.num_sge).map_err(ValidationError::invalid_input)?;
+
+        let num_sge = usize::try_from(wr.num_sge).map_err(ValidationError::invalid_input)?;
+
         if num_sge != 1 {
             return Err(ValidationError::unimplemented("only support single sge"));
         }
-        Ok(Self(wr))
+
+        // SAFETY: sg_list is valid when num_sge > 0, which we've verified above
+        let sge = unsafe { *wr.sg_list };
+
+        Ok(Self {
+            wr_id: wr.wr_id,
+            send_flags: wr.send_flags,
+            laddr: sge.addr,
+            length: sge.length,
+            lkey: sge.lkey,
+            // SAFETY: rdma field is valid for RDMA operations
+            raddr: unsafe { wr.wr.rdma.remote_addr },
+            rkey: unsafe { wr.wr.rdma.rkey },
+            // SAFETY: imm_data is valid for operations with immediate data
+            imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
+            opcode: wr.opcode,
+        })
     }
 
-    /// Returns the local address of the SGE buffer.
+    /// Returns the local address of the SGE buffer
+    #[inline]
     pub(crate) fn laddr(&self) -> u64 {
-        unsafe { *self.0.sg_list }.addr
+        self.laddr
     }
 
-    /// Returns the length of the SGE buffer in bytes.
+    /// Returns the length of the SGE buffer in bytes
+    #[inline]
     pub(crate) fn length(&self) -> u32 {
-        unsafe { *self.0.sg_list }.length
+        self.length
     }
 
-    /// Returns the local key associated with the SGE buffer.
+    /// Returns the local key associated with the SGE buffer
+    #[inline]
     pub(crate) fn lkey(&self) -> u32 {
-        unsafe { *self.0.sg_list }.lkey
+        self.lkey
     }
 
     /// Returns the remote memory address for RDMA operations
+    #[inline]
     pub(crate) fn raddr(&self) -> u64 {
-        unsafe { self.0.wr.rdma.remote_addr }
+        self.raddr
     }
 
     /// Returns the remote key for RDMA operations
+    #[inline]
     pub(crate) fn rkey(&self) -> u32 {
-        unsafe { self.0.wr.rdma.rkey }
+        self.rkey
     }
 
     /// Returns the immediate data value
+    #[inline]
     pub(crate) fn imm(&self) -> u32 {
-        unsafe { self.0.__bindgen_anon_1.imm_data }
+        self.imm_data
     }
 
     /// Returns the send flags
+    #[inline]
     pub(crate) fn send_flags(&self) -> u32 {
-        self.0.send_flags
+        self.send_flags
     }
 
     /// Returns the ID associated with this WR
+    #[inline]
     pub(crate) fn wr_id(&self) -> u64 {
-        self.0.wr_id
+        self.wr_id
     }
 }
 

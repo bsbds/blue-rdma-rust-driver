@@ -8,6 +8,7 @@ use crate::{
     mem::PageWithPhysAddr,
     message_worker::Task,
     meta_worker_v2::MetaWorker,
+    packet_retransmit::PacketRetransmitTask,
     protocol_impl_hardware::{
         desc::{
             MetaReportQueueAckDesc, MetaReportQueueAckExtraDesc, MetaReportQueueDescFirst,
@@ -106,6 +107,7 @@ pub(crate) fn init_and_spawn_meta_worker<Dev>(
     receiver_task_tx: flume::Sender<Task>,
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
+    packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     is_shutdown: Arc<AtomicBool>,
 ) -> io::Result<()>
 where
@@ -126,6 +128,7 @@ where
         receiver_task_tx,
         ack_tx,
         retransmit_tx,
+        packet_retransmit_tx,
     )
     .spawn(is_shutdown);
 

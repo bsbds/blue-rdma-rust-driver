@@ -13,7 +13,7 @@ use rand::Rng;
 
 use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW, QPN_KEY_PART_WIDTH},
-    device_protocol::{WithQpParams, WrChunkBuilder},
+    device_protocol::{QpParams, WithQpParams, WrChunkBuilder},
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
     },
@@ -298,7 +298,7 @@ impl InitiatorState {
         let end_psn = base_psn.wrapping_add(num_psn).wrapping_sub(1);
 
         Some((
-            WrChunkBuilder::new().set_qp_params(
+            WrChunkBuilder::new().set_qp_params(QpParams::new(
                 msn,
                 self.attrs.qp_type(),
                 self.attrs.qpn(),
@@ -306,7 +306,7 @@ impl InitiatorState {
                 self.attrs.dqpn(),
                 self.attrs.dqp_ip(),
                 self.attrs.pmtu(),
-            ),
+            )),
             msn,
             base_psn,
             end_psn,

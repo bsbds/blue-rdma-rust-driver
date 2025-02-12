@@ -15,7 +15,8 @@ use crate::{
     constants::PSN_MASK,
     device_protocol::{MetaReport, PacketPos, ReportMeta},
     message_worker::Task,
-    queue_pair::TrackerTable,
+    packet_retransmit::PacketRetransmitTask,
+    queue_pair::{Tracker, TrackerTable},
     timeout_retransmit::RetransmitTask,
     tracker::{MessageMeta, Msn},
 };
@@ -33,6 +34,7 @@ pub(crate) struct MetaWorker<T> {
     receiver_task_tx: flume::Sender<Task>,
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
+    packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
 }
 
 impl<T: MetaReport + Send + 'static> MetaWorker<T> {
@@ -42,6 +44,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         receiver_task_tx: flume::Sender<Task>,
         ack_tx: flume::Sender<AckResponse>,
         retransmit_tx: flume::Sender<RetransmitTask>,
+        packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     ) -> Self {
         Self {
             inner,
@@ -49,6 +52,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
             sender_task_tx,
             receiver_task_tx,
             retransmit_tx,
+            packet_retransmit_tx,
             send_table: TrackerTable::new(),
             recv_table: TrackerTable::new(),
         }
@@ -102,9 +106,18 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
                 is_send_by_local_hw,
                 is_send_by_driver,
             } => self.handle_ack(qpn, msn, psn_now, now_bitmap, is_send_by_local_hw),
+            ReportMeta::Nak {
+                qpn,
+                msn,
+                psn_now,
+                now_bitmap,
+                pre_bitmap,
+                psn_before_slide,
+                is_send_by_local_hw,
+                is_send_by_driver,
+            } => {}
             ReportMeta::Read { .. } => todo!(),
             ReportMeta::Cnp { .. } => todo!(),
-            ReportMeta::Nak { .. } => todo!(),
         }
     }
 
@@ -156,20 +169,87 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         now_bitmap: u128,
         is_send_by_local_hw: bool,
     ) {
+        if !is_send_by_local_hw {
+            let _ignore = self.retransmit_tx.send(RetransmitTask::ReceiveACK { qpn });
+        }
         let (table, task_tx) = if is_send_by_local_hw {
             (&mut self.recv_table, &self.receiver_task_tx)
         } else {
-            let _ignore = self.retransmit_tx.send(RetransmitTask::ReceiveACK { qpn });
+            (&mut self.send_table, &self.sender_task_tx)
+        };
+
+        let Some(tracker) = table.get_mut(qpn) else {
+            error!("qp number: {qpn} does not exist");
+            return;
+        };
+        if let Some(psn) = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn) {
+            self.send_update(task_tx, qpn, psn);
+        }
+    }
+
+    #[allow(clippy::too_many_arguments, clippy::similar_names)]
+    fn handle_nak(
+        &mut self,
+        qpn: u32,
+        ack_msn: u16,
+        psn_now: u32,
+        now_bitmap: u128,
+        psn_pre: u32,
+        pre_bitmap: u128,
+        is_send_by_local_hw: bool,
+    ) {
+        let (table, task_tx) = if is_send_by_local_hw {
+            (&mut self.recv_table, &self.receiver_task_tx)
+        } else {
             (&mut self.send_table, &self.sender_task_tx)
         };
         let Some(tracker) = table.get_mut(qpn) else {
             error!("qp number: {qpn} does not exist");
             return;
         };
-        let base_psn = psn_now.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
-        if let Some(psn) = tracker.ack_range(base_psn, now_bitmap, ack_msn) {
-            let task = Task::UpdateBasePsn { qpn, psn };
-            task_tx.send(task);
+        let x = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn);
+        let y = Self::update_packet_tracker(tracker, psn_pre, pre_bitmap, ack_msn);
+        for psn in x.into_iter().chain(y) {
+            self.send_update(task_tx, qpn, psn);
         }
+        // TODO: implement more fine-grained retransmission
+        let psn_low = psn_pre.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
+        let psn_high = psn_now.wrapping_add(128).wrapping_sub(BASE_PSN_OFFSET);
+        let _ignore = self
+            .packet_retransmit_tx
+            .send(PacketRetransmitTask::RetransmitRange {
+                qpn,
+                psn_low,
+                psn_high,
+            });
+    }
+
+    fn select_table(
+        &mut self,
+        is_send_by_local_hw: bool,
+    ) -> (&mut TrackerTable, &flume::Sender<Task>) {
+        if is_send_by_local_hw {
+            (&mut self.recv_table, &self.receiver_task_tx)
+        } else {
+            (&mut self.send_table, &self.sender_task_tx)
+        }
+    }
+
+    fn update_packet_tracker(
+        tracker: &mut Tracker,
+        psn: u32,
+        bitmap: u128,
+        ack_msn: u16,
+    ) -> Option<u32> {
+        let base_psn = psn.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
+        tracker.ack_range(base_psn, bitmap, ack_msn)
+    }
+
+    fn send_update(&self, tx: &flume::Sender<Task>, qpn: u32, psn: u32) {
+        let task = Task::UpdateBasePsn { qpn, psn };
+        let _ignore = tx.send(task);
+        let __ignore = self
+            .packet_retransmit_tx
+            .send(PacketRetransmitTask::Ack { qpn, psn });
     }
 }

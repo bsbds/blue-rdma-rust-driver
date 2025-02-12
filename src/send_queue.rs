@@ -1,26 +1,29 @@
-use std::{cmp::Ordering, collections::VecDeque};
+use std::{cmp::Ordering, collections::VecDeque, iter};
 
-use crate::{constants::MAX_PSN_WINDOW, send::SendWrResolver};
+use crate::{
+    constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
+    device_protocol::QpParams,
+    qp::qpn_index,
+    send::SendWrResolver,
+};
 
-struct IbvSendQueueTable {
-    inner: Box<[IbvSendQueue]>,
-}
-
-struct IbvSendQueue {
+#[derive(Default)]
+pub(crate) struct IbvSendQueue {
     inner: VecDeque<SendQueueElem>,
 }
 
 impl IbvSendQueue {
-    fn push(&mut self, elem: SendQueueElem) {
+    pub(crate) fn push(&mut self, elem: SendQueueElem) {
         self.inner.push_back(elem);
     }
 
-    fn pop_until(&mut self, psn: u32) {
+    pub(crate) fn pop_until(&mut self, psn: u32) {
         let mut a = self.inner.partition_point(|x| x.psn < Psn(psn));
         let _drop = self.inner.drain(..a);
     }
 
-    fn find(&self, psn_low: u32, psn_high: u32) -> Vec<SendQueueElem> {
+    /// Find range [`psn_low`, `psn_high`)
+    pub(crate) fn range(&self, psn_low: u32, psn_high: u32) -> Vec<SendQueueElem> {
         let mut a = self.inner.partition_point(|x| x.psn <= Psn(psn_low));
         let mut b = self.inner.partition_point(|x| x.psn < Psn(psn_high));
         a = a.saturating_sub(1);
@@ -29,22 +32,31 @@ impl IbvSendQueue {
 }
 
 #[derive(Clone, Copy)]
-struct SendQueueElem {
+pub(crate) struct SendQueueElem {
     psn: Psn,
-    pub(crate) wr: SendWrResolver,
+    wr: SendWrResolver,
+    qp_param: QpParams,
 }
 
 impl SendQueueElem {
-    fn new(psn: u32, wr: SendWrResolver) -> Self {
-        Self { psn: Psn(psn), wr }
+    pub(crate) fn new(psn: u32, wr: SendWrResolver, qp_param: QpParams) -> Self {
+        Self {
+            psn: Psn(psn),
+            wr,
+            qp_param,
+        }
     }
 
-    fn psn(&self) -> u32 {
+    pub(crate) fn psn(&self) -> u32 {
         self.psn.0
     }
 
-    fn wr(&self) -> SendWrResolver {
+    pub(crate) fn wr(&self) -> SendWrResolver {
         self.wr
+    }
+
+    pub(crate) fn qp_param(&self) -> QpParams {
+        self.qp_param
     }
 }
 

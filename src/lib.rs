@@ -186,9 +186,11 @@ mod meta_worker;
 mod meta_worker_v2;
 /// Memory translation table
 mod mtt;
+mod packet_retransmit;
 mod protocol_impl_hardware;
 /// Queue pair state
 mod qp;
+mod qp_table;
 mod queue_pair;
 /// Packet retransmission implementations
 mod retransmission;
@@ -196,6 +198,7 @@ mod retransmission;
 mod ringbuffer;
 /// Send Queue implementations
 mod send;
+mod send_queue;
 mod timeout_retransmit;
 mod timer;
 mod tracker;

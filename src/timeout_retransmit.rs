@@ -1,8 +1,9 @@
-use std::{io, thread, time::Duration};
+use std::{io, iter, thread, time::Duration};
 
 use tracing::error;
 
 use crate::{
+    constants::MAX_QP_CNT,
     device_protocol::{WorkReqSend, WrChunk},
     protocol_impl_hardware::SendQueueScheduler,
     qp::qpn_index,
@@ -12,12 +13,17 @@ use crate::{
 const TIMEOUT_CHECK_DURATION: Duration = Duration::from_micros(8);
 
 /// Timer per QP
-#[derive(Default)]
 struct TransportTimerTable {
     inner: Box<[Entry]>,
 }
 
 impl TransportTimerTable {
+    fn new() -> Self {
+        Self {
+            inner: iter::repeat_with(Entry::default).take(MAX_QP_CNT).collect(),
+        }
+    }
+
     fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut Entry> {
         self.inner.get_mut(qpn_index(qpn))
     }
@@ -64,7 +70,7 @@ impl TimeoutRetransmitWorker {
         Self {
             receiver,
             wr_sender,
-            table: TransportTimerTable::default(),
+            table: TransportTimerTable::new(),
         }
     }
 

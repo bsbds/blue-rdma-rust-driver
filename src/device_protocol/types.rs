@@ -196,25 +196,16 @@ impl WrChunkBuilder<Initial> {
     }
 
     #[allow(clippy::unused_self, clippy::too_many_arguments)]
-    pub(crate) fn set_qp_params(
-        self,
-        msn: u16,
-        qp_type: u8,
-        sqpn: u32,
-        mac_addr: u64,
-        dqpn: u32,
-        dqp_ip: u32,
-        pmtu: u8,
-    ) -> WrChunkBuilder<WithQpParams> {
+    pub(crate) fn set_qp_params(self, qp_params: QpParams) -> WrChunkBuilder<WithQpParams> {
         WrChunkBuilder {
             inner: WrChunk {
-                qp_type,
-                sqpn,
-                mac_addr,
-                dqpn,
-                dqp_ip,
-                pmtu,
-                msn,
+                qp_type: qp_params.qp_type,
+                sqpn: qp_params.sqpn,
+                mac_addr: qp_params.mac_addr,
+                dqpn: qp_params.dqpn,
+                dqp_ip: qp_params.dqp_ip,
+                pmtu: qp_params.pmtu,
+                msn: qp_params.msn,
                 ..Default::default()
             },
             _state: PhantomData,
@@ -337,6 +328,39 @@ impl ChunkPos {
             ChunkPos::First | ChunkPos::Middle => ChunkPos::Middle,
             ChunkPos::Last => ChunkPos::Last,
             ChunkPos::Only => ChunkPos::Only,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct QpParams {
+    pub(crate) msn: u16,
+    pub(crate) qp_type: u8,
+    pub(crate) sqpn: u32,
+    pub(crate) mac_addr: u64,
+    pub(crate) dqpn: u32,
+    pub(crate) dqp_ip: u32,
+    pub(crate) pmtu: u8,
+}
+
+impl QpParams {
+    pub(crate) fn new(
+        msn: u16,
+        qp_type: u8,
+        sqpn: u32,
+        mac_addr: u64,
+        dqpn: u32,
+        dqp_ip: u32,
+        pmtu: u8,
+    ) -> Self {
+        Self {
+            msn,
+            qp_type,
+            sqpn,
+            mac_addr,
+            dqpn,
+            dqp_ip,
+            pmtu,
         }
     }
 }
