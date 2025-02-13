@@ -16,7 +16,9 @@ pub(crate) enum PacketRetransmitTask {
     },
     RetransmitRange {
         qpn: u32,
+        // Inclusive
         psn_low: u32,
+        // Exclusive
         psn_high: u32,
     },
     Ack {

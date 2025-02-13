@@ -12,7 +12,7 @@ use pnet::{
 };
 use tracing::error;
 
-use crate::{device_protocol::FrameTx, queue_pair::QueuePairAttrTable};
+use crate::{constants::PSN_MASK, device_protocol::FrameTx, queue_pair::QueuePairAttrTable};
 
 pub(crate) enum AckResponse {
     Ack {
@@ -77,11 +77,10 @@ impl AckResponder {
                     base_psn,
                     ack_req_packet_psn,
                 } => AckFrameBuilder::build_ack(
-                    ack_req_packet_psn,
+                    ack_req_packet_psn.wrapping_add(1) & PSN_MASK,
                     0,
                     base_psn,
-                    // all packets before base_psn(exclude) is received
-                    u128::MAX >> NUM_BITS_STRIDE,
+                    0,
                     dqpn,
                     true,
                 ),

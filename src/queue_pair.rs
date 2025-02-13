@@ -231,6 +231,10 @@ impl Tracker {
         acked_psn
     }
 
+    pub(crate) fn ack_before(&mut self, psn: u32) -> Option<u32> {
+        self.psn.ack_before(psn)
+    }
+
     pub(crate) fn base_psn(&self) -> u32 {
         self.psn.base_psn()
     }

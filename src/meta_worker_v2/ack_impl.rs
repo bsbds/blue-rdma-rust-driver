@@ -59,7 +59,16 @@ impl<T> MetaWorker<T> {
         }
     }
 
-    fn handle_ack_driver(&mut self, meta: AckMeta) {}
+    fn handle_ack_driver(&mut self, meta: AckMeta) {
+        let AckMeta { qpn, psn_now, .. } = meta;
+        let (table, task_tx) = (&mut self.send_table, &self.sender_task_tx);
+        let Some(tracker) = table.get_mut(qpn) else {
+            return;
+        };
+        if let Some(psn) = tracker.ack_before(psn_now) {
+            self.send_update(task_tx, qpn, psn);
+        }
+    }
 
     fn handle_nak_hw(&mut self, meta: NakMeta) {
         let NakMeta {
@@ -98,7 +107,26 @@ impl<T> MetaWorker<T> {
             });
     }
 
-    fn handle_nak_driver(&mut self, meta: NakMeta) {}
+    fn handle_nak_driver(&mut self, meta: NakMeta) {
+        let NakMeta {
+            qpn,
+            msn: ack_msn,
+            psn_now,
+            psn_before_slide: psn_pre,
+            ..
+        } = meta;
+        let (table, task_tx) = (&mut self.send_table, &self.sender_task_tx);
+        let Some(tracker) = table.get_mut(qpn) else {
+            return;
+        };
+        let _ignore = self
+            .packet_retransmit_tx
+            .send(PacketRetransmitTask::RetransmitRange {
+                qpn,
+                psn_low: psn_pre,
+                psn_high: psn_now,
+            });
+    }
 
     fn update_packet_tracker(
         tracker: &mut Tracker,
