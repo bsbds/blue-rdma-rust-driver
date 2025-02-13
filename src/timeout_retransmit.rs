@@ -49,9 +49,12 @@ struct TransportTimerTable {
 }
 
 impl TransportTimerTable {
-    fn new() -> Self {
+    fn new(local_ack_timeout: u8, init_retry_counter: usize) -> Self {
+        let timer = TransportTimer::new(local_ack_timeout, init_retry_counter);
         Self {
-            inner: iter::repeat_with(Entry::default).take(MAX_QP_CNT).collect(),
+            inner: iter::repeat_with(|| Entry::new(timer.clone()))
+                .take(MAX_QP_CNT)
+                .collect(),
         }
     }
 
@@ -60,7 +63,6 @@ impl TransportTimerTable {
     }
 }
 
-#[derive(Default)]
 struct Entry {
     timer: TransportTimer,
     // contains the last packet which ack_req bit is set
@@ -68,12 +70,20 @@ struct Entry {
 }
 
 impl Entry {
+    fn new(timer: TransportTimer) -> Self {
+        Self {
+            timer,
+            last_packet_chunk: None,
+        }
+    }
+
     fn set_last_packet(&mut self, packet: WrChunk) {
         self.last_packet_chunk = Some(packet);
     }
 }
 
 #[allow(variant_size_differences)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum RetransmitTask {
     NewAckReq {
         qpn: u32,
@@ -109,7 +119,7 @@ impl TimeoutRetransmitWorker {
         Self {
             receiver,
             wr_sender,
-            table: TransportTimerTable::new(),
+            table: TransportTimerTable::new(config.local_ack_timeout, config.init_retry_count),
             config,
         }
     }

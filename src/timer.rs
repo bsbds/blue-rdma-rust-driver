@@ -2,18 +2,16 @@ use std::time::{self, Duration, Instant};
 
 use thiserror::Error;
 
-const INIT_RETRY_COUNT: usize = 5;
-const DEFAULT_LOCAL_ACK_TIMEOUT: u8 = 4;
-
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(crate) struct TransportTimer {
     timeout_interval: Option<Duration>,
     last_start: Option<Instant>,
-    retry_counter: usize,
+    init_retry_counter: usize,
+    current_retry_counter: usize,
 }
 
 impl TransportTimer {
-    pub(crate) fn new(local_ack_timeout: u8) -> Self {
+    pub(crate) fn new(local_ack_timeout: u8, init_retry_counter: usize) -> Self {
         let timeout_nanos = if local_ack_timeout == 0 {
             // disabled
             None
@@ -25,12 +23,13 @@ impl TransportTimer {
         Self {
             timeout_interval: timeout_nanos.map(Duration::from_nanos),
             last_start: None,
-            retry_counter: INIT_RETRY_COUNT,
+            init_retry_counter,
+            current_retry_counter: init_retry_counter,
         }
     }
 
     pub(crate) fn reset(&mut self) {
-        self.retry_counter = INIT_RETRY_COUNT;
+        self.current_retry_counter = self.init_retry_counter;
         self.restart();
     }
 
@@ -50,10 +49,10 @@ impl TransportTimer {
         if elapsed < timeout_interval {
             return Ok(false);
         }
-        if self.retry_counter == 0 {
+        if self.current_retry_counter == 0 {
             return Err(TimerError);
         }
-        self.retry_counter -= 1;
+        self.current_retry_counter -= 1;
         self.restart();
         Ok(true)
     }
@@ -64,18 +63,6 @@ impl TransportTimer {
 
     fn restart(&mut self) {
         self.last_start = Some(Instant::now());
-    }
-}
-
-impl Default for TransportTimer {
-    fn default() -> Self {
-        let timeout_nanos = Some(4096u64 << DEFAULT_LOCAL_ACK_TIMEOUT);
-
-        Self {
-            timeout_interval: timeout_nanos.map(Duration::from_nanos),
-            last_start: None,
-            retry_counter: INIT_RETRY_COUNT,
-        }
     }
 }
 
