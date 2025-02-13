@@ -67,6 +67,12 @@ struct Entry {
     last_packet_chunk: Option<WrChunk>,
 }
 
+impl Entry {
+    fn set_last_packet(&mut self, packet: WrChunk) {
+        self.last_packet_chunk = Some(packet);
+    }
+}
+
 #[allow(variant_size_differences)]
 pub(crate) enum RetransmitTask {
     NewAckReq {
@@ -125,8 +131,12 @@ impl TimeoutRetransmitWorker {
                 let Some(entry) = self.table.get_qp_mut(task.qpn()) else {
                     continue;
                 };
-                if matches!(task, RetransmitTask::NewAckReq { .. }) {
+                if let RetransmitTask::NewAckReq {
+                    last_packet_chunk, ..
+                } = task
+                {
                     entry.timer.reset();
+                    entry.set_last_packet(last_packet_chunk);
                 }
             }
             for (index, entry) in self.table.inner.iter_mut().enumerate() {
