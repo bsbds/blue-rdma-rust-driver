@@ -152,7 +152,8 @@ impl TimeoutRetransmitWorker {
             for (index, entry) in self.table.inner.iter_mut().enumerate() {
                 match entry.timer.check_timeout() {
                     Ok(true) => {
-                        if let Some(packet) = entry.last_packet_chunk {
+                        if let Some(mut packet) = entry.last_packet_chunk {
+                            packet.set_is_retry();
                             if let Err(err) = self.wr_sender.send(packet) {
                                 error!("failed to send packet: {err}");
                             }

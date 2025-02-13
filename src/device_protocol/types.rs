@@ -328,6 +328,12 @@ pub(crate) struct WrChunk {
     pub(crate) enable_ecn: bool,
 }
 
+impl WrChunk {
+    pub(crate) fn set_is_retry(&mut self) {
+        self.is_retry = true;
+    }
+}
+
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ChunkPos {
     #[default]

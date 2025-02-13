@@ -86,7 +86,8 @@ impl PacketRetransmitWorker {
                         })
                         .skip_while(|x| x.psn < psn_low)
                         .take_while(|x| x.psn < psn_high);
-                    for packet in packets {
+                    for mut packet in packets {
+                        packet.set_is_retry();
                         self.wr_sender.send(packet);
                     }
                 }
