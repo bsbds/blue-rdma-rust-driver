@@ -25,7 +25,10 @@ use tracing::error;
 use crate::{
     completion::{CompletionQueueTable, CqManager},
     constants::PSN_MASK,
-    device_protocol::{FrameTx, MetaReport, PacketPos, ReportMeta},
+    device_protocol::{
+        AckMeta, CnpMeta, FrameTx, HeaderReadMeta, HeaderWriteMeta, MetaReport, NakMeta, PacketPos,
+        ReportMeta,
+    },
     qp::{QpManager, QpTrackerTable},
     retransmission::message_tracker::MessageTracker,
 };
@@ -93,7 +96,7 @@ impl<T: MetaReport> MetaWorker<T> {
     #[allow(clippy::needless_pass_by_value)]
     fn handle_meta(&mut self, meta: ReportMeta) {
         match meta {
-            ReportMeta::Write {
+            ReportMeta::Write(HeaderWriteMeta {
                 pos,
                 msn,
                 psn,
@@ -105,7 +108,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 raddr,
                 rkey,
                 imm,
-            } => {
+            }) => {
                 let Some(qp) = self.qp_trackers.state_mut(dqpn) else {
                     error!("qp number: d{dqpn} does not exist");
                     return;
@@ -135,15 +138,15 @@ impl<T: MetaReport> MetaWorker<T> {
                     PacketPos::Middle | PacketPos::Last => {}
                 };
             }
-            ReportMeta::Read {
+            ReportMeta::Read(HeaderReadMeta {
                 raddr,
                 rkey,
                 total_len,
                 laddr,
                 lkey,
-            } => todo!(),
-            ReportMeta::Cnp { qpn } => todo!(),
-            ReportMeta::Ack {
+            }) => todo!(),
+            ReportMeta::Cnp(CnpMeta { qpn }) => todo!(),
+            ReportMeta::Ack(AckMeta {
                 qpn,
                 msn: ack_msn,
                 psn_now,
@@ -151,7 +154,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 is_window_slided,
                 is_send_by_local_hw,
                 is_send_by_driver,
-            } => {
+            }) => {
                 let Some(qp) = self.qp_trackers.state_mut(qpn) else {
                     error!("qp number: {qpn} does not exist");
                     return;
@@ -181,7 +184,7 @@ impl<T: MetaReport> MetaWorker<T> {
                     }
                 }
             }
-            ReportMeta::Nak {
+            ReportMeta::Nak(NakMeta {
                 qpn,
                 msn,
                 psn_now,
@@ -190,7 +193,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 psn_before_slide,
                 is_send_by_local_hw,
                 is_send_by_driver,
-            } => todo!(),
+            }) => todo!(),
         }
     }
 }

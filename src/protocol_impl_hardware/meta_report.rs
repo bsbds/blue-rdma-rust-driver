@@ -1,6 +1,8 @@
 use std::io;
 
-use crate::device_protocol::{MetaReport, ReportMeta};
+use crate::device_protocol::{
+    AckMeta, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport, NakMeta, ReportMeta,
+};
 
 use super::queue::meta_report_queue::{MetaReportQueue, MetaReportQueueDesc};
 
@@ -36,7 +38,7 @@ impl MetaReport for MetaReportQueueHandler {
             };
             self.pos = (idx + 1) % NUM_META_REPORT_QUEUES;
             let meta = match desc {
-                MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write {
+                MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write(HeaderWriteMeta {
                     pos: d.packet_pos(),
                     msn: d.msn(),
                     psn: d.psn(),
@@ -48,16 +50,16 @@ impl MetaReport for MetaReportQueueHandler {
                     raddr: d.raddr(),
                     rkey: d.rkey(),
                     imm: d.imm_data(),
-                },
-                MetaReportQueueDesc::ReadPacketInfo((f, n)) => ReportMeta::Read {
+                }),
+                MetaReportQueueDesc::ReadPacketInfo((f, n)) => ReportMeta::Read(HeaderReadMeta {
                     raddr: f.raddr(),
                     rkey: f.rkey(),
                     total_len: f.total_len(),
                     laddr: n.laddr(),
                     lkey: n.lkey(),
-                },
-                MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp { qpn: d.dqpn() },
-                MetaReportQueueDesc::Ack(d) => ReportMeta::Ack {
+                }),
+                MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp(CnpMeta { qpn: d.dqpn() }),
+                MetaReportQueueDesc::Ack(d) => ReportMeta::Ack(AckMeta {
                     qpn: d.qpn(),
                     msn: d.msn(),
                     psn_now: d.psn_now(),
@@ -65,8 +67,8 @@ impl MetaReport for MetaReportQueueHandler {
                     is_window_slided: d.is_window_slided(),
                     is_send_by_local_hw: d.is_send_by_local_hw(),
                     is_send_by_driver: d.is_send_by_driver(),
-                },
-                MetaReportQueueDesc::Nak((f, n)) => ReportMeta::Nak {
+                }),
+                MetaReportQueueDesc::Nak((f, n)) => ReportMeta::Nak(NakMeta {
                     qpn: f.qpn(),
                     msn: f.msn(),
                     psn_now: f.psn_now(),
@@ -75,7 +77,7 @@ impl MetaReport for MetaReportQueueHandler {
                     pre_bitmap: n.pre_bitmap(),
                     is_send_by_local_hw: f.is_send_by_local_hw(),
                     is_send_by_driver: f.is_send_by_driver(),
-                },
+                }),
             };
             return Ok(Some(meta));
         }

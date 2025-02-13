@@ -122,53 +122,68 @@ pub(crate) enum PacketPos {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum ReportMeta {
     /// Write operation header
-    Write {
-        pos: PacketPos,
-        msn: u16,
-        psn: u32,
-        solicited: bool,
-        ack_req: bool,
-        is_retry: bool,
-        dqpn: u32,
-        total_len: u32,
-        raddr: u64,
-        rkey: u32,
-        imm: u32,
-    },
+    Write(HeaderWriteMeta),
     /// Read operation header
-    Read {
-        raddr: u64,
-        rkey: u32,
-        total_len: u32,
-        laddr: u64,
-        lkey: u32,
-    },
+    Read(HeaderReadMeta),
     /// Congestion Notification Packet
-    Cnp {
-        /// The initiator's QP number
-        qpn: u32,
-    },
+    Cnp(CnpMeta),
     /// Positive acknowledgment
-    Ack {
-        qpn: u32,
-        msn: u16,
-        psn_now: u32,
-        now_bitmap: u128,
-        is_window_slided: bool,
-        is_send_by_local_hw: bool,
-        is_send_by_driver: bool,
-    },
+    Ack(AckMeta),
     /// Negative acknowledgment
-    Nak {
-        qpn: u32,
-        msn: u16,
-        psn_now: u32,
-        now_bitmap: u128,
-        pre_bitmap: u128,
-        psn_before_slide: u32,
-        is_send_by_local_hw: bool,
-        is_send_by_driver: bool,
-    },
+    Nak(NakMeta),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HeaderWriteMeta {
+    pub(crate) pos: PacketPos,
+    pub(crate) msn: u16,
+    pub(crate) psn: u32,
+    pub(crate) solicited: bool,
+    pub(crate) ack_req: bool,
+    pub(crate) is_retry: bool,
+    pub(crate) dqpn: u32,
+    pub(crate) total_len: u32,
+    pub(crate) raddr: u64,
+    pub(crate) rkey: u32,
+    pub(crate) imm: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HeaderReadMeta {
+    pub(crate) raddr: u64,
+    pub(crate) rkey: u32,
+    pub(crate) total_len: u32,
+    pub(crate) laddr: u64,
+    pub(crate) lkey: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct CnpMeta {
+    /// The initiator's QP number
+    pub(crate) qpn: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AckMeta {
+    pub(crate) qpn: u32,
+    pub(crate) msn: u16,
+    pub(crate) psn_now: u32,
+    pub(crate) now_bitmap: u128,
+    pub(crate) is_window_slided: bool,
+    pub(crate) is_send_by_local_hw: bool,
+    pub(crate) is_send_by_driver: bool,
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct NakMeta {
+    pub(crate) qpn: u32,
+    pub(crate) msn: u16,
+    pub(crate) psn_now: u32,
+    pub(crate) now_bitmap: u128,
+    pub(crate) pre_bitmap: u128,
+    pub(crate) psn_before_slide: u32,
+    pub(crate) is_send_by_local_hw: bool,
+    pub(crate) is_send_by_driver: bool,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
