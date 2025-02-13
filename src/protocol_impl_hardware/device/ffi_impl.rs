@@ -5,6 +5,7 @@ use ipnetwork::{IpNetwork, Ipv4Network};
 use crate::{
     ctx_ops::RdmaCtxOps,
     net::config::{MacAddress, NetworkConfig},
+    timeout_retransmit::AckTimeoutConfig,
     EmulatedDevice,
 };
 
@@ -91,7 +92,9 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
         };
-        let ctx = HwDeviceCtx::initialize(device, network_config);
+        // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
+        let ack_config = AckTimeoutConfig::new(16, 20, 10);
+        let ctx = HwDeviceCtx::initialize(device, network_config, ack_config);
 
         Box::into_raw(Box::new(ctx)).cast()
     }

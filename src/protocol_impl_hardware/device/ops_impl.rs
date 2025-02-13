@@ -45,7 +45,7 @@ use crate::{
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
     send::{SendWrResolver, WrFragmenter, WrPacketFragmenter},
     send_queue::{IbvSendQueue, SendQueueElem},
-    timeout_retransmit::{RetransmitTask, TimeoutRetransmitWorker},
+    timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
     tracker::{MessageMeta, Msn},
 };
 
@@ -94,7 +94,11 @@ where
     H::PageAllocator: PageAllocator<1>,
     H::PhysAddrResolver: AddressResolver,
 {
-    pub(crate) fn initialize(device: H, network_config: NetworkConfig) -> io::Result<Self> {
+    pub(crate) fn initialize(
+        device: H,
+        network_config: NetworkConfig,
+        ack_config: AckTimeoutConfig,
+    ) -> io::Result<Self> {
         let mode = Mode::default();
         let adaptor = device.new_adaptor();
         let mut allocator = device.new_page_allocator();
@@ -150,7 +154,7 @@ where
 
         let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
         AckResponder::new(qp_attr_table, ack_rx, Box::new(simple_nic_tx)).spawn();
-        TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc()).spawn();
+        TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
         PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
 
         Ok(Self {

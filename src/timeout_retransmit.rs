@@ -10,7 +10,38 @@ use crate::{
     timer::TransportTimer,
 };
 
-const TIMEOUT_CHECK_DURATION: Duration = Duration::from_micros(8);
+const DEFAULT_INIT_RETRY_COUNT: usize = 5;
+const DEFAULT_TIMEOUT_CHECK_DURATION: u8 = 8;
+const DEFAULT_LOCAL_ACK_TIMEOUT: u8 = 4;
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct AckTimeoutConfig {
+    // 4.096 uS * 2^(CHECK DURATION)
+    check_duration: u8,
+    // 4.096 uS * 2^(Local ACK Timeout)
+    local_ack_timeout: u8,
+    init_retry_count: usize,
+}
+
+impl Default for AckTimeoutConfig {
+    fn default() -> Self {
+        Self {
+            check_duration: DEFAULT_TIMEOUT_CHECK_DURATION,
+            local_ack_timeout: DEFAULT_LOCAL_ACK_TIMEOUT,
+            init_retry_count: DEFAULT_INIT_RETRY_COUNT,
+        }
+    }
+}
+
+impl AckTimeoutConfig {
+    pub(crate) fn new(check_duration: u8, local_ack_timeout: u8, init_retry_count: usize) -> Self {
+        Self {
+            check_duration,
+            local_ack_timeout,
+            init_retry_count,
+        }
+    }
+}
 
 /// Timer per QP
 struct TransportTimerTable {
@@ -60,17 +91,20 @@ pub(crate) struct TimeoutRetransmitWorker {
     receiver: flume::Receiver<RetransmitTask>,
     table: TransportTimerTable,
     wr_sender: SendQueueScheduler,
+    config: AckTimeoutConfig,
 }
 
 impl TimeoutRetransmitWorker {
     pub(crate) fn new(
         receiver: flume::Receiver<RetransmitTask>,
         wr_sender: SendQueueScheduler,
+        config: AckTimeoutConfig,
     ) -> Self {
         Self {
             receiver,
             wr_sender,
             table: TransportTimerTable::new(),
+            config,
         }
     }
 
@@ -84,8 +118,9 @@ impl TimeoutRetransmitWorker {
     #[allow(clippy::needless_pass_by_value)] // consume the flag
     /// Run the handler loop
     fn run(mut self) {
+        let check_duration_ns = Duration::from_nanos(4096u64 << self.config.check_duration);
         loop {
-            spin_sleep::sleep(TIMEOUT_CHECK_DURATION);
+            spin_sleep::sleep(check_duration_ns);
             for task in self.receiver.try_iter() {
                 let Some(entry) = self.table.get_qp_mut(task.qpn()) else {
                     continue;
