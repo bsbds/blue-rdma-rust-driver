@@ -1,10 +1,10 @@
 use std::thread;
 
 use crate::{
-    device_protocol::{WorkReqSend, WrChunkBuilder},
-    protocol_impl_hardware::{queue::send_queue::SendQueue, SendQueueScheduler},
+    device_protocol::WorkReqSend,
+    fragmenter::PacketFragmenter,
+    protocol_impl_hardware::SendQueueScheduler,
     qp_table::QpTable,
-    send::WrPacketFragmenter,
     send_queue::{IbvSendQueue, SendQueueElem},
 };
 
@@ -80,10 +80,7 @@ impl PacketRetransmitWorker {
                     let sqes = sq.range(psn_low, psn_high);
                     let packets = sqes
                         .into_iter()
-                        .flat_map(|sqe| {
-                            let builder = WrChunkBuilder::new().set_qp_params(sqe.qp_param());
-                            WrPacketFragmenter::new(sqe.wr(), builder, sqe.psn()).packets()
-                        })
+                        .flat_map(|sqe| PacketFragmenter::new(sqe.wr(), sqe.qp_param(), sqe.psn()))
                         .skip_while(|x| x.psn < psn_low)
                         .take_while(|x| x.psn < psn_high);
                     for mut packet in packets {

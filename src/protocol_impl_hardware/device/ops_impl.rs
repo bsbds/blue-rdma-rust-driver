@@ -20,6 +20,7 @@ use crate::{
         DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
         UpdateQp, WorkReqSend, WrChunk, WrChunkBuilder,
     },
+    fragmenter::PacketFragmenter,
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
         virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
@@ -312,11 +313,12 @@ where
             qp.dqp_ip,
             qp.pmtu,
         );
-        let builder = WrChunkBuilder::new().set_qp_params(qp_params);
 
         if ack_req {
-            let builder = WrPacketFragmenter::new(wr, builder, psn);
-            let last_packet_chunk = builder.last();
+            let fragmenter = PacketFragmenter::new(wr, qp_params, psn);
+            let Some(last_packet_chunk) = fragmenter.into_iter().last() else {
+                return Ok(());
+            };
             let _ignore = self.retransmit_tx.send(RetransmitTask::NewAckReq {
                 qpn,
                 last_packet_chunk,
@@ -328,6 +330,7 @@ where
             wr: SendQueueElem::new(psn, wr, qp_params),
         });
 
+        let builder = WrChunkBuilder::new().set_qp_params(qp_params);
         let fragmenter = WrFragmenter::new(wr, builder, psn);
         for chunk in fragmenter {
             // TODO: Should this never fail

@@ -178,6 +178,7 @@ mod completion_worker;
 /// Constants used throughout the driver
 mod constants;
 mod device_protocol;
+mod fragmenter;
 /// Memory operation components
 mod mem;
 mod message_worker;
