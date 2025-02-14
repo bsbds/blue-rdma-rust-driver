@@ -43,7 +43,7 @@ impl<T> MetaWorker<T> {
         }
 
         /// Timeout of an `AckReq` message, notify retransmission
-        if matches!(pos, PacketPos::Last) && is_retry && ack_req {
+        if matches!(pos, PacketPos::Last | PacketPos::Only) && is_retry && ack_req {
             let _ignore = self.ack_tx.send(AckResponse::Nak {
                 qpn: dqpn,
                 base_psn: tracker.base_psn(),
