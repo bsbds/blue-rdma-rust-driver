@@ -133,7 +133,6 @@
     clippy::needless_raw_strings,
     clippy::redundant_type_annotations,
     clippy::host_endian_bytes,
-    clippy::big_endian_bytes,
     clippy::error_impl_error,
     clippy::string_lit_chars_any,
     clippy::needless_pass_by_ref_mut,
@@ -200,6 +199,7 @@ mod ringbuffer;
 /// Send Queue implementations
 mod send;
 mod send_queue;
+mod send_recv;
 mod timeout_retransmit;
 mod timer;
 mod tracker;
