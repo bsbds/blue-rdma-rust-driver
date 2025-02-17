@@ -1,11 +1,15 @@
 use std::{
+    collections::VecDeque,
     io::{self, Read, Write},
     net::{Ipv4Addr, TcpListener, TcpStream},
+    sync::Arc,
+    thread,
 };
 
+use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use crate::qp::qpn_index;
+use crate::{qp::qpn_index, qp_table::QpTable};
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub(crate) struct RecvWr {
@@ -36,6 +40,11 @@ impl RecvWr {
     }
 }
 
+pub(crate) trait PostRecvChannel {
+    type Tx: PostRecvTx;
+    type Rx: PostRecvRx;
+}
+
 /// A channel for the responder to pass `ibv_recv_wr` to the initiator
 pub(crate) trait PostRecvTx: Sized {
     fn connect(addr: Ipv4Addr, dqpn: u32) -> io::Result<Self>;
@@ -48,6 +57,13 @@ pub(crate) trait PostRecvRx: Sized {
 }
 
 const BASE_PORT: u16 = 60000;
+
+pub(crate) struct TcpChannel;
+
+impl PostRecvChannel for TcpChannel {
+    type Tx = TcpChannelTx;
+    type Rx = TcpChannelRx;
+}
 
 pub(crate) struct TcpChannelTx {
     addr: Ipv4Addr,
@@ -102,19 +118,86 @@ impl PostRecvRx for TcpChannelRx {
     }
 }
 
-pub(crate) fn post_recv_channel<Tx: PostRecvTx, Rx: PostRecvRx>(
+pub(crate) fn post_recv_channel<C: PostRecvChannel>(
     local_addr: Ipv4Addr,
     dest_addr: Ipv4Addr,
     local_qpn: u32,
     dest_qpn: u32,
-) -> io::Result<(Tx, Rx)> {
-    let tx = Tx::connect(dest_addr, dest_qpn)?;
-    let rx = Rx::listen(local_addr, local_qpn)?;
-
+) -> io::Result<(C::Tx, C::Rx)> {
+    let tx = C::Tx::connect(dest_addr, dest_qpn)?;
+    let rx = C::Rx::listen(local_addr, local_qpn)?;
     Ok((tx, rx))
 }
 
 fn qpn_to_port(qpn: u32) -> u16 {
     let index = qpn_index(qpn);
     BASE_PORT + index as u16
+}
+
+pub(crate) struct PostRecvTxTable<Tx = TcpChannelTx> {
+    inner: QpTable<Option<Tx>>,
+}
+
+impl<Tx> PostRecvTxTable<Tx> {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: QpTable::new(),
+        }
+    }
+
+    pub(crate) fn insert(&mut self, qpn: u32, tx: Tx) {
+        let _ignore = self.inner.replace(qpn, Some(tx));
+    }
+
+    pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut Tx> {
+        self.inner.get_qp_mut(qpn).and_then(Option::as_mut)
+    }
+}
+
+pub(crate) type SharedRecvWrQueue = Arc<Mutex<VecDeque<RecvWr>>>;
+
+pub(crate) struct RecvWrQueueTable {
+    inner: QpTable<SharedRecvWrQueue>,
+}
+
+impl RecvWrQueueTable {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: QpTable::new(),
+        }
+    }
+
+    pub(crate) fn pop(&self, qpn: u32) -> Option<RecvWr> {
+        let queue = self.inner.get_qp(qpn)?;
+        queue.lock().pop_front()
+    }
+}
+
+struct RecvWorker<Rx = TcpChannelRx> {
+    rx: Rx,
+    wr_queue: SharedRecvWrQueue,
+}
+
+impl<Rx: PostRecvRx + Send + 'static> RecvWorker<Rx> {
+    pub(crate) fn new(rx: Rx) -> Self {
+        Self {
+            rx,
+            wr_queue: Arc::default(),
+        }
+    }
+
+    pub(crate) fn spawn(self) {
+        let _handle = thread::Builder::new()
+            .name("recv-worker".into())
+            .spawn(move || self.run())
+            .unwrap_or_else(|err| unreachable!("Failed to spawn rx thread: {err}"));
+    }
+
+    #[allow(clippy::needless_pass_by_value)] // consume the flag
+    /// Run the handler loop
+    fn run(mut self) {
+        while let Ok(wr) = self.rx.recv() {
+            self.wr_queue.lock().push_back(wr);
+        }
+    }
 }

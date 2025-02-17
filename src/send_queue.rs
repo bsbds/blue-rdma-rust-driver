@@ -4,7 +4,7 @@ use crate::{
     constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
     device_protocol::QpParams,
     qp::qpn_index,
-    send::SendWrResolver,
+    send::SendWrRdmaWrite,
 };
 
 #[derive(Default)]
@@ -34,12 +34,12 @@ impl IbvSendQueue {
 #[derive(Clone, Copy)]
 pub(crate) struct SendQueueElem {
     psn: Psn,
-    wr: SendWrResolver,
+    wr: SendWrRdmaWrite,
     qp_param: QpParams,
 }
 
 impl SendQueueElem {
-    pub(crate) fn new(psn: u32, wr: SendWrResolver, qp_param: QpParams) -> Self {
+    pub(crate) fn new(psn: u32, wr: SendWrRdmaWrite, qp_param: QpParams) -> Self {
         Self {
             psn: Psn(psn),
             wr,
@@ -51,7 +51,7 @@ impl SendQueueElem {
         self.psn.0
     }
 
-    pub(crate) fn wr(&self) -> SendWrResolver {
+    pub(crate) fn wr(&self) -> SendWrRdmaWrite {
         self.wr
     }
 

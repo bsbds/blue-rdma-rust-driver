@@ -44,7 +44,8 @@ use crate::{
     qp::{DeviceQp, QpInitiatorTable, QpTrackerTable},
     qp_table::QpTable,
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
-    send::{SendWrResolver, WrFragmenter, WrPacketFragmenter},
+    recv::{post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWr, RecvWrQueueTable, TcpChannel},
+    send::{SendWr, SendWrBase, SendWrRdmaWrite, WrFragmenter, WrPacketFragmenter},
     send_queue::{IbvSendQueue, SendQueueElem},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
     tracker::{MessageMeta, Msn},
@@ -65,12 +66,13 @@ pub(crate) trait HwDevice {
 pub(crate) trait DeviceOps {
     fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32>;
     fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32>;
-    fn update_qp(&self, qpn: u32, attr: IbvQpAttr) -> io::Result<()>;
+    fn update_qp(&mut self, qpn: u32, attr: IbvQpAttr) -> io::Result<()>;
     fn destroy_qp(&mut self, qpn: u32);
     fn create_cq(&mut self) -> Option<u32>;
     fn destroy_cq(&mut self, handle: u32);
     fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<CompletionEvent>;
-    fn post_send(&mut self, qpn: u32, wr: SendWrResolver) -> io::Result<()>;
+    fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()>;
+    fn post_recv(&mut self, qpn: u32, wr: RecvWr) -> io::Result<()>;
 }
 
 pub(crate) struct HwDeviceCtx<H: HwDevice> {
@@ -85,6 +87,8 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     cmd_controller: CommandController<H::Adaptor>,
     send_scheduler: SendQueueScheduler,
+    post_recv_tx_table: PostRecvTxTable,
+    recv_wr_queue_table: RecvWrQueueTable,
 }
 
 #[allow(private_bounds)]
@@ -170,99 +174,27 @@ where
             packet_retransmit_tx,
             mtt_buffer: alloc_page()?,
             mtt: Mtt::new(),
+            post_recv_tx_table: PostRecvTxTable::new(),
+            recv_wr_queue_table: RecvWrQueueTable::new(),
         })
     }
 }
 
-impl<H> DeviceOps for HwDeviceCtx<H>
-where
-    H: HwDevice,
-    H::Adaptor: DeviceAdaptor + Send + 'static,
-    H::PageAllocator: PageAllocator<1>,
-    H::PhysAddrResolver: AddressResolver,
-{
-    fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
-        let entry = self.mtt.register(
-            &self.device.new_phys_addr_resolver(),
-            &mut self.mtt_buffer.page,
-            self.mtt_buffer.phys_addr,
-            addr,
-            length,
-            0,
-            access,
-        )?;
-        let mr_key = entry.mr_key;
-        self.cmd_controller.update_mtt(entry)?;
-
-        Ok(mr_key)
+impl<H: HwDevice> HwDeviceCtx<H> {
+    fn send(&self, qpn: u32, mut wr: SendWrBase) -> io::Result<()> {
+        match self.recv_wr_queue_table.pop(qpn) {
+            Some(x) => {
+                if wr.length != x.length {
+                    return Err(io::Error::from(io::ErrorKind::InvalidInput));
+                }
+                let wr = SendWrRdmaWrite::new_from_base(wr, x.addr, x.lkey);
+                self.rdma_write(qpn, wr, true)
+            }
+            None => todo!("return rnr error"),
+        }
     }
 
-    fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32> {
-        let qpn = self
-            .qp_manager
-            .create_qp()
-            .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
-        let _ignore = self.qp_manager.update_qp(qpn, |current| {
-            current.qpn = qpn;
-            current.qp_type = attr.qp_type();
-            current.send_cq = attr.send_cq();
-            current.recv_cq = attr.recv_cq();
-            current.dqp_ip = CARD_IP_ADDRESS;
-            current.mac_addr = CARD_MAC_ADDRESS;
-            current.pmtu = ibverbs_sys::IBV_MTU_1024 as u8;
-        });
-        let entry = UpdateQp {
-            ip_addr: CARD_IP_ADDRESS,
-            local_udp_port: 0x100,
-            peer_mac_addr: CARD_MAC_ADDRESS,
-            qp_type: attr.qp_type(),
-            qpn,
-            ..Default::default()
-        };
-        self.cmd_controller.update_qp(entry)?;
-
-        Ok(qpn)
-    }
-
-    fn update_qp(&self, qpn: u32, attr: IbvQpAttr) -> io::Result<()> {
-        let entry = self
-            .qp_manager
-            .update_qp(qpn, |current| {
-                let entry = UpdateQp {
-                    qpn,
-                    ip_addr: CARD_IP_ADDRESS,
-                    local_udp_port: 0x100,
-                    peer_mac_addr: CARD_MAC_ADDRESS,
-                    qp_type: current.qp_type,
-                    peer_qpn: attr.dest_qp_num().unwrap_or(current.dqpn),
-                    rq_access_flags: attr
-                        .qp_access_flags()
-                        .map_or(current.access_flags, |x| x as u8),
-                    pmtu: attr.path_mtu().map_or(current.pmtu, |x| x as u8),
-                };
-                current.dqpn = entry.peer_qpn;
-                current.access_flags = entry.rq_access_flags;
-                current.pmtu = entry.pmtu;
-                entry
-            })
-            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
-
-        self.cmd_controller.update_qp(entry)
-    }
-
-    fn destroy_qp(&mut self, qpn: u32) {
-        self.qp_manager.destroy_qp(qpn);
-    }
-
-    fn create_cq(&mut self) -> Option<u32> {
-        self.cq_manager.create_cq()
-    }
-
-    fn destroy_cq(&mut self, handle: u32) {
-        self.cq_manager.destroy_cq(handle);
-    }
-
-    fn post_send(&mut self, qpn: u32, wr: SendWrResolver) -> io::Result<()> {
+    fn rdma_write(&self, qpn: u32, wr: SendWrRdmaWrite, is_read_resp: bool) -> io::Result<()> {
         let qp = self
             .qp_manager
             .get_qp(qpn)
@@ -330,7 +262,12 @@ where
             wr: SendQueueElem::new(psn, wr, qp_params),
         });
 
-        let builder = WrChunkBuilder::new().set_qp_params(qp_params);
+        let builder = if is_read_resp {
+            WrChunkBuilder::new_read_resp()
+        } else {
+            WrChunkBuilder::new()
+        };
+        let builder = builder.set_qp_params(qp_params);
         let fragmenter = WrFragmenter::new(wr, builder, psn);
         for chunk in fragmenter {
             // TODO: Should this never fail
@@ -338,6 +275,112 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<H> DeviceOps for HwDeviceCtx<H>
+where
+    H: HwDevice,
+    H::Adaptor: DeviceAdaptor + Send + 'static,
+    H::PageAllocator: PageAllocator<1>,
+    H::PhysAddrResolver: AddressResolver,
+{
+    fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
+        let entry = self.mtt.register(
+            &self.device.new_phys_addr_resolver(),
+            &mut self.mtt_buffer.page,
+            self.mtt_buffer.phys_addr,
+            addr,
+            length,
+            0,
+            access,
+        )?;
+        let mr_key = entry.mr_key;
+        self.cmd_controller.update_mtt(entry)?;
+
+        Ok(mr_key)
+    }
+
+    fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32> {
+        let qpn = self
+            .qp_manager
+            .create_qp()
+            .ok_or(io::Error::from(io::ErrorKind::WouldBlock))?;
+        let _ignore = self.qp_manager.update_qp(qpn, |current| {
+            current.qpn = qpn;
+            current.qp_type = attr.qp_type();
+            current.send_cq = attr.send_cq();
+            current.recv_cq = attr.recv_cq();
+            current.dqp_ip = CARD_IP_ADDRESS;
+            current.mac_addr = CARD_MAC_ADDRESS;
+            current.pmtu = ibverbs_sys::IBV_MTU_1024 as u8;
+        });
+        let entry = UpdateQp {
+            ip_addr: CARD_IP_ADDRESS,
+            local_udp_port: 0x100,
+            peer_mac_addr: CARD_MAC_ADDRESS,
+            qp_type: attr.qp_type(),
+            qpn,
+            ..Default::default()
+        };
+        self.cmd_controller.update_qp(entry)?;
+
+        Ok(qpn)
+    }
+
+    fn update_qp(&mut self, qpn: u32, attr: IbvQpAttr) -> io::Result<()> {
+        let entry = self
+            .qp_manager
+            .update_qp(qpn, |current| {
+                let entry = UpdateQp {
+                    qpn,
+                    ip_addr: CARD_IP_ADDRESS,
+                    local_udp_port: 0x100,
+                    peer_mac_addr: CARD_MAC_ADDRESS,
+                    qp_type: current.qp_type,
+                    peer_qpn: attr.dest_qp_num().unwrap_or(current.dqpn),
+                    rq_access_flags: attr
+                        .qp_access_flags()
+                        .map_or(current.access_flags, |x| x as u8),
+                    pmtu: attr.path_mtu().map_or(current.pmtu, |x| x as u8),
+                };
+                current.dqpn = entry.peer_qpn;
+                current.access_flags = entry.rq_access_flags;
+                current.pmtu = entry.pmtu;
+                entry
+            })
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+
+        if let Some(dqpn) = attr.dest_qp_num() {
+            let (tx, rx) = post_recv_channel::<TcpChannel>(
+                CARD_IP_ADDRESS.into(),
+                CARD_IP_ADDRESS.into(),
+                qpn,
+                dqpn,
+            )?;
+            self.post_recv_tx_table.insert(qpn, tx);
+        }
+
+        self.cmd_controller.update_qp(entry)
+    }
+
+    fn destroy_qp(&mut self, qpn: u32) {
+        self.qp_manager.destroy_qp(qpn);
+    }
+
+    fn create_cq(&mut self) -> Option<u32> {
+        self.cq_manager.create_cq()
+    }
+
+    fn destroy_cq(&mut self, handle: u32) {
+        self.cq_manager.destroy_cq(handle);
+    }
+
+    fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()> {
+        match wr {
+            SendWr::RdmaWrite(wr) => self.rdma_write(qpn, wr, false),
+            SendWr::Send(wr) => self.send(qpn, wr),
+        }
     }
 
     fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<CompletionEvent> {
@@ -349,6 +392,20 @@ where
             .take(max_num_entries)
             .flatten()
             .collect()
+    }
+
+    fn post_recv(&mut self, qpn: u32, wr: RecvWr) -> io::Result<()> {
+        let qp = self
+            .qp_manager
+            .get_qp(qpn)
+            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        let tx = self
+            .post_recv_tx_table
+            .get_qp_mut(qpn)
+            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        tx.send(wr)?;
+
+        Ok(())
     }
 }
 

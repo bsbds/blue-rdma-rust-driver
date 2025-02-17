@@ -5,6 +5,7 @@ use ipnetwork::{IpNetwork, Ipv4Network};
 use crate::{
     ctx_ops::RdmaCtxOps,
     net::config::{MacAddress, NetworkConfig},
+    send::SendWr,
     timeout_retransmit::AckTimeoutConfig,
     EmulatedDevice,
 };
@@ -15,7 +16,7 @@ use super::{
         qp_attr::{IbvQpAttr, IbvQpInitAttr},
         DeviceOps, HwDevice, HwDeviceCtx,
     },
-    EmulatedPageAllocator, PhysAddrResolverEmulated, SendWrResolver, UpdateQp,
+    EmulatedPageAllocator, PhysAddrResolverEmulated, SendWrRdmaWrite, UpdateQp,
 };
 
 const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;
@@ -319,7 +320,7 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
         let context = qp.context;
         let bluerdma = unsafe { get_device(context) };
         let qp_num = qp.qp_num;
-        let wr = SendWrResolver::new(wr).unwrap_or_else(|_| todo!("handle invalid input"));
+        let wr = SendWr::new(wr).unwrap_or_else(|_| todo!("handle invalid input"));
         bluerdma.post_send(qp_num, wr);
 
         0

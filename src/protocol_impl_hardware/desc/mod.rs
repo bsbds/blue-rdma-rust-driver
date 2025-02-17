@@ -20,7 +20,7 @@ pub(crate) use simple_nic::*;
 
 use bilge::prelude::*;
 
-use crate::ringbuffer::Descriptor;
+use crate::{device_protocol::WorkReqOpCode, ringbuffer::Descriptor};
 
 /// Size of a descriptor in bytes.
 pub(crate) const DESC_SIZE: usize = 32;

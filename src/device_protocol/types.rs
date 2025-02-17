@@ -210,6 +210,17 @@ impl WrChunkBuilder<Initial> {
         }
     }
 
+    pub(crate) fn new_read_resp() -> Self {
+        let mut inner = WrChunk {
+            opcode: WorkReqOpCode::RdmaReadResp,
+            ..Default::default()
+        };
+        Self {
+            inner,
+            _state: PhantomData,
+        }
+    }
+
     #[allow(clippy::unused_self, clippy::too_many_arguments)]
     pub(crate) fn set_qp_params(self, qp_params: QpParams) -> WrChunkBuilder<WithQpParams> {
         WrChunkBuilder {
@@ -299,6 +310,11 @@ impl WrChunkBuilder<WithChunkInfo> {
         self
     }
 
+    pub(crate) fn set_is_read_resp(mut self) -> Self {
+        self.inner.opcode = WorkReqOpCode::RdmaReadResp;
+        self
+    }
+
     pub(crate) fn build(self) -> WrChunk {
         self.inner
     }
@@ -306,6 +322,7 @@ impl WrChunkBuilder<WithChunkInfo> {
 
 #[derive(Clone, Copy, Debug, Default)]
 pub(crate) struct WrChunk {
+    pub(crate) opcode: WorkReqOpCode,
     pub(crate) qp_type: u8,
     pub(crate) sqpn: u32,
     pub(crate) mac_addr: u64,
@@ -384,4 +401,26 @@ impl QpParams {
             pmtu,
         }
     }
+}
+
+#[derive(Default, Debug, PartialEq, Eq, Clone, Copy)]
+#[repr(u8)]
+pub(crate) enum WorkReqOpCode {
+    #[default]
+    RdmaWrite = 0,
+    RdmaWriteWithImm = 1,
+    Send = 2,
+    SendWithImm = 3,
+    RdmaRead = 4,
+    AtomicCmpAndSwp = 5,
+    AtomicFetchAndAdd = 6,
+    LocalInv = 7,
+    BindMw = 8,
+    SendWithInv = 9,
+    Tso = 10,
+    Driver1 = 11,
+    RdmaReadResp = 12,
+    RdmaAck = 13,
+    Flush = 14,
+    AtomicWrite = 15,
 }

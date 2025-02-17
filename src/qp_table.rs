@@ -1,4 +1,4 @@
-use std::iter;
+use std::{iter, mem};
 
 use crate::{constants::MAX_QP_CNT, qp::qpn_index};
 
@@ -7,8 +7,21 @@ pub(crate) struct QpTable<T> {
 }
 
 impl<T> QpTable<T> {
+    pub(crate) fn get_qp(&self, qpn: u32) -> Option<&T> {
+        self.inner.get(qpn_index(qpn))
+    }
+
     pub(crate) fn get_qp_mut(&mut self, qpn: u32) -> Option<&mut T> {
         self.inner.get_mut(qpn_index(qpn))
+    }
+
+    pub(crate) fn replace(&mut self, qpn: u32, mut t: T) -> Option<T> {
+        if let Some(x) = self.inner.get_mut(qpn_index(qpn)) {
+            mem::swap(x, &mut t);
+            Some(t)
+        } else {
+            None
+        }
     }
 }
 

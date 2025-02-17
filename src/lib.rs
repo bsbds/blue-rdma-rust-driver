@@ -192,6 +192,7 @@ mod protocol_impl_hardware;
 mod qp;
 mod qp_table;
 mod queue_pair;
+mod recv;
 /// Packet retransmission implementations
 mod retransmission;
 /// RDMA ring buffer implementation
@@ -199,7 +200,6 @@ mod ringbuffer;
 /// Send Queue implementations
 mod send;
 mod send_queue;
-mod send_recv;
 mod timeout_retransmit;
 mod timer;
 mod tracker;

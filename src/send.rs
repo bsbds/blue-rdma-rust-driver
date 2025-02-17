@@ -5,7 +5,9 @@ use crate::{
 
 use ibverbs_sys::{
     ibv_send_wr,
-    ibv_wr_opcode::{IBV_WR_RDMA_WRITE, IBV_WR_RDMA_WRITE_WITH_IMM},
+    ibv_wr_opcode::{
+        IBV_WR_RDMA_WRITE, IBV_WR_RDMA_WRITE_WITH_IMM, IBV_WR_SEND, IBV_WR_SEND_WITH_IMM,
+    },
 };
 use thiserror::Error;
 
@@ -85,7 +87,7 @@ impl WrFragmenter {
     /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
     pub(crate) fn new(
-        wr: SendWrResolver,
+        wr: SendWrRdmaWrite,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
     ) -> Self {
@@ -123,7 +125,7 @@ impl WrFragmenter {
     /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
     fn new_custom(
-        wr: SendWrResolver,
+        wr: SendWrRdmaWrite,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
         chunk_size: u32,
@@ -180,14 +182,14 @@ impl WrFragmenter {
 }
 
 pub(crate) struct WrPacketFragmenter {
-    wr: SendWrResolver,
+    wr: SendWrRdmaWrite,
     builder: WrChunkBuilder<WithQpParams>,
     base_psn: u32,
 }
 
 impl WrPacketFragmenter {
     pub(crate) fn new(
-        wr: SendWrResolver,
+        wr: SendWrRdmaWrite,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
     ) -> Self {
@@ -248,21 +250,99 @@ impl WrPacketFragmenter {
     }
 }
 
-/// A resolver and validator for send work requests
-#[derive(Clone, Copy)]
-pub(crate) struct SendWrResolver {
-    wr_id: u64,
-    send_flags: u32,
-    laddr: u64,
-    length: u32,
-    lkey: u32,
-    raddr: u64,
-    rkey: u32,
-    imm_data: u32,
-    opcode: u32,
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum SendWr {
+    RdmaWrite(SendWrRdmaWrite),
+    Send(SendWrBase),
 }
 
-impl SendWrResolver {
+impl SendWr {
+    #[allow(unsafe_code)]
+    /// Creates a new `SendWr`
+    pub(crate) fn new(wr: ibv_send_wr) -> Result<Self> {
+        let num_sge = usize::try_from(wr.num_sge).map_err(ValidationError::invalid_input)?;
+        if num_sge != 1 {
+            return Err(ValidationError::unimplemented("only support single sge"));
+        }
+        // SAFETY: sg_list is valid when num_sge > 0, which we've verified above
+        let sge = unsafe { *wr.sg_list };
+
+        let base = SendWrBase {
+            wr_id: wr.wr_id,
+            send_flags: wr.send_flags,
+            laddr: sge.addr,
+            length: sge.length,
+            lkey: sge.lkey,
+            // SAFETY: imm_data is valid for operations with immediate data
+            imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
+        };
+
+        match wr.opcode {
+            IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {
+                let wr = SendWrRdmaWrite {
+                    base,
+                    // SAFETY: rdma field is valid for RDMA operations
+                    raddr: unsafe { wr.wr.rdma.remote_addr },
+                    rkey: unsafe { wr.wr.rdma.rkey },
+                };
+                Ok(Self::RdmaWrite(wr))
+            }
+            IBV_WR_SEND | IBV_WR_SEND_WITH_IMM => Ok(Self::Send(base)),
+            _ => Err(ValidationError::unimplemented("opcode not supported")),
+        }
+    }
+
+    pub(crate) fn wr_id(&self) -> u64 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.wr_id,
+            SendWr::Send(wr) => wr.wr_id,
+        }
+    }
+    pub(crate) fn send_flags(&self) -> u32 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.send_flags,
+            SendWr::Send(wr) => wr.send_flags,
+        }
+    }
+
+    pub(crate) fn laddr(&self) -> u64 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.laddr,
+            SendWr::Send(wr) => wr.laddr,
+        }
+    }
+
+    pub(crate) fn length(&self) -> u32 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.length,
+            SendWr::Send(wr) => wr.length,
+        }
+    }
+
+    pub(crate) fn lkey(&self) -> u32 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.lkey,
+            SendWr::Send(wr) => wr.lkey,
+        }
+    }
+
+    pub(crate) fn imm_data(&self) -> u32 {
+        match *self {
+            SendWr::RdmaWrite(wr) => wr.base.imm_data,
+            SendWr::Send(wr) => wr.imm_data,
+        }
+    }
+}
+
+/// A resolver and validator for send work requests
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SendWrRdmaWrite {
+    base: SendWrBase,
+    pub(crate) raddr: u64,
+    pub(crate) rkey: u32,
+}
+
+impl SendWrRdmaWrite {
     #[allow(unsafe_code)]
     /// Creates a new resolver from the given work request.
     /// Returns None if the input is invalid
@@ -282,36 +362,41 @@ impl SendWrResolver {
         let sge = unsafe { *wr.sg_list };
 
         Ok(Self {
-            wr_id: wr.wr_id,
-            send_flags: wr.send_flags,
-            laddr: sge.addr,
-            length: sge.length,
-            lkey: sge.lkey,
+            base: SendWrBase {
+                wr_id: wr.wr_id,
+                send_flags: wr.send_flags,
+                laddr: sge.addr,
+                length: sge.length,
+                lkey: sge.lkey,
+                // SAFETY: imm_data is valid for operations with immediate data
+                imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
+            },
             // SAFETY: rdma field is valid for RDMA operations
             raddr: unsafe { wr.wr.rdma.remote_addr },
             rkey: unsafe { wr.wr.rdma.rkey },
-            // SAFETY: imm_data is valid for operations with immediate data
-            imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
-            opcode: wr.opcode,
         })
+    }
+
+    pub(crate) fn new_from_base(base: SendWrBase, raddr: u64, rkey: u32) -> SendWrRdmaWrite {
+        Self { base, raddr, rkey }
     }
 
     /// Returns the local address of the SGE buffer
     #[inline]
     pub(crate) fn laddr(&self) -> u64 {
-        self.laddr
+        self.base.laddr
     }
 
     /// Returns the length of the SGE buffer in bytes
     #[inline]
     pub(crate) fn length(&self) -> u32 {
-        self.length
+        self.base.length
     }
 
     /// Returns the local key associated with the SGE buffer
     #[inline]
     pub(crate) fn lkey(&self) -> u32 {
-        self.lkey
+        self.base.lkey
     }
 
     /// Returns the remote memory address for RDMA operations
@@ -329,20 +414,30 @@ impl SendWrResolver {
     /// Returns the immediate data value
     #[inline]
     pub(crate) fn imm(&self) -> u32 {
-        self.imm_data
+        self.base.imm_data
     }
 
     /// Returns the send flags
     #[inline]
     pub(crate) fn send_flags(&self) -> u32 {
-        self.send_flags
+        self.base.send_flags
     }
 
     /// Returns the ID associated with this WR
     #[inline]
     pub(crate) fn wr_id(&self) -> u64 {
-        self.wr_id
+        self.base.wr_id
     }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct SendWrBase {
+    pub(crate) wr_id: u64,
+    pub(crate) send_flags: u32,
+    pub(crate) laddr: u64,
+    pub(crate) length: u32,
+    pub(crate) lkey: u32,
+    pub(crate) imm_data: u32,
 }
 
 /// Error type for invalid input validation

@@ -1,27 +1,8 @@
 use bilge::prelude::*;
 
-use super::RingBufDescCommonHead;
+use crate::device_protocol::WorkReqOpCode;
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
-#[repr(u8)]
-pub(crate) enum WorkReqOpCode {
-    RdmaWrite = 0,
-    RdmaWriteWithImm = 1,
-    Send = 2,
-    SendWithImm = 3,
-    RdmaRead = 4,
-    AtomicCmpAndSwp = 5,
-    AtomicFetchAndAdd = 6,
-    LocalInv = 7,
-    BindMw = 8,
-    SendWithInv = 9,
-    Tso = 10,
-    Driver1 = 11,
-    RdmaReadResp = 12,
-    RdmaAck = 13,
-    Flush = 14,
-    AtomicWrite = 15,
-}
+use super::RingBufDescCommonHead;
 
 #[bitsize(64)]
 #[derive(Clone, Copy, DebugBits, FromBits)]
@@ -65,7 +46,8 @@ pub(crate) struct SendQueueReqDescSeg0 {
 }
 
 impl SendQueueReqDescSeg0 {
-    pub(crate) fn new_rdma_write(
+    pub(crate) fn new(
+        op_code: WorkReqOpCode,
         msn: u16,
         psn: u32,
         qp_type: u8,
@@ -77,16 +59,7 @@ impl SendQueueReqDescSeg0 {
         total_len: u32,
     ) -> Self {
         Self::new_inner(
-            WorkReqOpCode::RdmaWrite,
-            msn,
-            psn,
-            qp_type,
-            dqpn,
-            flags,
-            dqp_ip,
-            raddr,
-            rkey,
-            total_len,
+            op_code, msn, psn, qp_type, dqpn, flags, dqp_ip, raddr, rkey, total_len,
         )
     }
 
@@ -236,7 +209,8 @@ pub(crate) struct SendQueueReqDescSeg1 {
 }
 
 impl SendQueueReqDescSeg1 {
-    pub(crate) fn new_rdma_write(
+    pub(crate) fn new(
+        op_code: WorkReqOpCode,
         pmtu: u8,
         is_first: bool,
         is_last: bool,
@@ -250,17 +224,7 @@ impl SendQueueReqDescSeg1 {
         laddr: u64,
     ) -> Self {
         Self::new_inner(
-            WorkReqOpCode::RdmaWrite,
-            pmtu,
-            is_first,
-            is_last,
-            is_retry,
-            enable_ecn,
-            sqpn,
-            imm,
-            mac_addr,
-            lkey,
-            len,
+            op_code, pmtu, is_first, is_last, is_retry, enable_ecn, sqpn, imm, mac_addr, lkey, len,
             laddr,
         )
     }

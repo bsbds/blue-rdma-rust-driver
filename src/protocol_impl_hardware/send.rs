@@ -133,7 +133,8 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
                 std::thread::sleep(Duration::from_millis(10));
                 continue;
             };
-            let desc0 = SendQueueReqDescSeg0::new_rdma_write(
+            let desc0 = SendQueueReqDescSeg0::new(
+                wr.opcode,
                 wr.msn,
                 wr.psn,
                 wr.qp_type,
@@ -144,7 +145,8 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
                 wr.rkey,
                 wr.total_len,
             );
-            let desc1 = SendQueueReqDescSeg1::new_rdma_write(
+            let desc1 = SendQueueReqDescSeg1::new(
+                wr.opcode,
                 wr.pmtu,
                 wr.is_first,
                 wr.is_last,
