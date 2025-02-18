@@ -2,6 +2,7 @@ use std::{iter, mem};
 
 use crate::{constants::MAX_QP_CNT, qp::qpn_index};
 
+#[derive(Debug)]
 pub(crate) struct QpTable<T> {
     inner: Box<[T]>,
 }
@@ -27,6 +28,12 @@ impl<T> QpTable<T> {
 
 impl<T: Default> QpTable<T> {
     pub(crate) fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<T: Default> Default for QpTable<T> {
+    fn default() -> Self {
         Self {
             inner: iter::repeat_with(T::default).take(MAX_QP_CNT).collect(),
         }

@@ -2,7 +2,7 @@ use tracing::error;
 
 use crate::{
     ack_responder::AckResponse,
-    device_protocol::{HeaderWriteMeta, PacketPos},
+    device_protocol::{HeaderType, HeaderWriteMeta, PacketPos},
     message_worker::Task,
     tracker::{MessageMeta, Msn},
 };
@@ -50,6 +50,12 @@ impl<T> MetaWorker<T> {
                 base_psn: tracker.base_psn(),
                 ack_req_packet_psn: psn,
             });
+        }
+
+        match header_type {
+            HeaderType::Write => todo!(),
+            HeaderType::Send => todo!(),
+            HeaderType::ReadResp => todo!(),
         }
     }
 }
