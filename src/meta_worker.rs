@@ -108,6 +108,7 @@ impl<T: MetaReport> MetaWorker<T> {
                 raddr,
                 rkey,
                 imm,
+                header_type,
             }) => {
                 let Some(qp) = self.qp_trackers.state_mut(dqpn) else {
                     error!("qp number: d{dqpn} does not exist");

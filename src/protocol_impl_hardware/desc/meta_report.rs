@@ -1,6 +1,6 @@
 use bilge::prelude::*;
 
-use crate::device_protocol::PacketPos;
+use crate::device_protocol::{HeaderType, PacketPos};
 
 use super::{RingBufDescCommonHead, RingBufDescUntyped};
 
@@ -227,6 +227,28 @@ impl MetaReportQueuePacketBasicInfoDesc {
             .unwrap_or_else(|| {
                 unreachable!("packet position info should always exists for this descriptor")
             })
+    }
+
+    #[allow(clippy::wildcard_enum_match_arm)]
+    pub(crate) fn header_type(&self) -> HeaderType {
+        let opcode = RdmaOpCode::from_u8(self.c0.common_header().op_code()).unwrap_or_else(|| {
+            unreachable!("packet position info should always exists for this descriptor")
+        });
+        match opcode {
+            RdmaOpCode::RdmaWriteFirst
+            | RdmaOpCode::RdmaWriteMiddle
+            | RdmaOpCode::RdmaWriteLast
+            | RdmaOpCode::RdmaWriteOnly => HeaderType::Write,
+            RdmaOpCode::SendFirst
+            | RdmaOpCode::SendMiddle
+            | RdmaOpCode::SendLast
+            | RdmaOpCode::SendOnly => HeaderType::Send,
+            RdmaOpCode::RdmaReadResponseFirst
+            | RdmaOpCode::RdmaReadResponseMiddle
+            | RdmaOpCode::RdmaReadResponseLast
+            | RdmaOpCode::RdmaReadResponseOnly => HeaderType::ReadResp,
+            _ => unreachable!("unsupported header type"),
+        }
     }
 
     pub(crate) fn msn(&self) -> u16 {

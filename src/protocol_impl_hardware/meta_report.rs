@@ -50,6 +50,7 @@ impl MetaReport for MetaReportQueueHandler {
                     raddr: d.raddr(),
                     rkey: d.rkey(),
                     imm: d.imm_data(),
+                    header_type: d.header_type(),
                 }),
                 MetaReportQueueDesc::ReadPacketInfo((f, n)) => ReportMeta::Read(HeaderReadMeta {
                     raddr: f.raddr(),

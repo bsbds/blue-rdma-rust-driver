@@ -24,6 +24,7 @@ impl<T> MetaWorker<T> {
             raddr,
             rkey,
             imm,
+            header_type,
         } = meta;
         let Some(tracker) = self.recv_table.get_mut(dqpn) else {
             error!("qp number: d{dqpn} does not exist");

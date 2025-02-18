@@ -18,7 +18,7 @@ use crate::{
     ctx_ops::RdmaCtxOps,
     device_protocol::{
         DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
-        UpdateQp, WorkReqSend, WrChunk, WrChunkBuilder,
+        UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
     },
     fragmenter::PacketFragmenter,
     mem::{
@@ -188,13 +188,13 @@ impl<H: HwDevice> HwDeviceCtx<H> {
                     return Err(io::Error::from(io::ErrorKind::InvalidInput));
                 }
                 let wr = SendWrRdmaWrite::new_from_base(wr, x.addr, x.lkey);
-                self.rdma_write(qpn, wr, true)
+                self.rdma_write(qpn, wr, WorkReqOpCode::Send)
             }
             None => todo!("return rnr error"),
         }
     }
 
-    fn rdma_write(&self, qpn: u32, wr: SendWrRdmaWrite, is_read_resp: bool) -> io::Result<()> {
+    fn rdma_write(&self, qpn: u32, wr: SendWrRdmaWrite, opcode: WorkReqOpCode) -> io::Result<()> {
         let qp = self
             .qp_manager
             .get_qp(qpn)
@@ -262,12 +262,7 @@ impl<H: HwDevice> HwDeviceCtx<H> {
             wr: SendQueueElem::new(psn, wr, qp_params),
         });
 
-        let builder = if is_read_resp {
-            WrChunkBuilder::new_read_resp()
-        } else {
-            WrChunkBuilder::new()
-        };
-        let builder = builder.set_qp_params(qp_params);
+        let builder = WrChunkBuilder::new_with_opcode(opcode).set_qp_params(qp_params);
         let fragmenter = WrFragmenter::new(wr, builder, psn);
         for chunk in fragmenter {
             // TODO: Should this never fail
@@ -378,7 +373,7 @@ where
 
     fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()> {
         match wr {
-            SendWr::RdmaWrite(wr) => self.rdma_write(qpn, wr, false),
+            SendWr::RdmaWrite(wr) => self.rdma_write(qpn, wr, WorkReqOpCode::RdmaWrite),
             SendWr::Send(wr) => self.send(qpn, wr),
         }
     }

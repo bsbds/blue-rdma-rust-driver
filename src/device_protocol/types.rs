@@ -146,6 +146,7 @@ pub(crate) struct HeaderWriteMeta {
     pub(crate) raddr: u64,
     pub(crate) rkey: u32,
     pub(crate) imm: u32,
+    pub(crate) header_type: HeaderType,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -210,9 +211,9 @@ impl WrChunkBuilder<Initial> {
         }
     }
 
-    pub(crate) fn new_read_resp() -> Self {
+    pub(crate) fn new_with_opcode(opcode: WorkReqOpCode) -> Self {
         let mut inner = WrChunk {
-            opcode: WorkReqOpCode::RdmaReadResp,
+            opcode,
             ..Default::default()
         };
         Self {
@@ -423,4 +424,11 @@ pub(crate) enum WorkReqOpCode {
     RdmaAck = 13,
     Flush = 14,
     AtomicWrite = 15,
+}
+
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+pub(crate) enum HeaderType {
+    Write,
+    Send,
+    ReadResp,
 }
