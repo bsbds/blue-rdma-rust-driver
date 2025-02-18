@@ -26,8 +26,8 @@ use crate::{
 #[allow(variant_size_differences)]
 pub(crate) enum CompletionTask {
     Register {
-        cq_handle: u32,
-        event: CompletionEventV2,
+        event: CompletionEvent,
+        is_send: bool,
     },
     UpdateBasePsn {
         qpn: u32,
@@ -65,8 +65,14 @@ impl CompletionWorker {
     fn run(mut self) {
         while let Ok(task) = self.completion_rx.recv() {
             match task {
-                CompletionTask::Register { cq_handle, event } => {
-                    let Some(cq) = self.cq_table.get_cq_mut(cq_handle) else {
+                CompletionTask::Register { event, is_send } => {
+                    let Some(attr) = self.qp_table.get(event.qpn()) else {
+                        continue;
+                    };
+                    let Some(handle) = (if is_send { attr.send_cq } else { attr.recv_cq }) else {
+                        continue;
+                    };
+                    let Some(cq) = self.cq_table.get_cq_mut(handle) else {
                         continue;
                     };
                     cq.registry.register(event);
@@ -90,21 +96,21 @@ impl CompletionWorker {
 
 #[derive(Default)]
 pub(crate) struct CompletionQueue {
-    inner: Mutex<VecDeque<CompletionEventV2>>,
+    inner: Mutex<VecDeque<CompletionEvent>>,
 }
 
 impl CompletionQueue {
-    pub(crate) fn push_back(&self, event: CompletionEventV2) {
+    pub(crate) fn push_back(&self, event: CompletionEvent) {
         let mut queue = self.inner.lock();
         queue.push_back(event);
     }
 
-    pub(crate) fn pop_front(&self) -> Option<CompletionEventV2> {
+    pub(crate) fn pop_front(&self) -> Option<CompletionEvent> {
         let mut queue = self.inner.lock();
         queue.pop_front()
     }
 
-    pub(crate) fn front(&self) -> Option<CompletionEventV2> {
+    pub(crate) fn front(&self) -> Option<CompletionEvent> {
         let queue = self.inner.lock();
         queue.front().copied()
     }
@@ -119,6 +125,10 @@ impl CompletionQueueTable {
         Self {
             inner: iter::repeat_with(Arc::default).take(MAX_CQ_CNT).collect(),
         }
+    }
+
+    pub(crate) fn get_cq(&self, handle: u32) -> Option<&CompletionQueue> {
+        self.inner.get(handle as usize).map(Arc::as_ref)
     }
 }
 
@@ -216,11 +226,11 @@ impl CqManager {
 
 #[derive(Default, Debug)]
 pub(crate) struct EventRegistry {
-    table: QpTable<VecDeque<CompletionEventV2>>,
+    table: QpTable<VecDeque<CompletionEvent>>,
 }
 
 impl EventRegistry {
-    pub(crate) fn ack_psn(&mut self, qpn: u32, base_psn: u32) -> Vec<CompletionEventV2> {
+    pub(crate) fn ack_psn(&mut self, qpn: u32, base_psn: u32) -> Vec<CompletionEvent> {
         let Some(queue) = self.table.get_qp_mut(qpn) else {
             return vec![];
         };
@@ -235,7 +245,7 @@ impl EventRegistry {
         elements
     }
 
-    pub(crate) fn register(&mut self, event: CompletionEventV2) {
+    pub(crate) fn register(&mut self, event: CompletionEvent) {
         if let Some(queue) = self.table.get_qp_mut(event.qpn()) {
             if queue
                 .back()
@@ -255,7 +265,7 @@ impl EventRegistry {
 }
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) enum CompletionEventV2 {
+pub(crate) enum CompletionEvent {
     RdmaWrite {
         qpn: u32,
         msn: u16,
@@ -268,9 +278,14 @@ pub(crate) enum CompletionEventV2 {
         end_psn: u32,
         imm: u32,
     },
+    Recv {
+        qpn: u32,
+        msn: u16,
+        end_psn: u32,
+    },
 }
 
-impl CompletionEventV2 {
+impl CompletionEvent {
     pub(crate) fn new_rdma_write(qpn: u32, msn: u16, end_psn: u32, wr_id: u64) -> Self {
         Self::RdmaWrite {
             qpn,
@@ -289,33 +304,41 @@ impl CompletionEventV2 {
         }
     }
 
+    pub(crate) fn new_recv(qpn: u32, msn: u16, end_psn: u32) -> Self {
+        Self::Recv { qpn, msn, end_psn }
+    }
+
     pub(crate) fn qpn(&self) -> u32 {
         match *self {
-            CompletionEventV2::RdmaWrite { qpn, .. }
-            | CompletionEventV2::RecvRdmaWithImm { qpn, .. } => qpn,
+            CompletionEvent::RdmaWrite { qpn, .. }
+            | CompletionEvent::RecvRdmaWithImm { qpn, .. }
+            | CompletionEvent::Recv { qpn, .. } => qpn,
         }
     }
 
     pub(crate) fn msn(&self) -> u16 {
         match *self {
-            CompletionEventV2::RdmaWrite { msn, .. }
-            | CompletionEventV2::RecvRdmaWithImm { msn, .. } => msn,
+            CompletionEvent::RdmaWrite { msn, .. }
+            | CompletionEvent::RecvRdmaWithImm { msn, .. }
+            | CompletionEvent::Recv { msn, .. } => msn,
         }
     }
 
     pub(crate) fn end_psn(&self) -> u32 {
         match *self {
-            CompletionEventV2::RdmaWrite { end_psn, .. }
-            | CompletionEventV2::RecvRdmaWithImm { end_psn, .. } => end_psn,
+            CompletionEvent::RdmaWrite { end_psn, .. }
+            | CompletionEvent::RecvRdmaWithImm { end_psn, .. }
+            | CompletionEvent::Recv { end_psn, .. } => end_psn,
         }
     }
 
     pub(crate) fn opcode(&self) -> u32 {
         match *self {
-            CompletionEventV2::RdmaWrite { .. } => ibverbs_sys::ibv_wc_opcode::IBV_WC_RDMA_WRITE,
-            CompletionEventV2::RecvRdmaWithImm { .. } => {
+            CompletionEvent::RdmaWrite { .. } => ibverbs_sys::ibv_wc_opcode::IBV_WC_RDMA_WRITE,
+            CompletionEvent::RecvRdmaWithImm { .. } => {
                 ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV_RDMA_WITH_IMM
             }
+            CompletionEvent::Recv { qpn, msn, end_psn } => ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV,
         }
     }
 }

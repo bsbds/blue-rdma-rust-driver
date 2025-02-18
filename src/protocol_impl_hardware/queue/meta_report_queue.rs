@@ -5,6 +5,7 @@ use std::{
 
 use crate::{
     ack_responder::AckResponse,
+    completion_v2::CompletionTask,
     mem::PageWithPhysAddr,
     message_worker::Task,
     meta_worker_v2::MetaWorker,
@@ -20,6 +21,7 @@ use crate::{
         },
         MetaReportQueueHandler,
     },
+    queue_pair::QueuePairAttrTable,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -106,6 +108,7 @@ pub(crate) fn init_and_spawn_meta_worker<Dev>(
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
+    completion_tx: flume::Sender<CompletionTask>,
     is_shutdown: Arc<AtomicBool>,
 ) -> io::Result<()>
 where
@@ -125,6 +128,7 @@ where
         ack_tx,
         retransmit_tx,
         packet_retransmit_tx,
+        completion_tx,
     )
     .spawn(is_shutdown);
 

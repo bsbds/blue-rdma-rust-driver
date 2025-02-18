@@ -239,6 +239,9 @@ impl MetaReportQueuePacketBasicInfoDesc {
             | RdmaOpCode::RdmaWriteMiddle
             | RdmaOpCode::RdmaWriteLast
             | RdmaOpCode::RdmaWriteOnly => HeaderType::Write,
+            RdmaOpCode::RdmaWriteLastWithImmediate | RdmaOpCode::RdmaWriteOnlyWithImmediate => {
+                HeaderType::WriteWithImm
+            }
             RdmaOpCode::SendFirst
             | RdmaOpCode::SendMiddle
             | RdmaOpCode::SendLast

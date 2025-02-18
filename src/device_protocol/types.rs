@@ -429,6 +429,7 @@ pub(crate) enum WorkReqOpCode {
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum HeaderType {
     Write,
+    WriteWithImm,
     Send,
     ReadResp,
 }
