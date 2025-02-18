@@ -28,8 +28,6 @@ pub(crate) struct MetaWorker<T> {
     inner: T,
     send_table: TrackerTable,
     recv_table: TrackerTable,
-    sender_task_tx: flume::Sender<Task>,
-    receiver_task_tx: flume::Sender<Task>,
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
@@ -38,8 +36,6 @@ pub(crate) struct MetaWorker<T> {
 impl<T: MetaReport + Send + 'static> MetaWorker<T> {
     pub(crate) fn new(
         inner: T,
-        sender_task_tx: flume::Sender<Task>,
-        receiver_task_tx: flume::Sender<Task>,
         ack_tx: flume::Sender<AckResponse>,
         retransmit_tx: flume::Sender<RetransmitTask>,
         packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
@@ -47,8 +43,6 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         Self {
             inner,
             ack_tx,
-            sender_task_tx,
-            receiver_task_tx,
             retransmit_tx,
             packet_retransmit_tx,
             send_table: TrackerTable::new(),

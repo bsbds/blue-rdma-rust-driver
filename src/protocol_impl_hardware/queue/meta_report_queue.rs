@@ -103,8 +103,6 @@ pub(crate) fn init_and_spawn_meta_worker<Dev>(
     dev: &Dev,
     pages: Vec<PageWithPhysAddr>,
     mode: Mode,
-    sender_task_tx: flume::Sender<Task>,
-    receiver_task_tx: flume::Sender<Task>,
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
@@ -124,8 +122,6 @@ where
 
     MetaWorker::new(
         MetaReportQueueHandler::new(mrqs),
-        sender_task_tx,
-        receiver_task_tx,
         ack_tx,
         retransmit_tx,
         packet_retransmit_tx,

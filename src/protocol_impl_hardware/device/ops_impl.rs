@@ -82,7 +82,6 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     qp_manager: QpManager,
     cq_manager: CqManager,
     sender_table: SenderTable,
-    sender_task_tx: flume::Sender<Task>,
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     cmd_controller: CommandController<H::Adaptor>,
@@ -119,9 +118,6 @@ where
             .collect::<Result<_, _>>()?;
 
         let is_shutdown = Arc::new(AtomicBool::new(false));
-        let (sender_task_tx, sender_task_rx) = flume::unbounded();
-        let sender_task_tx_c = sender_task_tx.clone();
-        let (receiver_task_tx, receiver_task_rx) = flume::unbounded();
         let (comp_tx, comp_rx) = flume::unbounded();
         let (ack_tx, ack_rx) = flume::unbounded();
         let (retransmit_tx, retransmit_rx) = flume::unbounded();
@@ -145,14 +141,11 @@ where
             &adaptor,
             meta_pages,
             mode,
-            sender_task_tx_c,
-            receiver_task_tx,
             ack_tx.clone(),
             retransmit_tx.clone(),
             packet_retransmit_tx.clone(),
             Arc::clone(&is_shutdown),
         )?;
-        spawn_message_workers(sender_task_rx, receiver_task_rx, comp_tx, ack_tx);
         CompletionWorker::new(cq_table, qp_attr_table.clone_arc(), comp_rx).spawn();
         cmd_controller.set_network(network_config)?;
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
@@ -169,7 +162,6 @@ where
             qp_manager,
             cq_manager,
             sender_table: SenderTable::new(),
-            sender_task_tx,
             retransmit_tx,
             packet_retransmit_tx,
             mtt_buffer: alloc_page()?,
@@ -232,10 +224,6 @@ impl<H: HwDevice> HwDeviceCtx<H> {
                 true,
             );
         }
-        self.sender_task_tx.send(Task::AppendMessage {
-            qpn,
-            meta: MessageMeta::new(Msn(msn), psn, ack_req),
-        });
         let qp_params = QpParams::new(
             msn,
             qp.qp_type,

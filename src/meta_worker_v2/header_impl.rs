@@ -30,18 +30,9 @@ impl<T> MetaWorker<T> {
             error!("qp number: d{dqpn} does not exist");
             return;
         };
-        /// new messages
-        if matches!(pos, PacketPos::First | PacketPos::Only) {
-            let task = Task::AppendMessage {
-                qpn: dqpn,
-                meta: MessageMeta::new(Msn(msn), psn, ack_req),
-            };
-            let _ignore = self.receiver_task_tx.send(task);
-        }
-        if let Some(psn) = tracker.ack_one(psn) {
-            let task = Task::UpdateBasePsn { qpn: dqpn, psn };
-            self.receiver_task_tx.send(task);
-        }
+        // TODO: send to completion queue if notification is required
+        //if matches!(pos, PacketPos::First | PacketPos::Only) {}
+        //if let Some(psn) = tracker.ack_one(psn) {}
 
         /// Timeout of an `AckReq` message, notify retransmission
         if matches!(pos, PacketPos::Last | PacketPos::Only) && is_retry && ack_req {

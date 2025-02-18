@@ -44,10 +44,10 @@ impl<T> MetaWorker<T> {
         if !is_send_by_local_hw {
             let _ignore = self.retransmit_tx.send(RetransmitTask::ReceiveACK { qpn });
         }
-        let (table, task_tx) = if is_send_by_local_hw {
-            (&mut self.recv_table, &self.receiver_task_tx)
+        let table = if is_send_by_local_hw {
+            &mut self.recv_table
         } else {
-            (&mut self.send_table, &self.sender_task_tx)
+            &mut self.send_table
         };
 
         let Some(tracker) = table.get_mut(qpn) else {
@@ -55,18 +55,18 @@ impl<T> MetaWorker<T> {
             return;
         };
         if let Some(psn) = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn) {
-            self.send_update(task_tx, qpn, psn);
+            self.send_update(qpn, psn);
         }
     }
 
     fn handle_ack_driver(&mut self, meta: AckMeta) {
         let AckMeta { qpn, psn_now, .. } = meta;
-        let (table, task_tx) = (&mut self.send_table, &self.sender_task_tx);
+        let table = &mut self.send_table;
         let Some(tracker) = table.get_mut(qpn) else {
             return;
         };
         if let Some(psn) = tracker.ack_before(psn_now) {
-            self.send_update(task_tx, qpn, psn);
+            self.send_update(qpn, psn);
         }
     }
 
@@ -81,10 +81,10 @@ impl<T> MetaWorker<T> {
             is_send_by_local_hw,
             ..
         } = meta;
-        let (table, task_tx) = if is_send_by_local_hw {
-            (&mut self.recv_table, &self.receiver_task_tx)
+        let table = if is_send_by_local_hw {
+            &mut self.recv_table
         } else {
-            (&mut self.send_table, &self.sender_task_tx)
+            &mut self.send_table
         };
         let Some(tracker) = table.get_mut(qpn) else {
             error!("qp number: {qpn} does not exist");
@@ -93,7 +93,7 @@ impl<T> MetaWorker<T> {
         let x = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn);
         let y = Self::update_packet_tracker(tracker, psn_pre, pre_bitmap, ack_msn);
         for psn in x.into_iter().chain(y) {
-            self.send_update(task_tx, qpn, psn);
+            self.send_update(qpn, psn);
         }
         // TODO: implement more fine-grained retransmission
         let psn_low = psn_pre.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
@@ -115,7 +115,7 @@ impl<T> MetaWorker<T> {
             psn_before_slide: psn_pre,
             ..
         } = meta;
-        let (table, task_tx) = (&mut self.send_table, &self.sender_task_tx);
+        let table = &mut self.send_table;
         let Some(tracker) = table.get_mut(qpn) else {
             return;
         };
@@ -138,9 +138,7 @@ impl<T> MetaWorker<T> {
         tracker.ack_range(base_psn, bitmap, ack_msn)
     }
 
-    fn send_update(&self, tx: &flume::Sender<Task>, qpn: u32, psn: u32) {
-        let task = Task::UpdateBasePsn { qpn, psn };
-        let _ignore = tx.send(task);
+    fn send_update(&self, qpn: u32, psn: u32) {
         let __ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::Ack { qpn, psn });
