@@ -2,19 +2,19 @@ use crate::{
     constants::PSN_MASK,
     device_protocol::{QpParams, WithIbvParams, WrChunk, WrChunkBuilder},
     qp::convert_ibv_mtu_to_u16,
-    send::SendWrRdmaWrite,
+    send::SendWrRdma,
 };
 
 use super::Fragmenter;
 
 pub(crate) struct PacketFragmenter {
-    wr: SendWrRdmaWrite,
+    wr: SendWrRdma,
     qp_param: QpParams,
     base_psn: u32,
 }
 
 impl PacketFragmenter {
-    pub(crate) fn new(wr: SendWrRdmaWrite, qp_param: QpParams, base_psn: u32) -> Self {
+    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: u32) -> Self {
         Self {
             wr,
             qp_param,
@@ -55,7 +55,7 @@ impl IntoIterator for PacketFragmenter {
 pub(crate) struct IntoIter {
     inner: super::IntoIter,
     psn: u32,
-    wr: SendWrRdmaWrite,
+    wr: SendWrRdma,
     builder: WrChunkBuilder<WithIbvParams>,
     laddr: u64,
 }

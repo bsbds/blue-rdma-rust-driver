@@ -22,6 +22,7 @@ use crate::{
         MetaReportQueueHandler,
     },
     queue_pair::QueuePairAttrTable,
+    rdma_write_worker::RdmaWriteTask,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -101,6 +102,7 @@ impl MetaReportQueue {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn init_and_spawn_meta_worker<Dev>(
     dev: &Dev,
     pages: Vec<PageWithPhysAddr>,
@@ -109,6 +111,7 @@ pub(crate) fn init_and_spawn_meta_worker<Dev>(
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     completion_tx: flume::Sender<CompletionTask>,
+    rdma_write_tx: flume::Sender<RdmaWriteTask>,
     is_shutdown: Arc<AtomicBool>,
 ) -> io::Result<()>
 where
@@ -129,6 +132,7 @@ where
         retransmit_tx,
         packet_retransmit_tx,
         completion_tx,
+        rdma_write_tx,
     )
     .spawn(is_shutdown);
 

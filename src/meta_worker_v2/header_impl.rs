@@ -3,13 +3,14 @@ use tracing::error;
 use crate::{
     ack_responder::AckResponse,
     completion_v2::CompletionEvent,
-    device_protocol::{HeaderType, HeaderWriteMeta, PacketPos},
+    device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
     message_worker::Task,
     queue_pair::num_psn,
+    send::{SendWrBase, SendWrRdma},
     tracker::{MessageMeta, Msn},
 };
 
-use super::{CompletionTask, MetaWorker};
+use super::{CompletionTask, MetaWorker, RdmaWriteTask};
 
 impl<T> MetaWorker<T> {
     #[allow(clippy::too_many_arguments)]
@@ -35,7 +36,7 @@ impl<T> MetaWorker<T> {
 
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
             match header_type {
-                HeaderType::Write => {}
+                HeaderType::Write | HeaderType::ReadResp => {}
                 HeaderType::WriteWithImm => {
                     let _ignore = self.completion_tx.send(CompletionTask::Register {
                         event: CompletionEvent::new_recv_rdma_with_imm(dqpn, msn, psn, imm),
@@ -48,7 +49,6 @@ impl<T> MetaWorker<T> {
                         is_send: false,
                     });
                 }
-                HeaderType::ReadResp => todo!(),
             }
         }
         if let Some(psn) = tracker.ack_one(psn) {
@@ -66,5 +66,17 @@ impl<T> MetaWorker<T> {
                 ack_req_packet_psn: psn,
             });
         }
+    }
+
+    pub(super) fn handle_header_read(&self, meta: HeaderReadMeta) {
+        let flags = if meta.ack_req {
+            ibverbs_sys::ibv_send_flags::IBV_SEND_SOLICITED.0
+        } else {
+            0
+        };
+        let base = SendWrBase::new(0, flags, meta.raddr, meta.total_len, meta.rkey, 0);
+        let send_wr = SendWrRdma::new_from_base(base, meta.laddr, meta.lkey);
+        let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr, WorkReqOpCode::RdmaReadResp);
+        let _ignore = self.rdma_write_tx.send(task);
     }
 }

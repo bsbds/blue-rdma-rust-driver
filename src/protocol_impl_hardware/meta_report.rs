@@ -53,11 +53,13 @@ impl MetaReport for MetaReportQueueHandler {
                     header_type: d.header_type(),
                 }),
                 MetaReportQueueDesc::ReadPacketInfo((f, n)) => ReportMeta::Read(HeaderReadMeta {
+                    dqpn: f.dqpn(),
                     raddr: f.raddr(),
                     rkey: f.rkey(),
-                    total_len: f.total_len(),
+                    total_len: n.total_len(),
                     laddr: n.laddr(),
                     lkey: n.lkey(),
+                    ack_req: f.ack_req(),
                 }),
                 MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp(CnpMeta { qpn: d.dqpn() }),
                 MetaReportQueueDesc::Ack(d) => ReportMeta::Ack(AckMeta {

@@ -193,6 +193,7 @@ mod protocol_impl_hardware;
 mod qp;
 mod qp_table;
 mod queue_pair;
+mod rdma_write_worker;
 mod recv;
 /// Packet retransmission implementations
 mod retransmission;

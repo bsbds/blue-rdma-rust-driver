@@ -151,11 +151,13 @@ pub(crate) struct HeaderWriteMeta {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct HeaderReadMeta {
+    pub(crate) dqpn: u32,
     pub(crate) raddr: u64,
     pub(crate) rkey: u32,
     pub(crate) total_len: u32,
     pub(crate) laddr: u64,
     pub(crate) lkey: u32,
+    pub(crate) ack_req: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -308,11 +310,6 @@ impl WrChunkBuilder<WithChunkInfo> {
 
     pub(crate) fn set_enable_ecn(mut self) -> Self {
         self.inner.enable_ecn = true;
-        self
-    }
-
-    pub(crate) fn set_is_read_resp(mut self) -> Self {
-        self.inner.opcode = WorkReqOpCode::RdmaReadResp;
         self
     }
 

@@ -20,6 +20,7 @@ use crate::{
     message_worker::Task,
     packet_retransmit::PacketRetransmitTask,
     queue_pair::{QueuePairAttrTable, TrackerTable},
+    rdma_write_worker::RdmaWriteTask,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -33,6 +34,7 @@ pub(crate) struct MetaWorker<T> {
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     completion_tx: flume::Sender<CompletionTask>,
+    rdma_write_tx: flume::Sender<RdmaWriteTask>,
 }
 
 impl<T: MetaReport + Send + 'static> MetaWorker<T> {
@@ -42,6 +44,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
         retransmit_tx: flume::Sender<RetransmitTask>,
         packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
         completion_tx: flume::Sender<CompletionTask>,
+        rdma_write_tx: flume::Sender<RdmaWriteTask>,
     ) -> Self {
         Self {
             inner,
@@ -49,6 +52,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
             retransmit_tx,
             packet_retransmit_tx,
             completion_tx,
+            rdma_write_tx,
             send_table: TrackerTable::new(),
             recv_table: TrackerTable::new(),
         }
@@ -79,7 +83,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
             ReportMeta::Write(x) => self.handle_header_write(x),
             ReportMeta::Ack(x) => self.handle_ack(x),
             ReportMeta::Nak(x) => self.handle_nak(x),
-            ReportMeta::Read { .. } => todo!(),
+            ReportMeta::Read(x) => self.handle_header_read(x),
             ReportMeta::Cnp { .. } => todo!(),
         }
     }

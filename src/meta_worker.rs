@@ -145,6 +145,8 @@ impl<T: MetaReport> MetaWorker<T> {
                 total_len,
                 laddr,
                 lkey,
+                dqpn,
+                ack_req,
             }) => todo!(),
             ReportMeta::Cnp(CnpMeta { qpn }) => todo!(),
             ReportMeta::Ack(AckMeta {

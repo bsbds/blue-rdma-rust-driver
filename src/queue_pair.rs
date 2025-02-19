@@ -17,7 +17,7 @@ use crate::{
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
     },
-    send::SendWrRdmaWrite,
+    send::SendWrRdma,
     tracker::{AckTracker, Msn, PacketTracker},
 };
 

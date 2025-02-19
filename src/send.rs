@@ -87,7 +87,7 @@ impl WrFragmenter {
     /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
     pub(crate) fn new(
-        wr: SendWrRdmaWrite,
+        wr: SendWrRdma,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
     ) -> Self {
@@ -125,7 +125,7 @@ impl WrFragmenter {
     /// Creates a new `WrFragmenter`
     #[allow(unsafe_code)]
     fn new_custom(
-        wr: SendWrRdmaWrite,
+        wr: SendWrRdma,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
         chunk_size: u32,
@@ -182,14 +182,14 @@ impl WrFragmenter {
 }
 
 pub(crate) struct WrPacketFragmenter {
-    wr: SendWrRdmaWrite,
+    wr: SendWrRdma,
     builder: WrChunkBuilder<WithQpParams>,
     base_psn: u32,
 }
 
 impl WrPacketFragmenter {
     pub(crate) fn new(
-        wr: SendWrRdmaWrite,
+        wr: SendWrRdma,
         builder: WrChunkBuilder<WithQpParams>,
         base_psn: u32,
     ) -> Self {
@@ -252,7 +252,8 @@ impl WrPacketFragmenter {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SendWr {
-    RdmaWrite(SendWrRdmaWrite),
+    RdmaWrite(SendWrRdma),
+    RdmaRead(SendWrRdma),
     Send(SendWrBase),
 }
 
@@ -279,7 +280,7 @@ impl SendWr {
 
         match wr.opcode {
             IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {
-                let wr = SendWrRdmaWrite {
+                let wr = SendWrRdma {
                     base,
                     // SAFETY: rdma field is valid for RDMA operations
                     raddr: unsafe { wr.wr.rdma.remote_addr },
@@ -294,41 +295,41 @@ impl SendWr {
 
     pub(crate) fn wr_id(&self) -> u64 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.wr_id,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.wr_id,
             SendWr::Send(wr) => wr.wr_id,
         }
     }
     pub(crate) fn send_flags(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.send_flags,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.send_flags,
             SendWr::Send(wr) => wr.send_flags,
         }
     }
 
     pub(crate) fn laddr(&self) -> u64 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.laddr,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.laddr,
             SendWr::Send(wr) => wr.laddr,
         }
     }
 
     pub(crate) fn length(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.length,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.length,
             SendWr::Send(wr) => wr.length,
         }
     }
 
     pub(crate) fn lkey(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.lkey,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.lkey,
             SendWr::Send(wr) => wr.lkey,
         }
     }
 
     pub(crate) fn imm_data(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) => wr.base.imm_data,
+            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.imm_data,
             SendWr::Send(wr) => wr.imm_data,
         }
     }
@@ -336,13 +337,13 @@ impl SendWr {
 
 /// A resolver and validator for send work requests
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct SendWrRdmaWrite {
+pub(crate) struct SendWrRdma {
     base: SendWrBase,
     pub(crate) raddr: u64,
     pub(crate) rkey: u32,
 }
 
-impl SendWrRdmaWrite {
+impl SendWrRdma {
     #[allow(unsafe_code)]
     /// Creates a new resolver from the given work request.
     /// Returns None if the input is invalid
@@ -377,7 +378,7 @@ impl SendWrRdmaWrite {
         })
     }
 
-    pub(crate) fn new_from_base(base: SendWrBase, raddr: u64, rkey: u32) -> SendWrRdmaWrite {
+    pub(crate) fn new_from_base(base: SendWrBase, raddr: u64, rkey: u32) -> SendWrRdma {
         Self { base, raddr, rkey }
     }
 
@@ -438,6 +439,26 @@ pub(crate) struct SendWrBase {
     pub(crate) length: u32,
     pub(crate) lkey: u32,
     pub(crate) imm_data: u32,
+}
+
+impl SendWrBase {
+    pub(crate) fn new(
+        wr_id: u64,
+        send_flags: u32,
+        laddr: u64,
+        length: u32,
+        lkey: u32,
+        imm_data: u32,
+    ) -> Self {
+        Self {
+            wr_id,
+            send_flags,
+            laddr,
+            length,
+            lkey,
+            imm_data,
+        }
+    }
 }
 
 /// Error type for invalid input validation

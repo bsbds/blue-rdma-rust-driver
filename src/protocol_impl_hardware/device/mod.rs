@@ -62,7 +62,7 @@ use crate::{
         tap::TapDevice,
     },
     qp::{DeviceQp, QpInitiatorTable, QpManager, QpTrackerTable},
-    send::{SendWrRdmaWrite, WrFragmenter},
+    send::{SendWrRdma, WrFragmenter},
 };
 
 pub(crate) trait InitializeDeviceQueue {
@@ -199,7 +199,7 @@ impl BlueRdmaInner {
     }
 
     /// Sends an RDMA operation
-    fn post_send_inner(&mut self, qpn: u32, wr: SendWrRdmaWrite) -> io::Result<()> {
+    fn post_send_inner(&mut self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
         let qp = self
             .qp_table
             .state_mut(qpn)
@@ -560,7 +560,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
         let bluerdma = unsafe { get_device(context) };
         let mut bluerdma = bluerdma.inner.lock();
         let qp_num = qp.qp_num;
-        let wr = SendWrRdmaWrite::new(wr).unwrap_or_else(|_| todo!("handle invalid input"));
+        let wr = SendWrRdma::new(wr).unwrap_or_else(|_| todo!("handle invalid input"));
         bluerdma.post_send_inner(qp_num, wr);
 
         0

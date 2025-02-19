@@ -272,6 +272,12 @@ pub(crate) enum CompletionEvent {
         end_psn: u32,
         wr_id: u64,
     },
+    RdmaRead {
+        qpn: u32,
+        msn: u16,
+        end_psn: u32,
+        wr_id: u64,
+    },
     RecvRdmaWithImm {
         qpn: u32,
         msn: u16,
@@ -287,6 +293,15 @@ pub(crate) enum CompletionEvent {
 
 impl CompletionEvent {
     pub(crate) fn new_rdma_write(qpn: u32, msn: u16, end_psn: u32, wr_id: u64) -> Self {
+        Self::RdmaWrite {
+            qpn,
+            msn,
+            end_psn,
+            wr_id,
+        }
+    }
+
+    pub(crate) fn new_rdma_read(qpn: u32, msn: u16, end_psn: u32, wr_id: u64) -> Self {
         Self::RdmaWrite {
             qpn,
             msn,
@@ -311,6 +326,7 @@ impl CompletionEvent {
     pub(crate) fn qpn(&self) -> u32 {
         match *self {
             CompletionEvent::RdmaWrite { qpn, .. }
+            | CompletionEvent::RdmaRead { qpn, .. }
             | CompletionEvent::RecvRdmaWithImm { qpn, .. }
             | CompletionEvent::Recv { qpn, .. } => qpn,
         }
@@ -319,6 +335,7 @@ impl CompletionEvent {
     pub(crate) fn msn(&self) -> u16 {
         match *self {
             CompletionEvent::RdmaWrite { msn, .. }
+            | CompletionEvent::RdmaRead { msn, .. }
             | CompletionEvent::RecvRdmaWithImm { msn, .. }
             | CompletionEvent::Recv { msn, .. } => msn,
         }
@@ -327,6 +344,7 @@ impl CompletionEvent {
     pub(crate) fn end_psn(&self) -> u32 {
         match *self {
             CompletionEvent::RdmaWrite { end_psn, .. }
+            | CompletionEvent::RdmaRead { end_psn, .. }
             | CompletionEvent::RecvRdmaWithImm { end_psn, .. }
             | CompletionEvent::Recv { end_psn, .. } => end_psn,
         }
@@ -339,6 +357,7 @@ impl CompletionEvent {
                 ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV_RDMA_WITH_IMM
             }
             CompletionEvent::Recv { qpn, msn, end_psn } => ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV,
+            CompletionEvent::RdmaRead { .. } => ibverbs_sys::ibv_wc_opcode::IBV_WC_RDMA_READ,
         }
     }
 }

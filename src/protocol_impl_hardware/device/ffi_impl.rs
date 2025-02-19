@@ -17,7 +17,7 @@ use super::{
         qp_attr::{IbvQpAttr, IbvQpInitAttr},
         DeviceOps, HwDevice, HwDeviceCtx,
     },
-    EmulatedPageAllocator, PhysAddrResolverEmulated, SendWrRdmaWrite, UpdateQp,
+    EmulatedPageAllocator, PhysAddrResolverEmulated, SendWrRdma, UpdateQp,
 };
 
 const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;
@@ -360,11 +360,17 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
                         msn,
                         end_psn,
                         wr_id,
+                    }
+                    | CompletionEvent::RdmaRead {
+                        qpn,
+                        msn,
+                        end_psn,
+                        wr_id,
                     } => {
                         wc.wr_id = wr_id;
                         wc.qp_num = qpn;
                         wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = ibverbs_sys::ibv_wc_opcode::IBV_WC_RDMA_WRITE;
+                        wc.opcode = c.opcode();
                     }
                     CompletionEvent::RecvRdmaWithImm {
                         qpn,
@@ -375,12 +381,12 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
                         wc.__bindgen_anon_1.imm_data = imm;
                         wc.qp_num = qpn;
                         wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV_RDMA_WITH_IMM;
+                        wc.opcode = c.opcode();
                     }
                     CompletionEvent::Recv { qpn, msn, end_psn } => {
                         wc.qp_num = qpn;
                         wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = ibverbs_sys::ibv_wc_opcode::IBV_WC_RECV;
+                        wc.opcode = c.opcode();
                     }
                 }
             }

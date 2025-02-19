@@ -17,7 +17,7 @@ use crate::{
     retransmission::{
         ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
     },
-    send::SendWrRdmaWrite,
+    send::SendWrRdma,
 };
 
 /// Manages QPs
@@ -291,7 +291,7 @@ impl InitiatorState {
     /// Returns the next wr
     pub(crate) fn next_wr(
         &mut self,
-        wr: &SendWrRdmaWrite,
+        wr: &SendWrRdma,
     ) -> Option<(WrChunkBuilder<WithQpParams>, u16, u32, u32)> {
         let num_psn = num_psn(self.attrs.pmtu(), wr.raddr(), wr.length())?;
         let (msn, base_psn) = self.next(num_psn)?;

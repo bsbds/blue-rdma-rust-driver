@@ -20,8 +20,8 @@ use crate::{
     constants::PSN_MASK,
     ctx_ops::RdmaCtxOps,
     device_protocol::{
-        DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta, SimpleNicTunnel,
-        UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
+        ChunkPos, DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta,
+        SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
     },
     fragmenter::PacketFragmenter,
     mem::{
@@ -47,8 +47,9 @@ use crate::{
     qp::{DeviceQp, QpInitiatorTable, QpTrackerTable},
     qp_table::QpTable,
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
+    rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
     recv::{post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWr, RecvWrQueueTable, TcpChannel},
-    send::{SendWr, SendWrBase, SendWrRdmaWrite, WrFragmenter, WrPacketFragmenter},
+    send::{SendWr, SendWrBase, SendWrRdma, WrFragmenter, WrPacketFragmenter},
     send_queue::{IbvSendQueue, SendQueueElem},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
     tracker::{MessageMeta, Msn},
@@ -85,14 +86,10 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     qp_manager: QpManager,
     cq_manager: CqManager,
     cq_table: CompletionQueueTable,
-    sender_table: SenderTable,
-    retransmit_tx: flume::Sender<RetransmitTask>,
-    packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
-    completion_tx: flume::Sender<CompletionTask>,
     cmd_controller: CommandController<H::Adaptor>,
-    send_scheduler: SendQueueScheduler,
     post_recv_tx_table: PostRecvTxTable,
     recv_wr_queue_table: RecvWrQueueTable,
+    rdma_write_tx: flume::Sender<RdmaWriteTask>,
 }
 
 #[allow(private_bounds)]
@@ -127,6 +124,7 @@ where
         let (ack_tx, ack_rx) = flume::unbounded();
         let (retransmit_tx, retransmit_rx) = flume::unbounded();
         let (packet_retransmit_tx, packet_retransmit_rx) = flume::unbounded();
+        let (rdma_write_tx, rdma_write_rx) = flume::unbounded();
         let rx_buffer = alloc_page()?;
         let rx_buffer_pa = rx_buffer.phys_addr;
         let qp_attr_table = QueuePairAttrTable::new();
@@ -150,6 +148,7 @@ where
             retransmit_tx.clone(),
             packet_retransmit_tx.clone(),
             completion_tx.clone(),
+            rdma_write_tx.clone(),
             Arc::clone(&is_shutdown),
         )?;
         CompletionWorker::new(qp_attr_table.clone_arc(), completion_rx, &cq_table).spawn();
@@ -157,25 +156,30 @@ where
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
 
         let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
-        AckResponder::new(qp_attr_table, ack_rx, Box::new(simple_nic_tx)).spawn();
+        AckResponder::new(qp_attr_table.clone_arc(), ack_rx, Box::new(simple_nic_tx)).spawn();
         TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
         PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
+        RdmaWriteWorker::new(
+            rdma_write_rx,
+            qp_attr_table,
+            send_scheduler,
+            retransmit_tx,
+            packet_retransmit_tx,
+            completion_tx,
+        )
+        .spawn();
 
         Ok(Self {
             device,
             cmd_controller,
-            send_scheduler,
             qp_manager,
             cq_manager,
             cq_table,
-            sender_table: SenderTable::new(),
-            retransmit_tx,
-            packet_retransmit_tx,
-            completion_tx,
             mtt_buffer: alloc_page()?,
             mtt: Mtt::new(),
             post_recv_tx_table: PostRecvTxTable::new(),
             recv_wr_queue_table: RecvWrQueueTable::new(),
+            rdma_write_tx,
         })
     }
 }
@@ -187,84 +191,27 @@ impl<H: HwDevice> HwDeviceCtx<H> {
                 if wr.length != x.length {
                     return Err(io::Error::from(io::ErrorKind::InvalidInput));
                 }
-                let wr = SendWrRdmaWrite::new_from_base(wr, x.addr, x.lkey);
+                let wr = SendWrRdma::new_from_base(wr, x.addr, x.lkey);
                 self.rdma_write(qpn, wr, WorkReqOpCode::Send)
             }
             None => todo!("return rnr error"),
         }
     }
 
-    fn rdma_write(&self, qpn: u32, wr: SendWrRdmaWrite, opcode: WorkReqOpCode) -> io::Result<()> {
-        let qp = self
-            .qp_manager
-            .get_qp(qpn)
-            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let addr = wr.raddr();
-        let length = wr.length();
-        let num_psn =
-            num_psn(qp.pmtu, addr, length).ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let (msn, psn) = self
-            .sender_table
-            .map_qp_mut(qpn, |sender| sender.next_wr(num_psn))
-            .flatten()
-            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let end_psn = (psn + num_psn) & PSN_MASK;
-        let chunk_builder = WrChunkBuilder::new().set_qp_params(QpParams::new(
-            msn,
-            qp.qp_type,
-            qp.qpn,
-            qp.mac_addr,
-            qp.dqpn,
-            qp.dqp_ip,
-            qp.pmtu,
-        ));
-        let flags = wr.send_flags();
-        let mut ack_req = false;
-        if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
-            ack_req = true;
-            let wr_id = wr.wr_id();
-            let send_cq_handle = qp
-                .send_cq
-                .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            self.completion_tx.send(CompletionTask::Register {
-                event: CompletionEvent::new_rdma_write(qpn, msn, end_psn, wr_id),
-                is_send: true,
-            });
-        }
-        let qp_params = QpParams::new(
-            msn,
-            qp.qp_type,
-            qp.qpn,
-            qp.mac_addr,
-            qp.dqpn,
-            qp.dqp_ip,
-            qp.pmtu,
-        );
+    fn rdma_read(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
+        let (task, result_rx) = RdmaWriteTask::new(qpn, wr, WorkReqOpCode::RdmaRead);
+        self.rdma_write_tx.send(task);
+        result_rx
+            .recv()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+    }
 
-        if ack_req {
-            let fragmenter = PacketFragmenter::new(wr, qp_params, psn);
-            let Some(last_packet_chunk) = fragmenter.into_iter().last() else {
-                return Ok(());
-            };
-            let _ignore = self.retransmit_tx.send(RetransmitTask::NewAckReq {
-                qpn,
-                last_packet_chunk,
-            });
-        }
-
-        let _ignore = self.packet_retransmit_tx.send(PacketRetransmitTask::NewWr {
-            qpn,
-            wr: SendQueueElem::new(psn, wr, qp_params),
-        });
-
-        let builder = WrChunkBuilder::new_with_opcode(opcode).set_qp_params(qp_params);
-        let fragmenter = WrFragmenter::new(wr, builder, psn);
-        for chunk in fragmenter {
-            // TODO: Should this never fail
-            self.send_scheduler.send(chunk)?;
-        }
-
-        Ok(())
+    fn rdma_write(&self, qpn: u32, wr: SendWrRdma, opcode: WorkReqOpCode) -> io::Result<()> {
+        let (task, result_rx) = RdmaWriteTask::new(qpn, wr, opcode);
+        self.rdma_write_tx.send(task);
+        result_rx
+            .recv()
+            .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
     }
 }
 
@@ -369,6 +316,7 @@ where
     fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()> {
         match wr {
             SendWr::RdmaWrite(wr) => self.rdma_write(qpn, wr, WorkReqOpCode::RdmaWrite),
+            SendWr::RdmaRead(wr) => self.rdma_read(qpn, wr),
             SendWr::Send(wr) => self.send(qpn, wr),
         }
     }
