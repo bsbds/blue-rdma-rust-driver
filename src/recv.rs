@@ -190,7 +190,7 @@ impl RecvWrQueueTable {
     }
 }
 
-struct RecvWorker<Rx = TcpChannelRx> {
+pub(crate) struct RecvWorker<Rx = TcpChannelRx> {
     rx: Rx,
     wr_queue: SharedRecvWrQueue,
 }
@@ -203,6 +203,7 @@ impl<Rx: PostRecvRx + Send + 'static> RecvWorker<Rx> {
         }
     }
 
+    // TODO: use tokio
     pub(crate) fn spawn(self) {
         let _handle = thread::Builder::new()
             .name("recv-worker".into())

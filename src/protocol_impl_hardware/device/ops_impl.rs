@@ -47,7 +47,10 @@ use crate::{
     qp_table::QpTable,
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
     rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
-    recv::{post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWr, RecvWrQueueTable, TcpChannel},
+    recv::{
+        post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
+        TcpChannel,
+    },
     send::{SendWr, SendWrBase, SendWrRdma, WrFragmenter, WrPacketFragmenter},
     send_queue::{IbvSendQueue, SendQueueElem},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
@@ -300,6 +303,7 @@ where
                 dqpn,
             )?;
             self.post_recv_tx_table.insert(qpn, tx);
+            RecvWorker::new(rx).spawn();
         }
 
         self.cmd_controller.update_qp(entry)
