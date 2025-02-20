@@ -182,15 +182,6 @@ impl RdmaWriteWorker {
             .flatten()
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let end_psn = (psn + num_psn) & PSN_MASK;
-        let chunk_builder = WrChunkBuilder::new().set_qp_params(QpParams::new(
-            msn,
-            qp.qp_type,
-            qp.qpn,
-            qp.mac_addr,
-            qp.dqpn,
-            qp.dqp_ip,
-            qp.pmtu,
-        ));
         let flags = wr.send_flags();
         let mut ack_req = false;
         if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {

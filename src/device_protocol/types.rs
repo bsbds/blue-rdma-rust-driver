@@ -225,18 +225,17 @@ impl WrChunkBuilder<Initial> {
     }
 
     #[allow(clippy::unused_self, clippy::too_many_arguments)]
-    pub(crate) fn set_qp_params(self, qp_params: QpParams) -> WrChunkBuilder<WithQpParams> {
+    pub(crate) fn set_qp_params(mut self, qp_params: QpParams) -> WrChunkBuilder<WithQpParams> {
+        self.inner.qp_type = qp_params.qp_type;
+        self.inner.sqpn = qp_params.sqpn;
+        self.inner.mac_addr = qp_params.mac_addr;
+        self.inner.dqpn = qp_params.dqpn;
+        self.inner.dqp_ip = qp_params.dqp_ip;
+        self.inner.pmtu = qp_params.pmtu;
+        self.inner.msn = qp_params.msn;
+
         WrChunkBuilder {
-            inner: WrChunk {
-                qp_type: qp_params.qp_type,
-                sqpn: qp_params.sqpn,
-                mac_addr: qp_params.mac_addr,
-                dqpn: qp_params.dqpn,
-                dqp_ip: qp_params.dqp_ip,
-                pmtu: qp_params.pmtu,
-                msn: qp_params.msn,
-                ..Default::default()
-            },
+            inner: self.inner,
             _state: PhantomData,
         }
     }
