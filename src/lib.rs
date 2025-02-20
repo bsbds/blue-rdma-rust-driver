@@ -174,6 +174,7 @@ mod ack_responder;
 /// Completion Queue implementation
 mod completion;
 mod completion_v2;
+mod completion_v3;
 mod completion_worker;
 /// Constants used throughout the driver
 mod constants;

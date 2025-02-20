@@ -87,7 +87,8 @@ impl CompletionWorker {
                     let Some(cq) = self.cq_table.get_cq_mut(handle) else {
                         continue;
                     };
-                    cq.ack_event(qpn, psn);
+                    let events = cq.ack_event(qpn, psn);
+                    cq.push_cq_events(events);
                 }
             }
         }
@@ -182,8 +183,11 @@ impl CompletionQueueCtx {
     /// * `msn` - Message Sequence Number to acknowledge
     /// * `qpn` - Queue Pair Number associated with this event
     #[allow(clippy::as_conversions)] // u16 to usize
-    pub(crate) fn ack_event(&mut self, qpn: u32, base_psn: u32) {
-        let events = self.registry.ack_psn(qpn, base_psn);
+    pub(crate) fn ack_event(&mut self, qpn: u32, base_psn: u32) -> Vec<CompletionEvent> {
+        self.registry.ack_psn(qpn, base_psn)
+    }
+
+    pub(crate) fn push_cq_events(&mut self, events: Vec<CompletionEvent>) {
         let mut event_count = events.len();
         for event in events {
             self.completion_queue.push_back(event);
@@ -302,7 +306,7 @@ impl CompletionEvent {
     }
 
     pub(crate) fn new_rdma_read(qpn: u32, msn: u16, end_psn: u32, wr_id: u64) -> Self {
-        Self::RdmaWrite {
+        Self::RdmaRead {
             qpn,
             msn,
             end_psn,

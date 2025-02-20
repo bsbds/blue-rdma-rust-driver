@@ -3,7 +3,7 @@ use std::{net::Ipv4Addr, ptr};
 use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
-    completion_v2::CompletionEvent,
+    completion_v3::Completion,
     ctx_ops::RdmaCtxOps,
     net::config::{MacAddress, NetworkConfig},
     send::SendWr,
@@ -355,40 +355,18 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
         for (i, c) in completions.into_iter().enumerate() {
             if let Some(wc) = unsafe { wc.add(i).as_mut() } {
                 match c {
-                    CompletionEvent::RdmaWrite {
-                        qpn,
-                        msn,
-                        end_psn,
-                        wr_id,
-                    }
-                    | CompletionEvent::RdmaRead {
-                        qpn,
-                        msn,
-                        end_psn,
-                        wr_id,
-                    } => {
+                    Completion::Send { wr_id }
+                    | Completion::RdmaWrite { wr_id }
+                    | Completion::RdmaRead { wr_id }
+                    | Completion::Recv { wr_id } => {
                         wc.wr_id = wr_id;
-                        wc.qp_num = qpn;
-                        wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = c.opcode();
                     }
-                    CompletionEvent::RecvRdmaWithImm {
-                        qpn,
-                        msn,
-                        end_psn,
-                        imm,
-                    } => {
+                    Completion::RecvRdmaWithImm { imm } => {
                         wc.__bindgen_anon_1.imm_data = imm;
-                        wc.qp_num = qpn;
-                        wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = c.opcode();
-                    }
-                    CompletionEvent::Recv { qpn, msn, end_psn } => {
-                        wc.qp_num = qpn;
-                        wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
-                        wc.opcode = c.opcode();
                     }
                 }
+                wc.opcode = c.opcode();
+                wc.status = ibverbs_sys::ibv_wc_status::IBV_WC_SUCCESS;
             }
         }
 

@@ -138,12 +138,14 @@ impl<T> MetaWorker<T> {
         tracker.ack_range(base_psn, bitmap, ack_msn)
     }
 
-    fn send_update(&self, is_send: bool, qpn: u32, psn: u32) {
-        let _ignore = self
-            .completion_tx
-            .send(CompletionTask::UpdateBasePsn { qpn, psn, is_send });
+    fn send_update(&self, is_send: bool, qpn: u32, base_psn: u32) {
+        let _ignore = self.completion_tx.send(CompletionTask::Ack {
+            qpn,
+            base_psn,
+            is_send,
+        });
         let __ignore = self
             .packet_retransmit_tx
-            .send(PacketRetransmitTask::Ack { qpn, psn });
+            .send(PacketRetransmitTask::Ack { qpn, psn: base_psn });
     }
 }

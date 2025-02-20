@@ -2,12 +2,14 @@ use tracing::error;
 
 use crate::{
     ack_responder::AckResponse,
-    completion_v2::CompletionEvent,
+    completion_v3::{
+        Completion, Event, MessageMeta, RecvEvent, RecvEventOp, SendEvent, SendEventOp,
+    },
     device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
     message_worker::Task,
     queue_pair::num_psn,
     send::{SendWrBase, SendWrRdma},
-    tracker::{MessageMeta, Msn},
+    tracker::Msn,
 };
 
 use super::{CompletionTask, MetaWorker, RdmaWriteTask};
@@ -36,25 +38,40 @@ impl<T> MetaWorker<T> {
 
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
             match header_type {
-                HeaderType::Write | HeaderType::ReadResp => {}
+                HeaderType::Write => {}
                 HeaderType::WriteWithImm => {
-                    let _ignore = self.completion_tx.send(CompletionTask::Register {
-                        event: CompletionEvent::new_recv_rdma_with_imm(dqpn, msn, psn, imm),
-                        is_send: false,
-                    });
+                    let event = Event::Recv(RecvEvent::new(
+                        RecvEventOp::WriteWithImm { imm },
+                        MessageMeta::new(msn, psn),
+                    ));
+                    let _ignore = self
+                        .completion_tx
+                        .send(CompletionTask::Register { qpn: dqpn, event });
                 }
                 HeaderType::Send => {
-                    let _ignore = self.completion_tx.send(CompletionTask::Register {
-                        event: CompletionEvent::new_recv(dqpn, msn, psn),
-                        is_send: false,
-                    });
+                    let event = Event::Recv(RecvEvent::new(
+                        RecvEventOp::Recv,
+                        MessageMeta::new(msn, psn),
+                    ));
+                    let _ignore = self
+                        .completion_tx
+                        .send(CompletionTask::Register { qpn: dqpn, event });
+                }
+                HeaderType::ReadResp => {
+                    let event = Event::Recv(RecvEvent::new(
+                        RecvEventOp::ReadResp,
+                        MessageMeta::new(msn, psn),
+                    ));
+                    let _ignore = self
+                        .completion_tx
+                        .send(CompletionTask::Register { qpn: dqpn, event });
                 }
             }
         }
-        if let Some(psn) = tracker.ack_one(psn) {
-            let _ignore = self.completion_tx.send(CompletionTask::UpdateBasePsn {
+        if let Some(base_psn) = tracker.ack_one(psn) {
+            let _ignore = self.completion_tx.send(CompletionTask::Ack {
                 qpn: dqpn,
-                psn,
+                base_psn,
                 is_send: false,
             });
         }

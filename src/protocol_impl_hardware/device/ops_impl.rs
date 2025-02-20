@@ -13,9 +13,8 @@ use qp_attr::{IbvQpAttr, IbvQpInitAttr};
 
 use crate::{
     ack_responder::AckResponder,
-    completion_v2::{
-        CompletionEvent, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager,
-        EventRegistry,
+    completion_v3::{
+        Completion, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager,
     },
     constants::PSN_MASK,
     ctx_ops::RdmaCtxOps,
@@ -74,7 +73,7 @@ pub(crate) trait DeviceOps {
     fn destroy_qp(&mut self, qpn: u32);
     fn create_cq(&mut self) -> Option<u32>;
     fn destroy_cq(&mut self, handle: u32);
-    fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<CompletionEvent>;
+    fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<Completion>;
     fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()>;
     fn post_recv(&mut self, qpn: u32, wr: RecvWr) -> io::Result<()>;
 }
@@ -151,7 +150,12 @@ where
             rdma_write_tx.clone(),
             Arc::clone(&is_shutdown),
         )?;
-        CompletionWorker::new(qp_attr_table.clone_arc(), completion_rx, &cq_table).spawn();
+        CompletionWorker::new(
+            completion_rx,
+            cq_table.clone_arc(),
+            qp_attr_table.clone_arc(),
+        )
+        .spawn();
         cmd_controller.set_network(network_config)?;
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
 
@@ -321,7 +325,7 @@ where
         }
     }
 
-    fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<CompletionEvent> {
+    fn poll_cq(&mut self, handle: u32, max_num_entries: usize) -> Vec<Completion> {
         let Some(cq) = self.cq_table.get_cq(handle) else {
             return vec![];
         };

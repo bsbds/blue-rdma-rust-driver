@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::{
-    completion_v2::{CompletionEvent, CompletionTask},
+    completion_v3::{Completion, CompletionTask, Event, MessageMeta, SendEvent, SendEventOp},
     constants::PSN_MASK,
     device_protocol::{ChunkPos, QpParams, WorkReqOpCode, WorkReqSend, WrChunkBuilder},
     fragmenter::PacketFragmenter,
@@ -141,10 +141,13 @@ impl RdmaWriteWorker {
             let send_cq_handle = qp
                 .send_cq
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            self.completion_tx.send(CompletionTask::Register {
-                event: CompletionEvent::new_rdma_read(qpn, msn, end_psn, wr_id),
-                is_send: true,
-            });
+            let event = Event::Send(SendEvent::new(
+                SendEventOp::ReadSignaled,
+                MessageMeta::new(msn, end_psn),
+                wr_id,
+            ));
+            self.completion_tx
+                .send(CompletionTask::Register { qpn, event });
         }
 
         if ack_req {
@@ -196,10 +199,13 @@ impl RdmaWriteWorker {
             let send_cq_handle = qp
                 .send_cq
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            self.completion_tx.send(CompletionTask::Register {
-                event: CompletionEvent::new_rdma_write(qpn, msn, end_psn, wr_id),
-                is_send: true,
-            });
+            let event = Event::Send(SendEvent::new(
+                SendEventOp::SendSignaled,
+                MessageMeta::new(msn, end_psn),
+                wr_id,
+            ));
+            self.completion_tx
+                .send(CompletionTask::Register { qpn, event });
         }
         let qp_params = QpParams::new(
             msn,
