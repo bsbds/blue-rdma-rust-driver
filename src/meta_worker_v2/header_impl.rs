@@ -5,6 +5,7 @@ use crate::{
     completion_v3::{
         Completion, Event, MessageMeta, RecvEvent, RecvEventOp, SendEvent, SendEventOp,
     },
+    constants::PSN_MASK,
     device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
     message_worker::Task,
     queue_pair::num_psn,
@@ -37,12 +38,23 @@ impl<T> MetaWorker<T> {
             .unwrap_or_else(|| unreachable!("qp number: d{dqpn} does not exist"));
 
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
+            let end_psn = (psn + 1) % PSN_MASK;
             match header_type {
-                HeaderType::Write => {}
+                HeaderType::Write => {
+                    if ack_req {
+                        let event = Event::Recv(RecvEvent::new(
+                            RecvEventOp::WriteAckReq,
+                            MessageMeta::new(msn, end_psn),
+                        ));
+                        let _ignore = self
+                            .completion_tx
+                            .send(CompletionTask::Register { qpn: dqpn, event });
+                    }
+                }
                 HeaderType::WriteWithImm => {
                     let event = Event::Recv(RecvEvent::new(
                         RecvEventOp::WriteWithImm { imm },
-                        MessageMeta::new(msn, psn),
+                        MessageMeta::new(msn, end_psn),
                     ));
                     let _ignore = self
                         .completion_tx
@@ -51,7 +63,7 @@ impl<T> MetaWorker<T> {
                 HeaderType::Send => {
                     let event = Event::Recv(RecvEvent::new(
                         RecvEventOp::Recv,
-                        MessageMeta::new(msn, psn),
+                        MessageMeta::new(msn, end_psn),
                     ));
                     let _ignore = self
                         .completion_tx
@@ -60,7 +72,7 @@ impl<T> MetaWorker<T> {
                 HeaderType::ReadResp => {
                     let event = Event::Recv(RecvEvent::new(
                         RecvEventOp::ReadResp,
-                        MessageMeta::new(msn, psn),
+                        MessageMeta::new(msn, end_psn),
                     ));
                     let _ignore = self
                         .completion_tx

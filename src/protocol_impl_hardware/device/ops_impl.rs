@@ -158,6 +158,7 @@ where
             completion_rx,
             cq_table.clone_arc(),
             qp_attr_table.clone_arc(),
+            ack_tx,
         )
         .spawn();
         cmd_controller.set_network(network_config)?;

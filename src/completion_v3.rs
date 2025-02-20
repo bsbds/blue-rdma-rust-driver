@@ -4,8 +4,8 @@ use bitvec::vec::BitVec;
 use parking_lot::Mutex;
 
 use crate::{
-    constants::MAX_CQ_CNT, qp_table::QpTable, queue_pair::QueuePairAttrTable, send_queue::Psn,
-    tracker::Msn,
+    ack_responder::AckResponse, constants::MAX_CQ_CNT, qp_table::QpTable,
+    queue_pair::QueuePairAttrTable, send_queue::Psn, tracker::Msn,
 };
 
 struct EventRegister {
@@ -56,6 +56,7 @@ pub(crate) struct CompletionWorker {
     tracker_table: QpTable<QueuePairMessageTracker>,
     cq_table: CompletionQueueTable,
     qp_table: QueuePairAttrTable,
+    ack_resp_tx: flume::Sender<AckResponse>,
 }
 
 impl CompletionWorker {
@@ -63,12 +64,14 @@ impl CompletionWorker {
         completion_rx: flume::Receiver<CompletionTask>,
         cq_table: CompletionQueueTable,
         qp_table: QueuePairAttrTable,
+        ack_resp_tx: flume::Sender<AckResponse>,
     ) -> Self {
         Self {
             completion_rx,
             tracker_table: QpTable::new(),
             cq_table,
             qp_table,
+            ack_resp_tx,
         }
     }
 
@@ -110,7 +113,7 @@ impl CompletionWorker {
                     ..
                 } => {
                     if let Some(recv_cq) = qp_attr.recv_cq.and_then(|h| self.cq_table.get_cq(h)) {
-                        tracker.ack_send(Some(base_psn), recv_cq);
+                        tracker.ack_recv(base_psn, recv_cq, qpn, &self.ack_resp_tx);
                     }
                 }
             }
@@ -192,7 +195,13 @@ impl QueuePairMessageTracker {
         }
     }
 
-    fn ack_recv(&mut self, psn: u32, recv_cq: &CompletionQueue) {
+    fn ack_recv(
+        &mut self,
+        psn: u32,
+        recv_cq: &CompletionQueue,
+        qpn: u32,
+        ack_resp_tx: &flume::Sender<AckResponse>,
+    ) {
         self.recv.ack(psn);
         while let Some(event) = self.recv.pop() {
             match event.op {
@@ -210,6 +219,13 @@ impl QueuePairMessageTracker {
                 }
                 RecvEventOp::ReadResp => {
                     self.read_resp_queue.push_back(event);
+                }
+                RecvEventOp::WriteAckReq => {
+                    let _ignore = ack_resp_tx.send(AckResponse::Ack {
+                        qpn,
+                        msn: event.meta().msn,
+                        last_psn: event.meta().end_psn,
+                    });
                 }
             }
         }
@@ -255,12 +271,12 @@ impl<E: EventMeta> MessageTracker<E> {
 
     fn peek(&self) -> Option<&E> {
         let front = self.inner.front()?;
-        (Psn(front.meta().end_psn) < Psn(self.base_psn)).then_some(front)
+        (Psn(front.meta().end_psn) <= Psn(self.base_psn)).then_some(front)
     }
 
     fn pop(&mut self) -> Option<E> {
         let front = self.inner.front()?;
-        if Psn(front.meta().end_psn) < Psn(self.base_psn) {
+        if Psn(front.meta().end_psn) <= Psn(self.base_psn) {
             self.inner.pop_front()
         } else {
             None
@@ -327,6 +343,7 @@ impl EventMeta for RecvEvent {
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RecvEventOp {
     WriteWithImm { imm: u32 },
+    WriteAckReq,
     Recv,
     ReadResp,
 }
