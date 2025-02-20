@@ -305,7 +305,11 @@ where
                 dqpn,
             )?;
             self.post_recv_tx_table.insert(qpn, tx);
-            RecvWorker::new(rx).spawn();
+            let wr_queue = self
+                .recv_wr_queue_table
+                .clone_recv_wr_queue(qpn)
+                .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+            RecvWorker::new(rx, wr_queue).spawn();
         }
 
         self.cmd_controller.update_qp(entry)

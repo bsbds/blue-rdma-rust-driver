@@ -184,6 +184,10 @@ impl RecvWrQueueTable {
         }
     }
 
+    pub(crate) fn clone_recv_wr_queue(&self, qpn: u32) -> Option<SharedRecvWrQueue> {
+        self.inner.get_qp(qpn).cloned()
+    }
+
     pub(crate) fn pop(&self, qpn: u32) -> Option<RecvWr> {
         let queue = self.inner.get_qp(qpn)?;
         queue.lock().pop_front()
@@ -196,11 +200,8 @@ pub(crate) struct RecvWorker<Rx = TcpChannelRx> {
 }
 
 impl<Rx: PostRecvRx + Send + 'static> RecvWorker<Rx> {
-    pub(crate) fn new(rx: Rx) -> Self {
-        Self {
-            rx,
-            wr_queue: Arc::default(),
-        }
+    pub(crate) fn new(rx: Rx, wr_queue: SharedRecvWrQueue) -> Self {
+        Self { rx, wr_queue }
     }
 
     // TODO: use tokio
