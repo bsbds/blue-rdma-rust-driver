@@ -213,9 +213,10 @@ impl EmulatedDevice {
         );
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let network_config = NetworkConfig {
-            ip_network: IpNetwork::V4(Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap()),
+            ip_network: Ipv4Network::new(Ipv4Addr::new(127, 0, 0, 1), 24).unwrap(),
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x02, 0x42, 0xAC, 0x11, 0x00, 0x02]),
+            post_recv_ip: Ipv4Addr::new(0, 0, 0, 0),
         };
         let mut bluerdma = device_builder
             .initialize(network_config, page_allocator, resolver, 128, 128)

@@ -23,6 +23,8 @@ use super::{
 
 const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;
 const CARD_IP_ADDRESS: u32 = 0x1122_330A;
+const POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
+const POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 2);
 
 static HEAP_ALLOCATOR: bluesimalloc::BlueSimalloc = bluesimalloc::BlueSimalloc::new();
 
@@ -88,12 +90,17 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             }
             _ => unreachable!("unexpected sysfs_name"),
         };
+        let post_recv_ip = match name.as_str() {
+            "uverbs0" => POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+            "uverbs1" => POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+            _ => unreachable!("unexpected sysfs_name"),
+        };
+
         let network_config = NetworkConfig {
-            ip_network: IpNetwork::V4(
-                Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
-            ),
+            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
+            post_recv_ip,
         };
         // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
         let ack_config = AckTimeoutConfig::new(16, 18, 100);
