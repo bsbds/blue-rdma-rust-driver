@@ -92,6 +92,7 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     post_recv_tx_table: PostRecvTxTable,
     recv_wr_queue_table: RecvWrQueueTable,
     rdma_write_tx: flume::Sender<RdmaWriteTask>,
+    network_config: NetworkConfig,
 }
 
 #[allow(private_bounds)]
@@ -187,6 +188,7 @@ where
             post_recv_tx_table: PostRecvTxTable::new(),
             recv_wr_queue_table: RecvWrQueueTable::new(),
             rdma_write_tx,
+            network_config,
         })
     }
 }
@@ -297,8 +299,8 @@ where
 
         if let Some(dqpn) = attr.dest_qp_num() {
             let (tx, rx) = post_recv_channel::<TcpChannel>(
-                CARD_IP_ADDRESS.into(),
-                CARD_IP_ADDRESS.into(),
+                self.network_config.post_recv_ip,
+                self.network_config.post_recv_peer_ip,
                 qpn,
                 dqpn,
             )?;

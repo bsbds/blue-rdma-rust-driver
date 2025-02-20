@@ -101,7 +101,7 @@ impl From<u64> for MacAddress {
 }
 
 /// Static network configuration containing IP network, gateway and MAC address
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
 pub struct NetworkConfig {
     /// IP network (address and subnet)
@@ -112,6 +112,8 @@ pub struct NetworkConfig {
     pub mac: MacAddress,
     /// TODO: replace this with real nic ip
     pub post_recv_ip: Ipv4Addr,
+    /// peer ip
+    pub post_recv_peer_ip: Ipv4Addr,
 }
 
 /// Network mode configuration - either static or DHCP
@@ -162,6 +164,7 @@ mod tests {
                 gateway: "10.0.0.1".parse().unwrap(),
                 mac: MacAddress([0; 6]),
                 post_recv_ip: Ipv4Addr::new(0, 0, 0, 0),
+                post_recv_peer_ip: Ipv4Addr::new(0, 0, 0, 0),
             })
         }
     }

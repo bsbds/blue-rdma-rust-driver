@@ -90,9 +90,15 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             }
             _ => unreachable!("unexpected sysfs_name"),
         };
-        let post_recv_ip = match name.as_str() {
-            "uverbs0" => POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
-            "uverbs1" => POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+        let (post_recv_ip, post_recv_peer_ip) = match name.as_str() {
+            "uverbs0" => (
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+            ),
+            "uverbs1" => (
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+            ),
             _ => unreachable!("unexpected sysfs_name"),
         };
 
@@ -101,6 +107,7 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
             post_recv_ip,
+            post_recv_peer_ip,
         };
         // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
         let ack_config = AckTimeoutConfig::new(16, 18, 100);

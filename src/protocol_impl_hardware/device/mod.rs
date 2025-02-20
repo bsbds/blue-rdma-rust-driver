@@ -274,6 +274,7 @@ unsafe impl RdmaCtxOps for BlueRdma {
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
             post_recv_ip: Ipv4Addr::new(0, 0, 0, 0),
+            post_recv_peer_ip: Ipv4Addr::new(0, 0, 0, 0),
         };
         let mut bluerdma_inner = device_builder
             .initialize(network_config, page_allocator, resolver, 128, 128)
