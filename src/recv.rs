@@ -20,6 +20,23 @@ pub(crate) struct RecvWr {
 }
 
 impl RecvWr {
+    #[allow(unsafe_code)]
+    pub(crate) fn new(wr: ibverbs_sys::ibv_recv_wr) -> Option<Self> {
+        let num_sge = usize::try_from(wr.num_sge).ok()?;
+        if num_sge != 1 {
+            return None;
+        }
+        // SAFETY: sg_list is valid when num_sge > 0, which we've verified above
+        let sge = unsafe { *wr.sg_list };
+
+        Some(Self {
+            wr_id: wr.wr_id,
+            addr: sge.addr,
+            length: sge.length,
+            lkey: sge.lkey,
+        })
+    }
+
     fn to_bytes(self) -> [u8; size_of::<RecvWr>()] {
         let mut bytes = [0u8; 24];
         bytes[0..8].copy_from_slice(&self.wr_id.to_be_bytes());

@@ -6,6 +6,7 @@ use crate::{
     completion_v3::Completion,
     ctx_ops::RdmaCtxOps,
     net::config::{MacAddress, NetworkConfig},
+    recv::RecvWr,
     send::SendWr,
     timeout_retransmit::AckTimeoutConfig,
     EmulatedDevice,
@@ -333,7 +334,15 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
         wr: *mut ibverbs_sys::ibv_recv_wr,
         bad_wr: *mut *mut ibverbs_sys::ibv_recv_wr,
     ) -> ::std::os::raw::c_int {
-        todo!()
+        let qp = unsafe { *qp };
+        let wr = unsafe { *wr };
+        let context = qp.context;
+        let bluerdma = unsafe { get_device(context) };
+        let qp_num = qp.qp_num;
+        let wr = RecvWr::new(wr).unwrap_or_else(|| todo!("handle invalid input"));
+        bluerdma.post_recv(qp_num, wr);
+
+        0
     }
 
     #[allow(
