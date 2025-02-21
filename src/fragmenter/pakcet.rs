@@ -1,6 +1,6 @@
 use crate::{
     constants::PSN_MASK,
-    device_protocol::{QpParams, WithIbvParams, WrChunk, WrChunkBuilder},
+    device_protocol::{QpParams, WithIbvParams, WorkReqOpCode, WrChunk, WrChunkBuilder},
     qp::convert_ibv_mtu_to_u16,
     send::SendWrRdma,
 };
@@ -9,14 +9,21 @@ use super::Fragmenter;
 
 pub(crate) struct PacketFragmenter {
     wr: SendWrRdma,
+    opcode: WorkReqOpCode,
     qp_param: QpParams,
     base_psn: u32,
 }
 
 impl PacketFragmenter {
-    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: u32) -> Self {
+    pub(crate) fn new(
+        wr: SendWrRdma,
+        opcode: WorkReqOpCode,
+        qp_param: QpParams,
+        base_psn: u32,
+    ) -> Self {
         Self {
             wr,
+            opcode,
             qp_param,
             base_psn,
         }
@@ -32,7 +39,7 @@ impl IntoIterator for PacketFragmenter {
             .unwrap_or_else(|| unreachable!("invalid ibv_mtu"))
             .into();
         let f = Fragmenter::new(pmtu, pmtu, self.wr.raddr(), self.wr.length().into());
-        let builder = WrChunkBuilder::new()
+        let builder = WrChunkBuilder::new_with_opcode(self.opcode)
             .set_qp_params(self.qp_param)
             .set_ibv_params(
                 self.wr.send_flags() as u8,

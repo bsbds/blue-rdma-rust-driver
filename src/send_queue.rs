@@ -2,7 +2,7 @@ use std::{cmp::Ordering, collections::VecDeque, iter};
 
 use crate::{
     constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
-    device_protocol::QpParams,
+    device_protocol::{QpParams, WorkReqOpCode},
     qp::qpn_index,
     send::SendWrRdma,
 };
@@ -35,14 +35,16 @@ impl IbvSendQueue {
 pub(crate) struct SendQueueElem {
     psn: Psn,
     wr: SendWrRdma,
+    opcode: WorkReqOpCode,
     qp_param: QpParams,
 }
 
 impl SendQueueElem {
-    pub(crate) fn new(psn: u32, wr: SendWrRdma, qp_param: QpParams) -> Self {
+    pub(crate) fn new(wr: SendWrRdma, opcode: WorkReqOpCode, psn: u32, qp_param: QpParams) -> Self {
         Self {
-            psn: Psn(psn),
             wr,
+            opcode,
+            psn: Psn(psn),
             qp_param,
         }
     }
@@ -57,6 +59,10 @@ impl SendQueueElem {
 
     pub(crate) fn qp_param(&self) -> QpParams {
         self.qp_param
+    }
+
+    pub(crate) fn opcode(&self) -> WorkReqOpCode {
+        self.opcode
     }
 }
 

@@ -122,7 +122,8 @@ impl RdmaWriteWorker {
             qp.dqp_ip,
             qp.pmtu,
         );
-        let chunk = WrChunkBuilder::new_with_opcode(WorkReqOpCode::RdmaRead)
+        let opcode = WorkReqOpCode::RdmaRead;
+        let chunk = WrChunkBuilder::new_with_opcode(opcode)
             .set_qp_params(qp_params)
             .set_ibv_params(
                 wr.send_flags() as u8,
@@ -159,7 +160,7 @@ impl RdmaWriteWorker {
 
         let _ignore = self.packet_retransmit_tx.send(PacketRetransmitTask::NewWr {
             qpn,
-            wr: SendQueueElem::new(psn, wr, qp_params),
+            wr: SendQueueElem::new(wr, opcode, psn, qp_params),
         });
 
         self.send_scheduler.send(chunk)?;
@@ -214,7 +215,7 @@ impl RdmaWriteWorker {
         );
 
         if ack_req {
-            let fragmenter = PacketFragmenter::new(wr, qp_params, psn);
+            let fragmenter = PacketFragmenter::new(wr, opcode, qp_params, psn);
             let Some(last_packet_chunk) = fragmenter.into_iter().last() else {
                 return Ok(());
             };
@@ -226,7 +227,7 @@ impl RdmaWriteWorker {
 
         let _ignore = self.packet_retransmit_tx.send(PacketRetransmitTask::NewWr {
             qpn,
-            wr: SendQueueElem::new(psn, wr, qp_params),
+            wr: SendQueueElem::new(wr, opcode, psn, qp_params),
         });
 
         let builder = WrChunkBuilder::new_with_opcode(opcode).set_qp_params(qp_params);

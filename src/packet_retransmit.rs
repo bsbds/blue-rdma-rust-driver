@@ -80,7 +80,9 @@ impl PacketRetransmitWorker {
                     let sqes = sq.range(psn_low, psn_high);
                     let packets = sqes
                         .into_iter()
-                        .flat_map(|sqe| PacketFragmenter::new(sqe.wr(), sqe.qp_param(), sqe.psn()))
+                        .flat_map(|sqe| {
+                            PacketFragmenter::new(sqe.wr(), sqe.opcode(), sqe.qp_param(), sqe.psn())
+                        })
                         .skip_while(|x| x.psn < psn_low)
                         .take_while(|x| x.psn < psn_high);
                     for mut packet in packets {
