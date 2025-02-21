@@ -59,6 +59,15 @@ impl<T> MetaWorker<T> {
                         .completion_tx
                         .send(CompletionTask::Register { qpn: dqpn, event });
                 }
+                HeaderType::SendWithImm => {
+                    let event = Event::Recv(RecvEvent::new(
+                        RecvEventOp::RecvWithImm { imm },
+                        MessageMeta::new(msn, end_psn),
+                    ));
+                    let _ignore = self
+                        .completion_tx
+                        .send(CompletionTask::Register { qpn: dqpn, event });
+                }
                 HeaderType::ReadResp => {
                     let event = Event::Recv(RecvEvent::new(
                         RecvEventOp::ReadResp,

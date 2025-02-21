@@ -214,7 +214,21 @@ impl QueuePairMessageTracker {
                         .post_recv_queue
                         .pop_back()
                         .unwrap_or_else(|| unreachable!("no posted recv wr"));
-                    let completion = Completion::Recv { wr_id: x.wr_id };
+                    let completion = Completion::Recv {
+                        wr_id: x.wr_id,
+                        imm: None,
+                    };
+                    recv_cq.push_back(completion);
+                }
+                RecvEventOp::RecvWithImm { imm } => {
+                    let x = self
+                        .post_recv_queue
+                        .pop_back()
+                        .unwrap_or_else(|| unreachable!("no posted recv wr"));
+                    let completion = Completion::Recv {
+                        wr_id: x.wr_id,
+                        imm: Some(imm),
+                    };
                     recv_cq.push_back(completion);
                 }
                 RecvEventOp::ReadResp => {
@@ -349,6 +363,7 @@ pub(crate) enum RecvEventOp {
     WriteWithImm { imm: u32 },
     WriteAckReq,
     Recv,
+    RecvWithImm { imm: u32 },
     ReadResp,
 }
 
@@ -426,7 +441,7 @@ pub(crate) enum Completion {
     Send { wr_id: u64 },
     RdmaWrite { wr_id: u64 },
     RdmaRead { wr_id: u64 },
-    Recv { wr_id: u64 },
+    Recv { wr_id: u64, imm: Option<u32> },
     RecvRdmaWithImm { imm: u32 },
 }
 

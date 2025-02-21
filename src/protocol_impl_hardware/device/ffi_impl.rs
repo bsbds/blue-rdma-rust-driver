@@ -380,9 +380,14 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
                 match c {
                     Completion::Send { wr_id }
                     | Completion::RdmaWrite { wr_id }
-                    | Completion::RdmaRead { wr_id }
-                    | Completion::Recv { wr_id } => {
+                    | Completion::RdmaRead { wr_id } => {
                         wc.wr_id = wr_id;
+                    }
+                    Completion::Recv { wr_id, imm } => {
+                        wc.wr_id = wr_id;
+                        if let Some(imm) = imm {
+                            wc.__bindgen_anon_1.imm_data = imm;
+                        }
                     }
                     Completion::RecvRdmaWithImm { imm } => {
                         wc.__bindgen_anon_1.imm_data = imm;

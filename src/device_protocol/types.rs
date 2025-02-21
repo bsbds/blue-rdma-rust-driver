@@ -429,5 +429,6 @@ pub(crate) enum HeaderType {
     Write,
     WriteWithImm,
     Send,
+    SendWithImm,
     ReadResp,
 }
