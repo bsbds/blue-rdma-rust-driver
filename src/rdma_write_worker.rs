@@ -190,11 +190,16 @@ impl RdmaWriteWorker {
             let send_cq_handle = qp
                 .send_cq
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-            let event = Event::Send(SendEvent::new(
-                SendEventOp::SendSignaled,
-                MessageMeta::new(msn, end_psn),
-                wr_id,
-            ));
+            #[allow(clippy::wildcard_enum_match_arm)]
+            let op = match opcode {
+                WorkReqOpCode::RdmaWrite | WorkReqOpCode::RdmaWriteWithImm => {
+                    SendEventOp::WriteSignaled
+                }
+                WorkReqOpCode::Send | WorkReqOpCode::SendWithImm => SendEventOp::SendSignaled,
+                WorkReqOpCode::RdmaRead => SendEventOp::ReadSignaled,
+                _ => return Err(io::ErrorKind::Unsupported.into()),
+            };
+            let event = Event::Send(SendEvent::new(op, MessageMeta::new(msn, end_psn), wr_id));
             self.completion_tx
                 .send(CompletionTask::Register { qpn, event });
         }
