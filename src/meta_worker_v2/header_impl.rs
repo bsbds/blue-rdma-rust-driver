@@ -97,7 +97,7 @@ impl<T> MetaWorker<T> {
         }
     }
 
-    pub(super) fn handle_header_read(&self, meta: HeaderReadMeta) {
+    pub(super) fn handle_header_read(&mut self, meta: HeaderReadMeta) {
         if meta.ack_req {
             let end_psn = (meta.psn + 1) % PSN_MASK;
             let event = Event::Recv(RecvEvent::new(
@@ -108,6 +108,17 @@ impl<T> MetaWorker<T> {
                 qpn: meta.dqpn,
                 event,
             });
+            let tracker = self
+                .recv_table
+                .get_mut(meta.dqpn)
+                .unwrap_or_else(|| unreachable!());
+            if let Some(base_psn) = tracker.ack_one(meta.psn) {
+                let __ignore = self.completion_tx.send(CompletionTask::Ack {
+                    qpn: meta.dqpn,
+                    base_psn,
+                    is_send: false,
+                });
+            }
         }
 
         let flags = if meta.ack_req {
@@ -115,6 +126,7 @@ impl<T> MetaWorker<T> {
         } else {
             0
         };
+
         let base = SendWrBase::new(0, flags, meta.raddr, meta.total_len, meta.rkey, 0);
         let send_wr = SendWrRdma::new_from_base(base, meta.laddr, meta.lkey);
         let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr, WorkReqOpCode::RdmaReadResp);

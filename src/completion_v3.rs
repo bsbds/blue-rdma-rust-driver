@@ -38,6 +38,7 @@ impl CompletionQueueRegistry {
     }
 }
 
+#[derive(Debug)]
 #[allow(variant_size_differences)]
 pub(crate) enum CompletionTask {
     Register {
@@ -95,8 +96,7 @@ impl CompletionWorker {
             };
             match x {
                 CompletionTask::Register { event, .. } => {
-                    let send_cq = qp_attr.send_cq.and_then(|h| self.cq_table.get_cq(h));
-                    tracker.append(event, send_cq);
+                    tracker.append(event);
                 }
                 CompletionTask::Ack {
                     base_psn,
@@ -112,8 +112,9 @@ impl CompletionWorker {
                     is_send: false,
                     ..
                 } => {
+                    let send_cq = qp_attr.send_cq.and_then(|h| self.cq_table.get_cq(h));
                     if let Some(recv_cq) = qp_attr.recv_cq.and_then(|h| self.cq_table.get_cq(h)) {
-                        tracker.ack_recv(base_psn, recv_cq, qpn, &self.ack_resp_tx);
+                        tracker.ack_recv(base_psn, recv_cq, send_cq, qpn, &self.ack_resp_tx);
                     }
                 }
             }
@@ -155,16 +156,12 @@ impl QueuePairMessageTracker {
         }
     }
 
-    fn append(&mut self, event: Event, send_cq: Option<&CompletionQueue>) {
+    fn append(&mut self, event: Event) {
         match event {
             Event::Send(x) => self.send.append(x),
             Event::Recv(x) => self.recv.append(x),
             Event::PostRecv(x) => {
                 self.post_recv_queue.push_back(x);
-                // check if the read  completion could be updated
-                if let Some(cq) = send_cq {
-                    self.ack_send(None, cq);
-                }
             }
         }
     }
@@ -189,6 +186,8 @@ impl QueuePairMessageTracker {
                         let x = self.send.pop().unwrap_or_else(|| unreachable!());
                         let completion = Completion::RdmaRead { wr_id: x.wr_id };
                         send_cq.push_back(completion);
+                    } else {
+                        break;
                     }
                 }
             }
@@ -199,6 +198,7 @@ impl QueuePairMessageTracker {
         &mut self,
         psn: u32,
         recv_cq: &CompletionQueue,
+        send_cq: Option<&CompletionQueue>,
         qpn: u32,
         ack_resp_tx: &flume::Sender<AckResponse>,
     ) {
@@ -219,6 +219,10 @@ impl QueuePairMessageTracker {
                 }
                 RecvEventOp::ReadResp => {
                     self.read_resp_queue.push_back(event);
+                    // check if the read  completion could be updated
+                    if let Some(cq) = send_cq {
+                        self.ack_send(None, cq);
+                    }
                 }
                 RecvEventOp::WriteAckReq => {
                     let _ignore = ack_resp_tx.send(AckResponse::Ack {
