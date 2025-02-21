@@ -6,9 +6,6 @@ use crate::device_protocol::{
 
 use super::queue::meta_report_queue::{MetaReportQueue, MetaReportQueueDesc};
 
-/// Number of all meta report queues
-const NUM_META_REPORT_QUEUES: usize = 4;
-
 /// Handler for meta report queues
 pub(crate) struct MetaReportQueueHandler {
     /// All four meta report queues
@@ -19,11 +16,6 @@ pub(crate) struct MetaReportQueueHandler {
 
 impl MetaReportQueueHandler {
     pub(crate) fn new(inner: Vec<MetaReportQueue>) -> Self {
-        debug_assert_eq!(
-            inner.len(),
-            NUM_META_REPORT_QUEUES,
-            "invalid numer of queues"
-        );
         Self { inner, pos: 0 }
     }
 }
@@ -31,12 +23,13 @@ impl MetaReportQueueHandler {
 impl MetaReport for MetaReportQueueHandler {
     #[allow(clippy::arithmetic_side_effects, clippy::indexing_slicing)] // should never overflow
     fn try_recv_meta(&mut self) -> io::Result<Option<ReportMeta>> {
-        for i in 0..NUM_META_REPORT_QUEUES {
-            let idx = (self.pos + i) % NUM_META_REPORT_QUEUES;
+        let num_queues = self.inner.len();
+        for i in 0..num_queues {
+            let idx = (self.pos + i) % num_queues;
             let Some(desc) = self.inner[idx].try_pop() else {
                 continue;
             };
-            self.pos = (idx + 1) % NUM_META_REPORT_QUEUES;
+            self.pos = (idx + 1) % num_queues;
             let meta = match desc {
                 MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write(HeaderWriteMeta {
                     pos: d.packet_pos(),
