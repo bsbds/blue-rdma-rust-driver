@@ -35,15 +35,13 @@ impl IbvSendQueue {
 pub(crate) struct SendQueueElem {
     psn: Psn,
     wr: SendWrRdma,
-    opcode: WorkReqOpCode,
     qp_param: QpParams,
 }
 
 impl SendQueueElem {
-    pub(crate) fn new(wr: SendWrRdma, opcode: WorkReqOpCode, psn: u32, qp_param: QpParams) -> Self {
+    pub(crate) fn new(wr: SendWrRdma, psn: u32, qp_param: QpParams) -> Self {
         Self {
             wr,
-            opcode,
             psn: Psn(psn),
             qp_param,
         }
@@ -62,7 +60,7 @@ impl SendQueueElem {
     }
 
     pub(crate) fn opcode(&self) -> WorkReqOpCode {
-        self.opcode
+        self.wr.opcode()
     }
 }
 

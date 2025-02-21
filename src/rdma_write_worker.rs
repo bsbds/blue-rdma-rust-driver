@@ -16,26 +16,13 @@ use crate::{
 pub(crate) struct RdmaWriteTask {
     qpn: u32,
     wr: SendWrRdma,
-    opcode: WorkReqOpCode,
     resp_tx: oneshot::Sender<io::Result<()>>,
 }
 
 impl RdmaWriteTask {
-    pub(crate) fn new(
-        qpn: u32,
-        wr: SendWrRdma,
-        opcode: WorkReqOpCode,
-    ) -> (Self, oneshot::Receiver<io::Result<()>>) {
+    pub(crate) fn new(qpn: u32, wr: SendWrRdma) -> (Self, oneshot::Receiver<io::Result<()>>) {
         let (resp_tx, resp_rx) = oneshot::channel();
-        (
-            Self {
-                qpn,
-                wr,
-                opcode,
-                resp_tx,
-            },
-            resp_rx,
-        )
+        (Self { qpn, wr, resp_tx }, resp_rx)
     }
 }
 
@@ -78,19 +65,14 @@ impl RdmaWriteWorker {
 
     fn run(mut self) {
         while let Ok(task) = self.rdma_write_rx.recv() {
-            let RdmaWriteTask {
-                qpn,
-                wr,
-                opcode,
-                resp_tx,
-            } = task;
+            let RdmaWriteTask { qpn, wr, resp_tx } = task;
             #[allow(clippy::wildcard_enum_match_arm)]
-            let resp = match opcode {
+            let resp = match wr.opcode() {
                 WorkReqOpCode::RdmaWrite
                 | WorkReqOpCode::RdmaWriteWithImm
                 | WorkReqOpCode::Send
                 | WorkReqOpCode::SendWithImm
-                | WorkReqOpCode::RdmaReadResp => self.write(qpn, wr, opcode),
+                | WorkReqOpCode::RdmaReadResp => self.write(qpn, wr),
                 WorkReqOpCode::RdmaRead => self.rdma_read(qpn, wr),
                 _ => unreachable!("opcode unsupported"),
             };
@@ -160,7 +142,7 @@ impl RdmaWriteWorker {
 
         let _ignore = self.packet_retransmit_tx.send(PacketRetransmitTask::NewWr {
             qpn,
-            wr: SendQueueElem::new(wr, opcode, psn, qp_params),
+            wr: SendQueueElem::new(wr, psn, qp_params),
         });
 
         self.send_scheduler.send(chunk)?;
@@ -168,7 +150,7 @@ impl RdmaWriteWorker {
         Ok(())
     }
 
-    fn write(&self, qpn: u32, wr: SendWrRdma, opcode: WorkReqOpCode) -> io::Result<()> {
+    fn write(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
         let qp = self
             .qp_attr_table
             .get(qpn)
@@ -192,7 +174,7 @@ impl RdmaWriteWorker {
                 .send_cq
                 .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
             #[allow(clippy::wildcard_enum_match_arm)]
-            let op = match opcode {
+            let op = match wr.opcode() {
                 WorkReqOpCode::RdmaWrite | WorkReqOpCode::RdmaWriteWithImm => {
                     SendEventOp::WriteSignaled
                 }
@@ -215,7 +197,7 @@ impl RdmaWriteWorker {
         );
 
         if ack_req {
-            let fragmenter = PacketFragmenter::new(wr, opcode, qp_params, psn);
+            let fragmenter = PacketFragmenter::new(wr, wr.opcode(), qp_params, psn);
             let Some(last_packet_chunk) = fragmenter.into_iter().last() else {
                 return Ok(());
             };
@@ -227,10 +209,10 @@ impl RdmaWriteWorker {
 
         let _ignore = self.packet_retransmit_tx.send(PacketRetransmitTask::NewWr {
             qpn,
-            wr: SendQueueElem::new(wr, opcode, psn, qp_params),
+            wr: SendQueueElem::new(wr, psn, qp_params),
         });
 
-        let builder = WrChunkBuilder::new_with_opcode(opcode).set_qp_params(qp_params);
+        let builder = WrChunkBuilder::new_with_opcode(wr.opcode()).set_qp_params(qp_params);
         let fragmenter = WrFragmenter::new(wr, builder, psn);
         for chunk in fragmenter {
             self.send_scheduler.send(chunk)?;

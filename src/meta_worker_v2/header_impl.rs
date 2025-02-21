@@ -126,9 +126,17 @@ impl<T> MetaWorker<T> {
             0
         };
 
-        let base = SendWrBase::new(0, flags, meta.raddr, meta.total_len, meta.rkey, 0);
+        let base = SendWrBase::new(
+            0,
+            flags,
+            meta.raddr,
+            meta.total_len,
+            meta.rkey,
+            0,
+            WorkReqOpCode::RdmaReadResp,
+        );
         let send_wr = SendWrRdma::new_from_base(base, meta.laddr, meta.lkey);
-        let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr, WorkReqOpCode::RdmaReadResp);
+        let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr);
         let _ignore = self.rdma_write_tx.send(task);
     }
 }

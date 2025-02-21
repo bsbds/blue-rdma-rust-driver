@@ -205,22 +205,22 @@ impl<H: HwDevice> HwDeviceCtx<H> {
                     return Err(io::Error::from(io::ErrorKind::InvalidInput));
                 }
                 let wr = SendWrRdma::new_from_base(wr, x.addr, x.lkey);
-                self.rdma_write(qpn, wr, WorkReqOpCode::Send)
+                self.rdma_write(qpn, wr)
             }
             None => todo!("return rnr error"),
         }
     }
 
     fn rdma_read(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
-        let (task, result_rx) = RdmaWriteTask::new(qpn, wr, WorkReqOpCode::RdmaRead);
+        let (task, result_rx) = RdmaWriteTask::new(qpn, wr);
         self.rdma_write_tx.send(task);
         result_rx
             .recv()
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
     }
 
-    fn rdma_write(&self, qpn: u32, wr: SendWrRdma, opcode: WorkReqOpCode) -> io::Result<()> {
-        let (task, result_rx) = RdmaWriteTask::new(qpn, wr, opcode);
+    fn rdma_write(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
+        let (task, result_rx) = RdmaWriteTask::new(qpn, wr);
         self.rdma_write_tx.send(task);
         result_rx
             .recv()
@@ -333,8 +333,7 @@ where
 
     fn post_send(&mut self, qpn: u32, wr: SendWr) -> io::Result<()> {
         match wr {
-            SendWr::RdmaWrite(wr) => self.rdma_write(qpn, wr, WorkReqOpCode::RdmaWrite),
-            SendWr::RdmaRead(wr) => self.rdma_read(qpn, wr),
+            SendWr::Rdma(wr) => self.rdma_write(qpn, wr),
             SendWr::Send(wr) => self.send(qpn, wr),
         }
     }

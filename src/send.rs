@@ -1,6 +1,8 @@
 use crate::{
     constants::PSN_MASK,
-    device_protocol::{ChunkPos, WithIbvParams, WithQpParams, WrChunk, WrChunkBuilder},
+    device_protocol::{
+        ChunkPos, WithIbvParams, WithQpParams, WorkReqOpCode, WrChunk, WrChunkBuilder,
+    },
 };
 
 use ibverbs_sys::{
@@ -253,8 +255,7 @@ impl WrPacketFragmenter {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum SendWr {
-    RdmaWrite(SendWrRdma),
-    RdmaRead(SendWrRdma),
+    Rdma(SendWrRdma),
     Send(SendWrBase),
 }
 
@@ -268,6 +269,14 @@ impl SendWr {
         }
         // SAFETY: sg_list is valid when num_sge > 0, which we've verified above
         let sge = unsafe { *wr.sg_list };
+        let opcode = match wr.opcode {
+            IBV_WR_RDMA_WRITE => WorkReqOpCode::RdmaWrite,
+            IBV_WR_RDMA_WRITE_WITH_IMM => WorkReqOpCode::RdmaWriteWithImm,
+            IBV_WR_RDMA_READ => WorkReqOpCode::RdmaRead,
+            IBV_WR_SEND => WorkReqOpCode::Send,
+            IBV_WR_SEND_WITH_IMM => WorkReqOpCode::SendWithImm,
+            _ => return Err(ValidationError::unimplemented("opcode not supported")),
+        };
 
         let base = SendWrBase {
             wr_id: wr.wr_id,
@@ -277,26 +286,18 @@ impl SendWr {
             lkey: sge.lkey,
             // SAFETY: imm_data is valid for operations with immediate data
             imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
+            opcode,
         };
 
         match wr.opcode {
-            IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM => {
+            IBV_WR_RDMA_WRITE | IBV_WR_RDMA_WRITE_WITH_IMM | IBV_WR_RDMA_READ => {
                 let wr = SendWrRdma {
                     base,
                     // SAFETY: rdma field is valid for RDMA operations
                     raddr: unsafe { wr.wr.rdma.remote_addr },
                     rkey: unsafe { wr.wr.rdma.rkey },
                 };
-                Ok(Self::RdmaWrite(wr))
-            }
-            IBV_WR_RDMA_READ => {
-                let wr = SendWrRdma {
-                    base,
-                    // SAFETY: rdma field is valid for RDMA operations
-                    raddr: unsafe { wr.wr.rdma.remote_addr },
-                    rkey: unsafe { wr.wr.rdma.rkey },
-                };
-                Ok(Self::RdmaRead(wr))
+                Ok(Self::Rdma(wr))
             }
             IBV_WR_SEND | IBV_WR_SEND_WITH_IMM => Ok(Self::Send(base)),
             _ => Err(ValidationError::unimplemented("opcode not supported")),
@@ -305,41 +306,41 @@ impl SendWr {
 
     pub(crate) fn wr_id(&self) -> u64 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.wr_id,
+            SendWr::Rdma(wr) => wr.base.wr_id,
             SendWr::Send(wr) => wr.wr_id,
         }
     }
     pub(crate) fn send_flags(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.send_flags,
+            SendWr::Rdma(wr) => wr.base.send_flags,
             SendWr::Send(wr) => wr.send_flags,
         }
     }
 
     pub(crate) fn laddr(&self) -> u64 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.laddr,
+            SendWr::Rdma(wr) => wr.base.laddr,
             SendWr::Send(wr) => wr.laddr,
         }
     }
 
     pub(crate) fn length(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.length,
+            SendWr::Rdma(wr) => wr.base.length,
             SendWr::Send(wr) => wr.length,
         }
     }
 
     pub(crate) fn lkey(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.lkey,
+            SendWr::Rdma(wr) => wr.base.lkey,
             SendWr::Send(wr) => wr.lkey,
         }
     }
 
     pub(crate) fn imm_data(&self) -> u32 {
         match *self {
-            SendWr::RdmaWrite(wr) | SendWr::RdmaRead(wr) => wr.base.imm_data,
+            SendWr::Rdma(wr) => wr.base.imm_data,
             SendWr::Send(wr) => wr.imm_data,
         }
     }
@@ -372,6 +373,15 @@ impl SendWrRdma {
         // SAFETY: sg_list is valid when num_sge > 0, which we've verified above
         let sge = unsafe { *wr.sg_list };
 
+        let opcode = match wr.opcode {
+            IBV_WR_RDMA_WRITE => WorkReqOpCode::RdmaWrite,
+            IBV_WR_RDMA_WRITE_WITH_IMM => WorkReqOpCode::RdmaWriteWithImm,
+            IBV_WR_RDMA_READ => WorkReqOpCode::RdmaRead,
+            IBV_WR_SEND => WorkReqOpCode::Send,
+            IBV_WR_SEND_WITH_IMM => WorkReqOpCode::SendWithImm,
+            _ => return Err(ValidationError::unimplemented("opcode not supported")),
+        };
+
         Ok(Self {
             base: SendWrBase {
                 wr_id: wr.wr_id,
@@ -381,6 +391,7 @@ impl SendWrRdma {
                 lkey: sge.lkey,
                 // SAFETY: imm_data is valid for operations with immediate data
                 imm_data: unsafe { wr.__bindgen_anon_1.imm_data },
+                opcode,
             },
             // SAFETY: rdma field is valid for RDMA operations
             raddr: unsafe { wr.wr.rdma.remote_addr },
@@ -439,6 +450,10 @@ impl SendWrRdma {
     pub(crate) fn wr_id(&self) -> u64 {
         self.base.wr_id
     }
+
+    pub(crate) fn opcode(&self) -> WorkReqOpCode {
+        self.base.opcode
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -449,6 +464,7 @@ pub(crate) struct SendWrBase {
     pub(crate) length: u32,
     pub(crate) lkey: u32,
     pub(crate) imm_data: u32,
+    pub(crate) opcode: WorkReqOpCode,
 }
 
 impl SendWrBase {
@@ -459,6 +475,7 @@ impl SendWrBase {
         length: u32,
         lkey: u32,
         imm_data: u32,
+        opcode: WorkReqOpCode,
     ) -> Self {
         Self {
             wr_id,
@@ -467,6 +484,7 @@ impl SendWrBase {
             length,
             lkey,
             imm_data,
+            opcode,
         }
     }
 }
