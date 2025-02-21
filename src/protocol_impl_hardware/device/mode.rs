@@ -2,9 +2,9 @@ use super::{constants::CSR_DEVICE_MODE_ADDR, DeviceAdaptor};
 
 #[derive(Default, Clone, Copy)]
 pub(crate) enum Mode {
-    #[default]
     Mode400G,
     Mode200G,
+    #[default]
     Mode100G,
 }
 
