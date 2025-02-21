@@ -98,6 +98,18 @@ impl<T> MetaWorker<T> {
     }
 
     pub(super) fn handle_header_read(&self, meta: HeaderReadMeta) {
+        if meta.ack_req {
+            let end_psn = (meta.psn + 1) % PSN_MASK;
+            let event = Event::Recv(RecvEvent::new(
+                RecvEventOp::WriteAckReq,
+                MessageMeta::new(meta.msn, end_psn),
+            ));
+            let _ignore = self.completion_tx.send(CompletionTask::Register {
+                qpn: meta.dqpn,
+                event,
+            });
+        }
+
         let flags = if meta.ack_req {
             ibverbs_sys::ibv_send_flags::IBV_SEND_SOLICITED.0
         } else {

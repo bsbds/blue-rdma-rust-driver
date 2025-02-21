@@ -53,6 +53,8 @@ impl MetaReport for MetaReportQueueHandler {
                     laddr: n.laddr(),
                     lkey: n.lkey(),
                     ack_req: f.ack_req(),
+                    msn: f.msn(),
+                    psn: f.psn(),
                 }),
                 MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp(CnpMeta { qpn: d.dqpn() }),
                 MetaReportQueueDesc::Ack(d) => ReportMeta::Ack(AckMeta {

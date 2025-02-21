@@ -151,6 +151,8 @@ pub(crate) struct HeaderWriteMeta {
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct HeaderReadMeta {
+    pub(crate) msn: u16,
+    pub(crate) psn: u32,
     pub(crate) dqpn: u32,
     pub(crate) raddr: u64,
     pub(crate) rkey: u32,
