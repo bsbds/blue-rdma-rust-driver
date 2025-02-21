@@ -14,7 +14,8 @@ use qp_attr::{IbvQpAttr, IbvQpInitAttr};
 use crate::{
     ack_responder::AckResponder,
     completion_v3::{
-        Completion, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager,
+        Completion, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager, Event,
+        PostRecvEvent,
     },
     constants::PSN_MASK,
     ctx_ops::RdmaCtxOps,
@@ -92,6 +93,7 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     post_recv_tx_table: PostRecvTxTable,
     recv_wr_queue_table: RecvWrQueueTable,
     rdma_write_tx: flume::Sender<RdmaWriteTask>,
+    completion_tx: flume::Sender<CompletionTask>,
     network_config: NetworkConfig,
 }
 
@@ -174,7 +176,7 @@ where
             send_scheduler,
             retransmit_tx,
             packet_retransmit_tx,
-            completion_tx,
+            completion_tx.clone(),
         )
         .spawn();
 
@@ -189,6 +191,7 @@ where
             post_recv_tx_table: PostRecvTxTable::new(),
             recv_wr_queue_table: RecvWrQueueTable::new(),
             rdma_write_tx,
+            completion_tx,
             network_config,
         })
     }
@@ -352,6 +355,9 @@ where
             .qp_manager
             .get_qp(qpn)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        let event = Event::PostRecv(PostRecvEvent::new(wr.wr_id));
+        self.completion_tx
+            .send(CompletionTask::Register { qpn, event });
         let tx = self
             .post_recv_tx_table
             .get_qp_mut(qpn)
