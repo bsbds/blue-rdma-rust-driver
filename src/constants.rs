@@ -11,8 +11,8 @@ pub(crate) const MAX_MSN_SIZE_BITS: usize = 16;
 pub(crate) const MAX_MSN_WINDOW: usize = 1 << (MAX_MSN_SIZE_BITS - 1);
 
 pub(crate) const MAX_QP_CNT: usize = 1024;
-pub(crate) const QPN_IDX_PART_WIDTH: u32 = 10; // log2(MAX_QP_CNT)
-pub(crate) const QPN_KEY_PART_WIDTH: u32 = 24 - QPN_IDX_PART_WIDTH;
+pub(crate) const QPN_KEY_PART_WIDTH: u32 = 8;
+pub(crate) const QPN_IDX_PART_WIDTH: u32 = 32 - QPN_KEY_PART_WIDTH;
 
 pub(crate) const MAX_CQ_CNT: usize = 1024;
 

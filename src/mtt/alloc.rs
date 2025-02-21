@@ -2,8 +2,8 @@ use bitvec::{array::BitArray, bitarr};
 use rand::Rng;
 
 const MAX_MR_CNT: usize = 8192;
-const LR_KEY_IDX_PART_WIDTH: u32 = 13;
-const LR_KEY_KEY_PART_WIDTH: u32 = 32 - LR_KEY_IDX_PART_WIDTH;
+const LR_KEY_KEY_PART_WIDTH: u32 = 8;
+const LR_KEY_IDX_PART_WIDTH: u32 = 32 - LR_KEY_KEY_PART_WIDTH;
 /// Maximum number of entries in the secodn stage table
 pub(super) const PGT_LEN: usize = 0x20000;
 
