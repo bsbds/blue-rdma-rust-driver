@@ -6,7 +6,8 @@ use crate::{
 use ibverbs_sys::{
     ibv_send_wr,
     ibv_wr_opcode::{
-        IBV_WR_RDMA_WRITE, IBV_WR_RDMA_WRITE_WITH_IMM, IBV_WR_SEND, IBV_WR_SEND_WITH_IMM,
+        IBV_WR_RDMA_READ, IBV_WR_RDMA_WRITE, IBV_WR_RDMA_WRITE_WITH_IMM, IBV_WR_SEND,
+        IBV_WR_SEND_WITH_IMM,
     },
 };
 use thiserror::Error;
@@ -287,6 +288,15 @@ impl SendWr {
                     rkey: unsafe { wr.wr.rdma.rkey },
                 };
                 Ok(Self::RdmaWrite(wr))
+            }
+            IBV_WR_RDMA_READ => {
+                let wr = SendWrRdma {
+                    base,
+                    // SAFETY: rdma field is valid for RDMA operations
+                    raddr: unsafe { wr.wr.rdma.remote_addr },
+                    rkey: unsafe { wr.wr.rdma.rkey },
+                };
+                Ok(Self::RdmaRead(wr))
             }
             IBV_WR_SEND | IBV_WR_SEND_WITH_IMM => Ok(Self::Send(base)),
             _ => Err(ValidationError::unimplemented("opcode not supported")),
