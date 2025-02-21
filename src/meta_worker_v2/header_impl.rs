@@ -40,17 +40,7 @@ impl<T> MetaWorker<T> {
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
             let end_psn = (psn + 1) % PSN_MASK;
             match header_type {
-                HeaderType::Write => {
-                    if ack_req {
-                        let event = Event::Recv(RecvEvent::new(
-                            RecvEventOp::WriteAckReq,
-                            MessageMeta::new(msn, end_psn),
-                        ));
-                        let _ignore = self
-                            .completion_tx
-                            .send(CompletionTask::Register { qpn: dqpn, event });
-                    }
-                }
+                HeaderType::Write => {}
                 HeaderType::WriteWithImm => {
                     let event = Event::Recv(RecvEvent::new(
                         RecvEventOp::WriteWithImm { imm },
@@ -78,6 +68,15 @@ impl<T> MetaWorker<T> {
                         .completion_tx
                         .send(CompletionTask::Register { qpn: dqpn, event });
                 }
+            }
+            if ack_req {
+                let event = Event::Recv(RecvEvent::new(
+                    RecvEventOp::WriteAckReq,
+                    MessageMeta::new(msn, end_psn),
+                ));
+                let _ignore = self
+                    .completion_tx
+                    .send(CompletionTask::Register { qpn: dqpn, event });
             }
         }
         if let Some(base_psn) = tracker.ack_one(psn) {
