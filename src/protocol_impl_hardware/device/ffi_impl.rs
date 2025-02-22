@@ -1,4 +1,4 @@
-use std::{net::Ipv4Addr, ptr};
+use std::{io, net::Ipv4Addr, ptr};
 
 use ipnetwork::{IpNetwork, Ipv4Network};
 
@@ -50,8 +50,8 @@ impl HwDevice for EmulatedHwDevice {
 
     type PhysAddrResolver = PhysAddrResolverEmulated;
 
-    fn new_adaptor(&self) -> Self::Adaptor {
-        EmulatedDevice::new_with_addr(&self.addr)
+    fn new_adaptor(&self) -> io::Result<Self::Adaptor> {
+        Ok(EmulatedDevice::new_with_addr(&self.addr))
     }
 
     fn new_page_allocator(&self) -> Self::PageAllocator {
