@@ -73,6 +73,7 @@ impl RpcClient {
 pub(crate) struct EmulatedDevice(RpcClient);
 
 impl EmulatedDevice {
+    #[allow(clippy::expect_used)]
     pub(crate) fn new_with_addr(addr: &str) -> Self {
         EmulatedDevice(
             RpcClient::new(addr.parse().expect("invalid socket addr"))

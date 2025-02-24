@@ -135,7 +135,7 @@ impl NetworkMode {
     /// For DHCP mode, resolves configuration using the device.
     pub(crate) fn resolve(&self) -> io::Result<NetworkConfig> {
         match *self {
-            NetworkMode::Static(ref config) => Ok(config.clone()),
+            NetworkMode::Static(ref config) => Ok(*config),
             NetworkMode::Dynamic { ref device } => device.resolve_dynamic(),
         }
     }

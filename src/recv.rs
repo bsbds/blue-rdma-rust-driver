@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{qp_table::QpTable, queue_pair::qpn_index};
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
 pub(crate) struct RecvWr {
     pub(crate) wr_id: u64,
     pub(crate) addr: u64,
