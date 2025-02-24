@@ -1,3 +1,5 @@
+use memmap2::{MmapMut, MmapOptions};
+use parking_lot::Mutex;
 use pci_driver::{
     backends::vfio::VfioPciDevice,
     device::PciDevice,
@@ -5,6 +7,7 @@ use pci_driver::{
 };
 use pci_info::PciInfo;
 use std::{
+    fs::{File, OpenOptions},
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -21,11 +24,11 @@ const DEVICE_ID: u16 = 0x903f;
 const PCI_SYSFS_BUS_PATH: &str = "/sys/bus/pci/devices";
 
 #[derive(Clone, Debug)]
-pub(crate) struct PciCsrAdaptor {
+pub(crate) struct VfioPciCsrAdaptor {
     bar: Arc<MappedOwningPciRegion>,
 }
 
-impl PciCsrAdaptor {
+impl VfioPciCsrAdaptor {
     fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
         let path = sysfs_path.as_ref();
         let device = VfioPciDevice::open(path).map_err(|err| {
@@ -42,24 +45,69 @@ impl PciCsrAdaptor {
             bar: Arc::new(mapped_bar),
         })
     }
-
-    fn read_csr(&self, addr: u64) -> io::Result<u32> {
-        self.bar.read_le_u32(addr)
-    }
-
-    fn write_csr(&self, addr: u64, data: u32) -> io::Result<()> {
-        self.bar.write_le_u32(addr, data)
-    }
 }
 
 // TODO: use u64 instead of usize
-impl DeviceAdaptor for PciCsrAdaptor {
+impl DeviceAdaptor for VfioPciCsrAdaptor {
     fn read_csr(&self, addr: usize) -> io::Result<u32> {
-        self.read_csr(addr as u64)
+        self.bar.read_le_u32(addr as u64)
     }
 
     fn write_csr(&self, addr: usize, data: u32) -> io::Result<()> {
-        self.write_csr(addr as u64, data)
+        self.bar.write_le_u32(addr as u64, data)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct SysfsPciCsrAdaptor {
+    bar: Arc<Mutex<MmapMut>>,
+}
+
+#[allow(unsafe_code)]
+impl SysfsPciCsrAdaptor {
+    fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
+        let bar_path = sysfs_path.as_ref().join(format!("resource{BAR_INDEX}"));
+        let file = OpenOptions::new().read(true).write(true).open(&bar_path)?;
+        let mmap = unsafe { MmapOptions::new().map_mut(&file)? };
+
+        Ok(Self {
+            bar: Arc::new(Mutex::new(mmap)),
+        })
+    }
+}
+
+#[allow(unsafe_code, clippy::cast_ptr_alignment)]
+impl DeviceAdaptor for SysfsPciCsrAdaptor {
+    fn read_csr(&self, addr: usize) -> io::Result<u32> {
+        if addr % 4 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unaligned access",
+            ));
+        }
+
+        let bar = self.bar.lock();
+        unsafe {
+            let ptr = bar.as_ptr().add(addr);
+            Ok(ptr.cast::<u32>().read_volatile())
+        }
+    }
+
+    fn write_csr(&self, addr: usize, data: u32) -> io::Result<()> {
+        if addr % 4 != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unaligned access",
+            ));
+        }
+
+        let mut bar = self.bar.lock();
+        unsafe {
+            let ptr = bar.as_mut_ptr().add(addr);
+            ptr.cast::<u32>().write_volatile(data);
+        }
+
+        Ok(())
     }
 }
 
@@ -90,14 +138,14 @@ impl PciHwDevice {
 }
 
 impl HwDevice for PciHwDevice {
-    type Adaptor = PciCsrAdaptor;
+    type Adaptor = SysfsPciCsrAdaptor;
 
     type PageAllocator = HostPageAllocator<1>;
 
     type PhysAddrResolver = PhysAddrResolverLinuxX86;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor> {
-        PciCsrAdaptor::new(&self.sysfs_path)
+        SysfsPciCsrAdaptor::new(&self.sysfs_path)
     }
 
     fn new_page_allocator(&self) -> Self::PageAllocator {
