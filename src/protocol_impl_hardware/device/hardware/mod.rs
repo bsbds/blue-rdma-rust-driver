@@ -27,8 +27,13 @@ pub(crate) struct PciCsrAdaptor {
 
 impl PciCsrAdaptor {
     fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
-        let device =
-            VfioPciDevice::open(sysfs_path).map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        let path = sysfs_path.as_ref();
+        let device = VfioPciDevice::open(path).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!("Failed to open sysfs_path: {path:?}"),
+            )
+        })?;
         let bar = device.bar(BAR_INDEX).ok_or_else(|| {
             io::Error::new(io::ErrorKind::NotFound, "Expected device to have BAR")
         })?;

@@ -218,6 +218,7 @@ pub mod net;
 pub use protocol_impl_hardware::device::emulated::EmulatedDevice;
 pub use protocol_impl_hardware::device::ffi_impl::BlueRdmaCore;
 pub use protocol_impl_hardware::device::BlueRdma;
+pub use protocol_impl_hardware::test_csr_rw::TestDevice;
 pub use protocol_impl_hardware::SimpleNicDeviceConfig;
 
 pub mod bench_wrappers;

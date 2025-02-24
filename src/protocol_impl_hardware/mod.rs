@@ -8,6 +8,7 @@ mod meta_report;
 pub(crate) mod queue;
 mod send;
 mod simple_nic;
+pub(crate) mod test_csr_rw;
 
 pub(crate) use cmd::*;
 pub(crate) use meta_report::*;
