@@ -1,10 +1,8 @@
 use crate::device_protocol::ChunkPos;
 
-// TODO: rewrite `WrFragmenter`
 mod chunk;
-mod pakcet;
 
-pub(crate) use pakcet::PacketFragmenter;
+pub(crate) use chunk::{WrChunkFragmenter, WrPacketFragmenter};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct Fragmenter {

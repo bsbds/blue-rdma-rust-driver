@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::VecDeque, iter, thread};
 use crate::{
     constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
     device_protocol::{QpParams, WorkReqOpCode, WorkReqSend},
-    fragmenter::PacketFragmenter,
+    fragmenter::WrPacketFragmenter,
     protocol_impl::SendQueueScheduler,
     qp_table::QpTable,
     queue_pair::qpn_index,
@@ -83,7 +83,7 @@ impl PacketRetransmitWorker {
                     let packets = sqes
                         .into_iter()
                         .flat_map(|sqe| {
-                            PacketFragmenter::new(sqe.wr(), sqe.opcode(), sqe.qp_param(), sqe.psn())
+                            WrPacketFragmenter::new(sqe.wr(), sqe.qp_param(), sqe.psn())
                         })
                         .skip_while(|x| x.psn < psn_low)
                         .take_while(|x| x.psn < psn_high);

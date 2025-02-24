@@ -4,11 +4,11 @@ use crate::{
     completion::{Completion, CompletionTask, Event, MessageMeta, SendEvent, SendEventOp},
     constants::PSN_MASK,
     device_protocol::{ChunkPos, QpParams, WorkReqOpCode, WorkReqSend, WrChunkBuilder},
-    fragmenter::PacketFragmenter,
+    fragmenter::{WrChunkFragmenter, WrPacketFragmenter},
     packet_retransmit::{PacketRetransmitTask, SendQueueElem},
     protocol_impl::SendQueueScheduler,
     queue_pair::{num_psn, QueuePairAttrTable, SenderTable},
-    send::{SendWrRdma, WrFragmenter},
+    send::SendWrRdma,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -196,7 +196,7 @@ impl RdmaWriteWorker {
         );
 
         if ack_req {
-            let fragmenter = PacketFragmenter::new(wr, wr.opcode(), qp_params, psn);
+            let fragmenter = WrPacketFragmenter::new(wr, qp_params, psn);
             let Some(last_packet_chunk) = fragmenter.into_iter().last() else {
                 return Ok(());
             };
@@ -211,8 +211,7 @@ impl RdmaWriteWorker {
             wr: SendQueueElem::new(wr, psn, qp_params),
         });
 
-        let builder = WrChunkBuilder::new_with_opcode(wr.opcode()).set_qp_params(qp_params);
-        let fragmenter = WrFragmenter::new(wr, builder, psn);
+        let fragmenter = WrChunkFragmenter::new(wr, qp_params, psn);
         for chunk in fragmenter {
             self.send_scheduler.send(chunk)?;
         }

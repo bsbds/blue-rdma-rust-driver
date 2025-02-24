@@ -23,7 +23,6 @@ use crate::{
         ChunkPos, DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta,
         SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
     },
-    fragmenter::PacketFragmenter,
     mem::{
         page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
         virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
@@ -49,7 +48,7 @@ use crate::{
         post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
         TcpChannel,
     },
-    send::{SendWr, SendWrBase, SendWrRdma, WrFragmenter, WrPacketFragmenter},
+    send::{SendWr, SendWrBase, SendWrRdma},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
     tracker::Msn,
 };
