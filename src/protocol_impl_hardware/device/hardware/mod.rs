@@ -28,10 +28,10 @@ pub(crate) struct PciCsrAdaptor {
 impl PciCsrAdaptor {
     fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
         let path = sysfs_path.as_ref();
-        let device = VfioPciDevice::open(path).map_err(|e| {
+        let device = VfioPciDevice::open(path).map_err(|err| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!("Failed to open sysfs_path: {path:?}"),
+                format!("Failed to open sysfs_path: {err}"),
             )
         })?;
         let bar = device.bar(BAR_INDEX).ok_or_else(|| {
@@ -83,9 +83,7 @@ impl PciHwDevice {
             .find(|d| d.vendor_id() == VENDER_ID && d.device_id() == DEVICE_ID)
             .ok_or_else(build_err)?;
         let location = device.location().map_err(|_err| build_err())?;
-        let bus_number = location.bus_number();
-        let bus_id = format!("{:04x}:{:02x}", bus_number.segment(), bus_number.bus());
-        let sysfs_path = PathBuf::from(PCI_SYSFS_BUS_PATH).join(bus_id);
+        let sysfs_path = PathBuf::from(PCI_SYSFS_BUS_PATH).join(location.to_string());
 
         Ok(Self { sysfs_path })
     }
