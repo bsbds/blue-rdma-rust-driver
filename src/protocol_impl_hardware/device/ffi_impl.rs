@@ -5,20 +5,20 @@ use ipnetwork::{IpNetwork, Ipv4Network};
 use crate::{
     completion_v3::Completion,
     ctx_ops::RdmaCtxOps,
+    mem::{page::EmulatedPageAllocator, virt_to_phy::PhysAddrResolverEmulated},
     net::config::{MacAddress, NetworkConfig},
     recv::RecvWr,
     send::SendWr,
     timeout_retransmit::AckTimeoutConfig,
-    EmulatedDevice,
 };
 
 use super::{
     config::DeviceConfig,
+    emulated::EmulatedDevice,
     ops_impl::{
         qp_attr::{IbvQpAttr, IbvQpInitAttr},
         DeviceOps, HwDevice, HwDeviceCtx,
     },
-    EmulatedPageAllocator, PhysAddrResolverEmulated, SendWrRdma, UpdateQp,
 };
 
 const CARD_MAC_ADDRESS: u64 = 0xAABB_CCDD_EE0A;

@@ -7,7 +7,6 @@ use crate::{
     },
     constants::PSN_MASK,
     device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
-    message_worker::Task,
     queue_pair::num_psn,
     send::{SendWrBase, SendWrRdma},
     tracker::Msn,

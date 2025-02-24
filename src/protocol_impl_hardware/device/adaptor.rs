@@ -1,6 +1,6 @@
 use std::io;
 
-use super::DeviceProxy;
+use super::proxy::DeviceProxy;
 
 /// A trait for interacting with device hardware through CSR operations.
 pub(crate) trait DeviceAdaptor: Clone {

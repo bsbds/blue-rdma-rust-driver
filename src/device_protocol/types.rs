@@ -3,7 +3,7 @@
 // TODO: add field validations
 use std::marker::PhantomData;
 
-use crate::{mem::page::ContiguousPages, qp::convert_ibv_mtu_to_u16};
+use crate::{mem::page::ContiguousPages, queue_pair::convert_ibv_mtu_to_u16};
 
 #[allow(clippy::missing_docs_in_private_items)]
 /// Memory Translation Table entry

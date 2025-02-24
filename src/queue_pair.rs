@@ -14,9 +14,6 @@ use rand::Rng;
 use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW, MAX_QP_CNT, MAX_SEND_WR, QPN_KEY_PART_WIDTH},
     device_protocol::{WithQpParams, WrChunkBuilder},
-    retransmission::{
-        ack_msn_tracker::AckMsnTracker, message_tracker::MessageTracker, psn_tracker::PsnTracker,
-    },
     send::SendWrRdma,
     tracker::{AckTracker, Msn, PacketTracker},
 };
@@ -272,4 +269,9 @@ pub(crate) fn convert_ibv_mtu_to_u16(ibv_mtu: u8) -> Option<u16> {
         _ => return None,
     };
     Some(pmtu)
+}
+
+#[allow(clippy::as_conversions)] // u32 to usize
+pub(crate) fn qpn_index(qpn: u32) -> usize {
+    (qpn >> QPN_KEY_PART_WIDTH) as usize
 }

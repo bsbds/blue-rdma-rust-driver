@@ -3,7 +3,6 @@ use tracing::error;
 use crate::{
     constants::PSN_MASK,
     device_protocol::{AckMeta, NakMeta},
-    message_worker::Task,
     packet_retransmit::PacketRetransmitTask,
     queue_pair::Tracker,
     timeout_retransmit::RetransmitTask,

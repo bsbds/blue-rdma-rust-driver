@@ -7,7 +7,6 @@ use crate::{
     ack_responder::AckResponse,
     completion_v3::CompletionTask,
     mem::PageWithPhysAddr,
-    message_worker::Task,
     meta_worker_v2::MetaWorker,
     packet_retransmit::PacketRetransmitTask,
     protocol_impl_hardware::{

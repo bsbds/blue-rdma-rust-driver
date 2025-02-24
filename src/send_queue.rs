@@ -3,7 +3,7 @@ use std::{cmp::Ordering, collections::VecDeque, iter};
 use crate::{
     constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
     device_protocol::{QpParams, WorkReqOpCode},
-    qp::qpn_index,
+    queue_pair::qpn_index,
     send::SendWrRdma,
 };
 

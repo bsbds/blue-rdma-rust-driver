@@ -1,6 +1,6 @@
 use std::{iter, mem};
 
-use crate::{constants::MAX_QP_CNT, qp::qpn_index};
+use crate::{constants::MAX_QP_CNT, queue_pair::qpn_index};
 
 #[derive(Debug)]
 pub(crate) struct QpTable<T> {

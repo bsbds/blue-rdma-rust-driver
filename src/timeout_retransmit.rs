@@ -6,7 +6,7 @@ use crate::{
     constants::MAX_QP_CNT,
     device_protocol::{WorkReqSend, WrChunk},
     protocol_impl_hardware::SendQueueScheduler,
-    qp::qpn_index,
+    queue_pair::qpn_index,
     timer::TransportTimer,
 };
 

@@ -29,8 +29,6 @@ use crate::{
         virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
         PageWithPhysAddr,
     },
-    message_worker::{spawn_message_workers, Task},
-    meta_worker,
     mtt::Mtt,
     net::{
         config::{MacAddress, NetworkConfig},
@@ -44,7 +42,6 @@ use crate::{
         spawn_send_workers, CommandController, SendQueueScheduler, SendWorker, SendWorkerBuilder,
         SimpleNicController,
     },
-    qp::{DeviceQp, QpInitiatorTable, QpTrackerTable},
     qp_table::QpTable,
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
     rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
@@ -55,7 +52,7 @@ use crate::{
     send::{SendWr, SendWrBase, SendWrRdma, WrFragmenter, WrPacketFragmenter},
     send_queue::{IbvSendQueue, SendQueueElem},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
-    tracker::{MessageMeta, Msn},
+    tracker::Msn,
 };
 
 use super::{mode::Mode, DeviceAdaptor, CARD_IP_ADDRESS, CARD_MAC_ADDRESS};

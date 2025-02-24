@@ -171,33 +171,22 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 mod ack_responder;
-/// Completion Queue implementation
-mod completion;
-mod completion_v2;
 mod completion_v3;
-mod completion_worker;
 /// Constants used throughout the driver
 mod constants;
 mod device_protocol;
 mod fragmenter;
 /// Memory operation components
 mod mem;
-mod message_worker;
-/// Worker for handling meta from meta report queues
-mod meta_worker;
 mod meta_worker_v2;
 /// Memory translation table
 mod mtt;
 mod packet_retransmit;
 mod protocol_impl_hardware;
-/// Queue pair state
-mod qp;
 mod qp_table;
 mod queue_pair;
 mod rdma_write_worker;
 mod recv;
-/// Packet retransmission implementations
-mod retransmission;
 /// RDMA ring buffer implementation
 mod ringbuffer;
 /// Send Queue implementations
@@ -215,9 +204,7 @@ pub mod ctx_ops;
 /// Network implementations
 pub mod net;
 
-pub use protocol_impl_hardware::device::emulated::EmulatedDevice;
 pub use protocol_impl_hardware::device::ffi_impl::BlueRdmaCore;
-pub use protocol_impl_hardware::device::BlueRdma;
 pub use protocol_impl_hardware::test_csr_rw::TestDevice;
 pub use protocol_impl_hardware::SimpleNicDeviceConfig;
 
