@@ -4,8 +4,8 @@ use bitvec::vec::BitVec;
 use parking_lot::Mutex;
 
 use crate::{
-    ack_responder::AckResponse, constants::MAX_CQ_CNT, qp_table::QpTable,
-    queue_pair::QueuePairAttrTable, send_queue::Psn, tracker::Msn,
+    ack_responder::AckResponse, constants::MAX_CQ_CNT, packet_retransmit::Psn, qp_table::QpTable,
+    queue_pair::QueuePairAttrTable, tracker::Msn,
 };
 
 struct EventRegister {

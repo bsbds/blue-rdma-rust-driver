@@ -50,7 +50,6 @@ use crate::{
         TcpChannel,
     },
     send::{SendWr, SendWrBase, SendWrRdma, WrFragmenter, WrPacketFragmenter},
-    send_queue::{IbvSendQueue, SendQueueElem},
     timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
     tracker::Msn,
 };

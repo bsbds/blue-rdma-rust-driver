@@ -5,11 +5,10 @@ use crate::{
     constants::PSN_MASK,
     device_protocol::{ChunkPos, QpParams, WorkReqOpCode, WorkReqSend, WrChunkBuilder},
     fragmenter::PacketFragmenter,
-    packet_retransmit::PacketRetransmitTask,
+    packet_retransmit::{PacketRetransmitTask, SendQueueElem},
     protocol_impl_hardware::SendQueueScheduler,
     queue_pair::{num_psn, QueuePairAttrTable, SenderTable},
     send::{SendWrRdma, WrFragmenter},
-    send_queue::SendQueueElem,
     timeout_retransmit::RetransmitTask,
 };
 
