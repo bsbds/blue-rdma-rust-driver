@@ -9,7 +9,7 @@ use crate::{
     mem::PageWithPhysAddr,
     meta_worker::MetaWorker,
     packet_retransmit::PacketRetransmitTask,
-    protocol_impl_hardware::{
+    protocol_impl::{
         desc::{
             MetaReportQueueAckDesc, MetaReportQueueAckExtraDesc, MetaReportQueueDescFirst,
             MetaReportQueueDescNext, MetaReportQueuePacketBasicInfoDesc,

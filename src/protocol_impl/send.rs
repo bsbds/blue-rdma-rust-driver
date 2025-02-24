@@ -5,7 +5,7 @@ use crossbeam_deque::{Injector, Steal, Stealer, Worker};
 use crate::{
     device_protocol::{WorkReqSend, WrChunk},
     mem::PageWithPhysAddr,
-    protocol_impl_hardware::device::CsrWriterAdaptor,
+    protocol_impl::device::CsrWriterAdaptor,
 };
 
 use super::{

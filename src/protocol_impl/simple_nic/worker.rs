@@ -12,7 +12,7 @@ use tracing::error;
 use crate::{
     device_protocol::{FrameRx, FrameTx},
     mem::{page::ContiguousPages, PageWithPhysAddr},
-    protocol_impl_hardware::device::{
+    protocol_impl::device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },

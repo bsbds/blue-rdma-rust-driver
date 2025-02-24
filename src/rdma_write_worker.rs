@@ -6,7 +6,7 @@ use crate::{
     device_protocol::{ChunkPos, QpParams, WorkReqOpCode, WorkReqSend, WrChunkBuilder},
     fragmenter::PacketFragmenter,
     packet_retransmit::{PacketRetransmitTask, SendQueueElem},
-    protocol_impl_hardware::SendQueueScheduler,
+    protocol_impl::SendQueueScheduler,
     queue_pair::{num_psn, QueuePairAttrTable, SenderTable},
     send::{SendWrRdma, WrFragmenter},
     timeout_retransmit::RetransmitTask,

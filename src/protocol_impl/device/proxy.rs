@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::protocol_impl_hardware::device::{
+use crate::protocol_impl::device::{
     constants::{
         CSR_ADDR_CMD_REQ_QUEUE_ADDR_HIGH, CSR_ADDR_CMD_REQ_QUEUE_ADDR_LOW,
         CSR_ADDR_CMD_REQ_QUEUE_HEAD, CSR_ADDR_CMD_REQ_QUEUE_TAIL,

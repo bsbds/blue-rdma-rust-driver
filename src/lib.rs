@@ -182,7 +182,7 @@ mod meta_worker;
 /// Memory translation table
 mod mtt;
 mod packet_retransmit;
-mod protocol_impl_hardware;
+mod protocol_impl;
 mod qp_table;
 mod queue_pair;
 mod rdma_write_worker;
@@ -203,8 +203,8 @@ pub mod ctx_ops;
 /// Network implementations
 pub mod net;
 
-pub use protocol_impl_hardware::device::ffi_impl::BlueRdmaCore;
-pub use protocol_impl_hardware::test_csr_rw::TestDevice;
-pub use protocol_impl_hardware::SimpleNicDeviceConfig;
+pub use protocol_impl::device::ffi_impl::BlueRdmaCore;
+pub use protocol_impl::test_csr_rw::TestDevice;
+pub use protocol_impl::SimpleNicDeviceConfig;
 
 pub mod bench_wrappers;

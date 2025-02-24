@@ -8,7 +8,7 @@ use crate::{
     mem::{page::ContiguousPages, PageWithPhysAddr},
     mtt::Mtt,
     net::config::NetworkConfig,
-    protocol_impl_hardware::device::{
+    protocol_impl::device::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },

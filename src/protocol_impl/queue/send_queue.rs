@@ -1,6 +1,6 @@
 use std::io;
 
-use crate::protocol_impl_hardware::desc::{
+use crate::protocol_impl::desc::{
     RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1,
 };
 

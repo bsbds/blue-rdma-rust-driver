@@ -4,7 +4,7 @@ use crate::{
     constants::{MAX_PSN_WINDOW, MAX_QP_CNT},
     device_protocol::{QpParams, WorkReqOpCode, WorkReqSend},
     fragmenter::PacketFragmenter,
-    protocol_impl_hardware::SendQueueScheduler,
+    protocol_impl::SendQueueScheduler,
     qp_table::QpTable,
     queue_pair::qpn_index,
     send::SendWrRdma,

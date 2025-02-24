@@ -35,7 +35,7 @@ use crate::{
         tap::TapDevice,
     },
     packet_retransmit::{PacketRetransmitTask, PacketRetransmitWorker},
-    protocol_impl_hardware::{
+    protocol_impl::{
         queue::{
             meta_report_queue::init_and_spawn_meta_worker, DescRingBuffer, DescRingBufferAllocator,
         },
