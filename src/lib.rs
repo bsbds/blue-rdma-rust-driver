@@ -171,14 +171,14 @@
 #![allow(clippy::arithmetic_side_effects)]
 
 mod ack_responder;
-mod completion_v3;
+mod completion;
 /// Constants used throughout the driver
 mod constants;
 mod device_protocol;
 mod fragmenter;
 /// Memory operation components
 mod mem;
-mod meta_worker_v2;
+mod meta_worker;
 /// Memory translation table
 mod mtt;
 mod packet_retransmit;

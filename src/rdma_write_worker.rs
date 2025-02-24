@@ -1,7 +1,7 @@
 use std::io;
 
 use crate::{
-    completion_v3::{Completion, CompletionTask, Event, MessageMeta, SendEvent, SendEventOp},
+    completion::{Completion, CompletionTask, Event, MessageMeta, SendEvent, SendEventOp},
     constants::PSN_MASK,
     device_protocol::{ChunkPos, QpParams, WorkReqOpCode, WorkReqSend, WrChunkBuilder},
     fragmenter::PacketFragmenter,

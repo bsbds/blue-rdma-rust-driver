@@ -15,7 +15,7 @@ use tracing::error;
 
 use crate::{
     ack_responder::AckResponse,
-    completion_v3::CompletionTask,
+    completion::CompletionTask,
     device_protocol::{MetaReport, ReportMeta},
     packet_retransmit::PacketRetransmitTask,
     queue_pair::{QueuePairAttrTable, TrackerTable},

@@ -5,9 +5,9 @@ use std::{
 
 use crate::{
     ack_responder::AckResponse,
-    completion_v3::CompletionTask,
+    completion::CompletionTask,
     mem::PageWithPhysAddr,
-    meta_worker_v2::MetaWorker,
+    meta_worker::MetaWorker,
     packet_retransmit::PacketRetransmitTask,
     protocol_impl_hardware::{
         desc::{

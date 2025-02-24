@@ -2,9 +2,7 @@ use tracing::error;
 
 use crate::{
     ack_responder::AckResponse,
-    completion_v3::{
-        Completion, Event, MessageMeta, RecvEvent, RecvEventOp, SendEvent, SendEventOp,
-    },
+    completion::{Completion, Event, MessageMeta, RecvEvent, RecvEventOp, SendEvent, SendEventOp},
     constants::PSN_MASK,
     device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
     queue_pair::num_psn,

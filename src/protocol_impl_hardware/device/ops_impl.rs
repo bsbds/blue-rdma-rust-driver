@@ -13,7 +13,7 @@ use qp_attr::{IbvQpAttr, IbvQpInitAttr};
 
 use crate::{
     ack_responder::AckResponder,
-    completion_v3::{
+    completion::{
         Completion, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager, Event,
         PostRecvEvent,
     },

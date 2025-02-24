@@ -3,7 +3,7 @@ use std::{io, net::Ipv4Addr, ptr};
 use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
-    completion_v3::Completion,
+    completion::Completion,
     ctx_ops::RdmaCtxOps,
     mem::{page::EmulatedPageAllocator, virt_to_phy::PhysAddrResolverEmulated},
     net::config::{MacAddress, NetworkConfig},
