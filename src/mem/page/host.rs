@@ -2,6 +2,8 @@ use std::{ffi::c_void, io, marker::PhantomData, sync::Arc};
 
 use std::ops::{Deref, DerefMut};
 
+use std::arch::x86_64::{_mm_clflush, _mm_mfence};
+
 use crate::mem::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
 
 use super::{ContiguousPages, MmapMut, PageAllocator};
@@ -17,6 +19,7 @@ impl<const N: usize> PageAllocator<N> for HostPageAllocator<N> {
     }
 }
 
+#[allow(unsafe_code)]
 impl<const N: usize> HostPageAllocator<N> {
     /// TODO: implements allocating multiple consecutive pages
     const _OK: () = assert!(
@@ -40,7 +43,6 @@ impl<const N: usize> HostPageAllocator<N> {
     }
 
     /// Reserves memory pages using mmap.
-    #[allow(unsafe_code)]
     fn reserve(num_pages: usize) -> io::Result<MmapMut> {
         /// Number of bits representing a 4K page size
         const PAGE_SIZE_4K_BITS: u8 = 12;

@@ -22,7 +22,7 @@ use crate::{
         slot_alloc::{RcSlot, SlotAlloc, SlotSize},
         virt_to_phy::{virt_to_phy, virt_to_phy_range},
     },
-    ringbuffer::{Descriptor, RingBuffer, RingCtx, RING_BUF_LEN},
+    ringbuffer::{DescBuffer, Descriptor, Flushable, RingBuffer, RingCtx, RING_BUF_LEN},
 };
 
 #[inline]
@@ -64,6 +64,12 @@ impl Descriptor for BenchDesc {
 }
 
 type BenchBuf = RcSlot<ContiguousPages<1>, BenchSlotSize>;
+
+impl Flushable for BenchBuf {
+    fn flush(&self) {}
+}
+
+impl DescBuffer<BenchDesc> for BenchBuf {}
 
 pub struct RingWrapper {
     inner: RingBuffer<BenchBuf, BenchDesc>,

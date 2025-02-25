@@ -86,6 +86,18 @@ pub(crate) trait Descriptor {
     fn take_valid(&mut self) -> bool;
 }
 
+pub(crate) trait Flushable {
+    fn flush(&self);
+}
+
+pub(crate) trait DescBuffer<Desc>: AsMut<[Desc]> + Flushable {}
+
+impl<Desc> Flushable for Vec<Desc> {
+    fn flush(&self) {}
+}
+
+impl<Desc> DescBuffer<Desc> for Vec<Desc> {}
+
 /// A ring buffer for RDMA operations.
 ///
 /// # Type Parameters
@@ -104,7 +116,7 @@ pub(crate) struct RingBuffer<Buf, Desc> {
 
 impl<Buf, Desc> RingBuffer<Buf, Desc>
 where
-    Buf: AsMut<[Desc]>,
+    Buf: DescBuffer<Desc>,
     Desc: Descriptor,
 {
     /// Creates a new `Ring`
@@ -124,6 +136,7 @@ where
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;
         self.ctx.inc_head();
+        self.buf.flush();
 
         Ok(())
     }
@@ -137,6 +150,7 @@ where
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;
         self.ctx.inc_head();
+        self.buf.flush();
     }
 
     /// Tries to poll next valid entry from the queue

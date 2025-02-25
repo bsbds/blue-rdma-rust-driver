@@ -45,6 +45,10 @@ impl<const N: usize> ContiguousPages<N> {
     pub(super) fn new(inner: MmapMut) -> Self {
         Self { inner }
     }
+
+    pub(crate) fn flush(&self) {
+        self.inner.flush();
+    }
 }
 
 impl<const N: usize> Deref for ContiguousPages<N> {
@@ -94,6 +98,7 @@ impl MmapMut {
 /// Implementations of `MmapMut`
 mod mmap_mut_impl {
     use std::{
+        arch::x86_64::{_mm_clflush, _mm_mfence},
         ops::{Deref, DerefMut},
         slice,
     };
@@ -141,6 +146,27 @@ mod mmap_mut_impl {
         #[inline]
         fn as_mut(&mut self) -> &mut [u8] {
             self
+        }
+    }
+
+    #[allow(unsafe_code, clippy::multiple_inherent_impl)]
+    impl MmapMut {
+        pub(crate) fn flush(&self) {
+            const CACHE_LINE_SIZE: usize = 64;
+
+            unsafe {
+                for offset in (0..self.len).step_by(CACHE_LINE_SIZE) {
+                    Self::flush_cache_line(self.ptr.cast::<u8>().add(offset));
+                }
+
+                _mm_mfence();
+            }
+        }
+
+        fn flush_cache_line(addr: *const u8) {
+            unsafe {
+                _mm_clflush(addr);
+            }
         }
     }
 }

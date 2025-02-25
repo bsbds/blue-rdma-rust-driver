@@ -7,7 +7,7 @@ use memmap2::MmapMut;
 
 use crate::{
     mem::page::{ContiguousPages, HostPageAllocator, PageAllocator},
-    ringbuffer::{RingBuffer, RingCtx},
+    ringbuffer::{DescBuffer, Flushable, RingBuffer, RingCtx},
 };
 
 use super::super::desc::RingBufDescUntyped;
@@ -16,6 +16,18 @@ use super::super::desc::RingBufDescUntyped;
 pub(crate) struct PageBuf {
     /// The underlying contiguous physical pages
     inner: ContiguousPages<1>,
+}
+
+impl PageBuf {
+    pub(crate) fn new(inner: ContiguousPages<1>) -> Self {
+        Self { inner }
+    }
+}
+
+impl Flushable for PageBuf {
+    fn flush(&self) {
+        self.inner.flush();
+    }
 }
 
 impl AsMut<[RingBufDescUntyped]> for PageBuf {
@@ -31,6 +43,8 @@ impl AsRef<[RingBufDescUntyped]> for PageBuf {
         unsafe { std::mem::transmute(self.inner.as_ref()) }
     }
 }
+
+impl DescBuffer<RingBufDescUntyped> for PageBuf {}
 
 /// Allocator for descriptor ring buffers
 #[derive(Debug)]
