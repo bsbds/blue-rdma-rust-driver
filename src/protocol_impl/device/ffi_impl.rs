@@ -15,6 +15,7 @@ use crate::{
 use super::{
     config::DeviceConfig,
     emulated::EmulatedDevice,
+    hardware::PciHwDevice,
     ops_impl::{
         qp_attr::{IbvQpAttr, IbvQpInitAttr},
         DeviceOps, HwDevice, HwDeviceCtx,
@@ -31,6 +32,71 @@ static HEAP_ALLOCATOR: bluesimalloc::BlueSimalloc = bluesimalloc::BlueSimalloc::
 #[allow(missing_debug_implementations)]
 pub struct BlueRdmaCore {
     inner: HwDeviceCtx<EmulatedHwDevice>,
+}
+
+impl BlueRdmaCore {
+    #[allow(clippy::unwrap_used, clippy::unwrap_in_result)]
+    fn new_hw(sysfs_name: &str) -> io::Result<HwDeviceCtx<PciHwDevice>> {
+        let (post_recv_ip, post_recv_peer_ip) = match sysfs_name {
+            "uverbs0" => (
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+            ),
+            "uverbs1" => (
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+            ),
+            _ => unreachable!("unexpected sysfs_name"),
+        };
+
+        let network_config = NetworkConfig {
+            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
+            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
+            mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
+            post_recv_ip,
+            post_recv_peer_ip,
+        };
+        let ack_config = AckTimeoutConfig::new(10, 14, 10);
+        let device = PciHwDevice::open_default()?;
+        HwDeviceCtx::initialize(device, network_config, ack_config)
+    }
+
+    #[allow(clippy::unwrap_used, clippy::unwrap_in_result)]
+    fn new_emulated(sysfs_name: &str) -> io::Result<HwDeviceCtx<EmulatedHwDevice>> {
+        let device = match sysfs_name {
+            "uverbs0" => {
+                bluesimalloc::init_global_allocator(0, &HEAP_ALLOCATOR);
+                EmulatedHwDevice::new("127.0.0.1:7701".into())
+            }
+            "uverbs1" => {
+                bluesimalloc::init_global_allocator(1, &HEAP_ALLOCATOR);
+                EmulatedHwDevice::new("127.0.0.1:7702".into())
+            }
+            _ => unreachable!("unexpected sysfs_name"),
+        };
+        let (post_recv_ip, post_recv_peer_ip) = match sysfs_name {
+            "uverbs0" => (
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+            ),
+            "uverbs1" => (
+                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
+                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
+            ),
+            _ => unreachable!("unexpected sysfs_name"),
+        };
+
+        let network_config = NetworkConfig {
+            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
+            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
+            mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
+            post_recv_ip,
+            post_recv_peer_ip,
+        };
+        // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
+        let ack_config = AckTimeoutConfig::new(16, 18, 100);
+        HwDeviceCtx::initialize(device, network_config, ack_config)
+    }
 }
 
 struct EmulatedHwDevice {
@@ -79,40 +145,9 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
                 .to_string_lossy()
                 .into_owned()
         };
-        let device = match name.as_str() {
-            "uverbs0" => {
-                bluesimalloc::init_global_allocator(0, &HEAP_ALLOCATOR);
-                EmulatedHwDevice::new("127.0.0.1:7701".into())
-            }
-            "uverbs1" => {
-                bluesimalloc::init_global_allocator(1, &HEAP_ALLOCATOR);
-                EmulatedHwDevice::new("127.0.0.1:7702".into())
-            }
-            _ => unreachable!("unexpected sysfs_name"),
+        let Ok(ctx) = BlueRdmaCore::new_hw(&name) else {
+            return ptr::null_mut();
         };
-        let (post_recv_ip, post_recv_peer_ip) = match name.as_str() {
-            "uverbs0" => (
-                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
-                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
-            ),
-            "uverbs1" => (
-                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
-                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
-            ),
-            _ => unreachable!("unexpected sysfs_name"),
-        };
-
-        let network_config = NetworkConfig {
-            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
-            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
-            mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
-            post_recv_ip,
-            post_recv_peer_ip,
-        };
-        // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
-        let ack_config = AckTimeoutConfig::new(16, 18, 100);
-        let ctx = HwDeviceCtx::initialize(device, network_config, ack_config);
-
         Box::into_raw(Box::new(ctx)).cast()
     }
 
