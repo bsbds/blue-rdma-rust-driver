@@ -68,6 +68,12 @@ impl<const N: usize> HostPageAllocator<N> {
             return Err(io::Error::last_os_error());
         }
 
+        for i in 0..len {
+            unsafe {
+                *ptr.cast::<u8>().add(i) = 0;
+            }
+        }
+
         unsafe {
             if libc::mlock(ptr, len) != 0 {
                 return Err(io::Error::last_os_error());
