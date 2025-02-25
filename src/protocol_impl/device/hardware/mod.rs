@@ -7,7 +7,7 @@ use pci_driver::{
 };
 use pci_info::PciInfo;
 use std::{
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io,
     path::{Path, PathBuf},
     sync::Arc,
@@ -18,6 +18,7 @@ use crate::mem::{page::HostPageAllocator, virt_to_phy::PhysAddrResolverLinuxX86}
 use super::{ops_impl::HwDevice, DeviceAdaptor};
 
 const BAR_INDEX: usize = 0;
+const BAR_INDEX_DMA_ENGINE: usize = 1;
 const BAR_MAP_RANGE_END: u64 = 4096;
 const VENDER_ID: u16 = 0x10ee;
 const DEVICE_ID: u16 = 0x903f;
@@ -135,6 +136,17 @@ impl PciHwDevice {
 
         Ok(Self { sysfs_path })
     }
+
+    pub(crate) fn reset(&self) -> io::Result<()> {
+        let path = self.sysfs_path.join("reset");
+        fs::write(path, "1")
+    }
+
+    pub(crate) fn init_dma_engine(&self) -> io::Result<()> {
+        DmaEngineConfigurator::new(&self.sysfs_path)?.configure();
+
+        Ok(())
+    }
 }
 
 impl HwDevice for PciHwDevice {
@@ -154,5 +166,39 @@ impl HwDevice for PciHwDevice {
 
     fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver {
         PhysAddrResolverLinuxX86
+    }
+}
+
+pub(crate) struct DmaEngineConfigurator {
+    bar: MmapMut,
+}
+
+#[allow(unsafe_code, clippy::cast_ptr_alignment)]
+impl DmaEngineConfigurator {
+    pub(crate) fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
+        let bar_path = sysfs_path
+            .as_ref()
+            .join(format!("resource{BAR_INDEX_DMA_ENGINE}"));
+        let file = OpenOptions::new().read(true).write(true).open(&bar_path)?;
+        let mmap = unsafe { MmapOptions::new().map_mut(&file)? };
+
+        Ok(Self { bar: mmap })
+    }
+
+    pub(crate) fn configure(&mut self) {
+        const ADDR0: usize = 0x0004;
+        const ADDR1: usize = 0x1004;
+        unsafe {
+            self.bar
+                .as_mut_ptr()
+                .add(ADDR0)
+                .cast::<u32>()
+                .write_volatile(1);
+            self.bar
+                .as_mut_ptr()
+                .add(ADDR1)
+                .cast::<u32>()
+                .write_volatile(1);
+        }
     }
 }

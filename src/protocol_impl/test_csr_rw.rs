@@ -9,7 +9,10 @@ use crate::{
 };
 
 use super::{
-    device::{hardware::PciHwDevice, ops_impl::HwDevice},
+    device::{
+        hardware::{DmaEngineConfigurator, PciHwDevice},
+        ops_impl::HwDevice,
+    },
     CommandController,
 };
 
@@ -29,6 +32,8 @@ impl TestDevice {
     #[inline]
     pub fn init() -> io::Result<Self> {
         let device = PciHwDevice::open_default().unwrap();
+        device.reset().unwrap();
+        device.init_dma_engine().unwrap();
         let adaptor = device.new_adaptor().unwrap();
         let mut allocator = device.new_page_allocator();
         let addr_resolver = device.new_phys_addr_resolver();
