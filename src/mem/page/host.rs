@@ -58,7 +58,7 @@ impl<const N: usize> HostPageAllocator<N> {
                 std::ptr::null_mut(),
                 len,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_PRIVATE | libc::MAP_ANON,
+                libc::MAP_SHARED | libc::MAP_ANON,
                 -1,
                 0,
             )
