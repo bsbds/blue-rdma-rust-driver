@@ -56,9 +56,12 @@ impl BlueRdmaCore {
             post_recv_ip,
             post_recv_peer_ip,
         };
-        let ack_config = AckTimeoutConfig::new(10, 14, 10);
+        let ack_config = AckTimeoutConfig::new(16, 18, 10);
         let device = PciHwDevice::open_default()?;
-        HwDeviceCtx::initialize(device, network_config, ack_config)
+        device.reset()?;
+        device.init_dma_engine()?;
+        let mut ctx = HwDeviceCtx::initialize(device, network_config, ack_config).unwrap();
+        Ok(ctx)
     }
 
     #[allow(clippy::unwrap_used, clippy::unwrap_in_result)]
@@ -447,12 +450,12 @@ struct BlueRdmaDevice {
 #[allow(unsafe_code)]
 unsafe fn get_device(
     context: *mut ibverbs_sys::ibv_context,
-) -> &'static mut HwDeviceCtx<EmulatedHwDevice> {
+) -> &'static mut HwDeviceCtx<PciHwDevice> {
     let dev_ptr = unsafe { *context }.device.cast::<BlueRdmaDevice>();
     unsafe {
         (*dev_ptr)
             .driver
-            .cast::<HwDeviceCtx<EmulatedHwDevice>>()
+            .cast::<HwDeviceCtx<PciHwDevice>>()
             .as_mut()
     }
     .unwrap_or_else(|| unreachable!("null device pointer"))

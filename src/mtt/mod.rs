@@ -7,11 +7,7 @@ use alloc::Alloc;
 
 use crate::{
     device_protocol::MttEntry,
-    mem::{
-        page::ContiguousPages,
-        virt_to_phy::{virt_to_phy_range, AddressResolver},
-        PAGE_SIZE,
-    },
+    mem::{page::ContiguousPages, virt_to_phy::AddressResolver, PAGE_SIZE},
 };
 
 /// Memory Translation Table implementation
@@ -48,6 +44,7 @@ impl Mtt {
         let num_pages = Self::get_num_page(addr, length);
         let virt_addrs = Self::get_page_start_virt_addrs(addr, length)
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+
         let phy_addrs = addr_resolver.virt_to_phys_range(addr, num_pages)?;
         if phy_addrs.iter().any(Option::is_none) {
             return Err(io::Error::new(

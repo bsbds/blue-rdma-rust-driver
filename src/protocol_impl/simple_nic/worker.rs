@@ -1,5 +1,5 @@
 use std::{
-    io,
+    io::{self, Read},
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,

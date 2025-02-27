@@ -1,7 +1,8 @@
 use std::io;
 
-use crate::protocol_impl::desc::{
-    RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1,
+use crate::{
+    mem::virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86},
+    protocol_impl::desc::{RingBufDescUntyped, SendQueueReqDescSeg0, SendQueueReqDescSeg1},
 };
 
 use super::DescRingBuffer;

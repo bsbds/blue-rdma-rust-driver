@@ -14,6 +14,7 @@ use tracing::error;
 
 use crate::{constants::PSN_MASK, device_protocol::FrameTx, queue_pair::QueuePairAttrTable};
 
+#[derive(Debug)]
 pub(crate) enum AckResponse {
     Ack {
         qpn: u32,

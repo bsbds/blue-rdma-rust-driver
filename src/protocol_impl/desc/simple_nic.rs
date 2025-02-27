@@ -29,7 +29,7 @@ struct SimpleNicTxQueueDescChunk3 {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) struct SimpleNicTxQueueDesc {
     c0: SimpleNicTxQueueDescChunk0,
     c1: SimpleNicTxQueueDescChunk1,

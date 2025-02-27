@@ -133,6 +133,7 @@ where
         if self.ctx.len() == RING_BUF_LEN as usize {
             return Err(io::ErrorKind::WouldBlock.into());
         }
+
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;
         self.ctx.inc_head();

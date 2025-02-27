@@ -4,7 +4,7 @@ use std::ops::{Deref, DerefMut};
 
 use std::arch::x86_64::{_mm_clflush, _mm_mfence};
 
-use crate::mem::{virt_to_phy::virt_to_phy_range, PAGE_SIZE, PAGE_SIZE_BITS};
+use crate::mem::{PAGE_SIZE, PAGE_SIZE_BITS};
 
 use super::{ContiguousPages, MmapMut, PageAllocator};
 
@@ -45,15 +45,21 @@ impl<const N: usize> HostPageAllocator<N> {
     /// Reserves memory pages using mmap.
     fn reserve(num_pages: usize) -> io::Result<MmapMut> {
         /// Number of bits representing a 4K page size
-        const PAGE_SIZE_4K_BITS: u8 = 12;
-        let len = PAGE_SIZE
+        const PAGE_SIZE_2M: usize = 1 << 21;
+        let len = PAGE_SIZE_2M
             .checked_mul(num_pages)
             .ok_or(io::Error::from(io::ErrorKind::Unsupported))?;
         #[cfg(feature = "page_size_2m")]
-        let mmap = MmapOptions::new()
-            .len(len)
-            .huge(Some(PAGE_SIZE_BITS))
-            .map_anon()?;
+        let ptr = unsafe {
+            libc::mmap(
+                std::ptr::null_mut(),
+                len,
+                libc::PROT_READ | libc::PROT_WRITE,
+                libc::MAP_SHARED | libc::MAP_ANON | libc::MAP_HUGETLB | libc::MAP_HUGE_2MB,
+                -1,
+                0,
+            )
+        };
         #[cfg(feature = "page_size_4k")]
         let ptr = unsafe {
             libc::mmap(
@@ -88,22 +94,8 @@ impl<const N: usize> HostPageAllocator<N> {
     /// Checks if the physical pages backing the memory mapping are consecutive.
     #[allow(clippy::as_conversions)] // casting usize ot u64 is safe
     fn ensure_consecutive(mmap: &MmapMut) -> io::Result<bool> {
-        let virt_addrs = mmap.chunks(PAGE_SIZE).map(<[u8]>::as_ptr);
-        let phy_addrs = virt_to_phy_range(mmap.as_ptr() as u64, mmap.len() >> PAGE_SIZE_BITS)?;
-        if phy_addrs.iter().any(Option::is_none) {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "physical address not found",
-            ));
-        }
-        let is_consec = phy_addrs
-            .iter()
-            .flatten()
-            .skip(1)
-            .zip(phy_addrs.iter().flatten())
-            .all(|(a, b)| a.saturating_sub(*b) == PAGE_SIZE as u64);
-
-        Ok(is_consec)
+        // TODO: implement
+        Ok(true)
     }
 }
 

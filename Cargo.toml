@@ -10,7 +10,7 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
-default = ["page_size_4k"]
+default = ["page_size_2m"]
 page_size_2m = []
 page_size_4k = []
 

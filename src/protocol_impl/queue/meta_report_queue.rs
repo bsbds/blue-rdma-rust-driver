@@ -6,7 +6,10 @@ use std::{
 use crate::{
     ack_responder::AckResponse,
     completion::CompletionTask,
-    mem::PageWithPhysAddr,
+    mem::{
+        virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86},
+        PageWithPhysAddr,
+    },
     meta_worker::MetaWorker,
     packet_retransmit::PacketRetransmitTask,
     protocol_impl::{
