@@ -117,6 +117,7 @@ impl IntoIterator for ChunkFragmenter {
             wr: self.wr,
             builder,
             laddr: self.wr.laddr(),
+            pmtu,
             is_retry: self.is_retry,
         }
     }
@@ -128,6 +129,7 @@ pub(crate) struct IntoIter {
     wr: SendWrRdma,
     builder: WrChunkBuilder<WithIbvParams>,
     laddr: u64,
+    pmtu: u64,
     is_retry: bool,
 }
 
@@ -144,7 +146,8 @@ impl Iterator for IntoIter {
         } else {
             builder.build()
         };
-        self.psn = (self.psn + 1) % PSN_MASK;
+        let num_packets = f.len.div_ceil(self.pmtu) as u32;
+        self.psn = (self.psn + num_packets) % PSN_MASK;
         self.laddr += f.len;
 
         Some(chunk)
