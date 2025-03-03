@@ -1,6 +1,7 @@
 use std::{io, iter, sync::Arc, time::Duration};
 
 use crossbeam_deque::{Injector, Steal, Stealer, Worker};
+use tracing::error;
 
 use crate::{
     device_protocol::{WorkReqSend, WrChunk},
@@ -169,7 +170,14 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
                 continue;
             }
             if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
-                tracing::error!("failed to flush queue pointer");
+                error!("failed to flush queue pointer");
+            }
+            if self.send_queue.remaining() < 2 {
+                let Ok(tail_ptr) = self.csr_adaptor.read_tail() else {
+                    error!("failed to read tail pointer");
+                    continue;
+                };
+                self.send_queue.set_tail(tail_ptr);
             }
         }
     }

@@ -55,6 +55,10 @@ impl RingCtx {
         (dlt & RING_BUF_LEN_WRAP_MASK) as usize
     }
 
+    fn remaining(&self) -> usize {
+        RING_BUF_LEN as usize - self.len()
+    }
+
     /// Returns true if the ring buffer is empty
     fn is_empty(&self) -> bool {
         self.head == self.tail
@@ -177,6 +181,10 @@ where
 
     pub(crate) fn set_tail(&mut self, tail: u32) {
         self.ctx.tail = tail;
+    }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.ctx.remaining()
     }
 }
 

@@ -55,4 +55,8 @@ impl SendQueue {
     pub(crate) fn set_tail(&mut self, tail: u32) {
         self.inner.set_tail(tail);
     }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.inner.remaining()
+    }
 }

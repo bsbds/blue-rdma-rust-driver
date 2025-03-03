@@ -98,6 +98,10 @@ impl DescRingBuffer {
     pub(crate) fn base_addr(&self) -> u64 {
         self.0.base_addr()
     }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.0.remaining()
+    }
 }
 
 impl Deref for DescRingBuffer {
