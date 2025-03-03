@@ -163,8 +163,8 @@ where
 
         let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
         AckResponder::new(qp_attr_table.clone_arc(), ack_rx, Box::new(simple_nic_tx)).spawn();
-        TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
-        PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
+        //TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
+        //PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
         RdmaWriteWorker::new(
             rdma_write_rx,
             qp_attr_table,
