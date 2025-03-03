@@ -21,7 +21,7 @@ use crate::{
         device::{
             mode::Mode, proxy::build_meta_report_queue_proxies, CsrBaseAddrAdaptor, DeviceAdaptor,
         },
-        MetaReportQueueHandler,
+        MetaReportQueueCtx, MetaReportQueueHandler,
     },
     queue_pair::QueuePairAttrTable,
     rdma_write_worker::RdmaWriteTask,
@@ -102,6 +102,22 @@ impl MetaReportQueue {
             }
         }
     }
+
+    pub(crate) fn tail(&self) -> u32 {
+        self.inner.tail()
+    }
+
+    pub(crate) fn set_head(&mut self, head: u32) {
+        self.inner.set_head(head);
+    }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.inner.remaining()
+    }
+
+    pub(crate) fn capacity(&self) -> usize {
+        self.inner.capacity()
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -123,13 +139,15 @@ where
     for (proxy, page) in mrq_proxies.iter_mut().zip(pages.iter()) {
         proxy.write_base_addr(page.phys_addr)?;
     }
-    let mrqs: Vec<_> = pages
+    let ctxs: Vec<_> = pages
         .into_iter()
         .map(|p| MetaReportQueue::new(DescRingBuffer::new(p.page)))
+        .zip(mrq_proxies)
+        .map(|(q, p)| MetaReportQueueCtx::new(q, p))
         .collect();
 
     MetaWorker::new(
-        MetaReportQueueHandler::new(mrqs),
+        MetaReportQueueHandler::new(ctxs),
         ack_tx,
         retransmit_tx,
         packet_retransmit_tx,

@@ -102,6 +102,10 @@ impl DescRingBuffer {
     pub(crate) fn remaining(&self) -> usize {
         self.0.remaining()
     }
+
+    pub(crate) fn capacity(&self) -> usize {
+        self.0.capacity()
+    }
 }
 
 impl Deref for DescRingBuffer {

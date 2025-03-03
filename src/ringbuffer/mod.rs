@@ -183,8 +183,16 @@ where
         self.ctx.tail = tail;
     }
 
+    pub(crate) fn set_head(&mut self, head: u32) {
+        self.ctx.head = head;
+    }
+
     pub(crate) fn remaining(&self) -> usize {
         self.ctx.remaining()
+    }
+
+    pub(crate) fn capacity(&self) -> usize {
+        RING_BUF_LEN as usize
     }
 }
 
