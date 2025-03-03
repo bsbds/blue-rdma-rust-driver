@@ -162,6 +162,13 @@ impl<Dev: DeviceAdaptor + Send + 'static> FrameTx for FrameTxQueue<Dev> {
             thread::yield_now();
         }
         self.csr_proxy.write_head(self.inner.head());
+        if self.inner.remaining() == 0 {
+            if let Ok(tail_ptr) = self.csr_proxy.read_tail() {
+                self.inner.set_tail(tail_ptr);
+            } else {
+                error!("failed to read tail pointer");
+            };
+        }
 
         Ok(())
     }

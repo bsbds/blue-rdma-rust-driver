@@ -25,6 +25,14 @@ impl SimpleNicTxQueue {
     pub(crate) fn head(&self) -> u32 {
         self.inner.head()
     }
+
+    pub(crate) fn set_tail(&mut self, tail: u32) {
+        self.inner.set_tail(tail);
+    }
+
+    pub(crate) fn remaining(&self) -> usize {
+        self.inner.remaining()
+    }
 }
 
 /// A receive queue for the simple NIC device.
