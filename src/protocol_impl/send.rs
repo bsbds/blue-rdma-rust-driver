@@ -131,7 +131,6 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
     pub(crate) fn run(mut self) {
         loop {
             let Some(wr) = Self::find_task(&self.local, &self.global, &self.remotes) else {
-                std::thread::sleep(Duration::from_millis(10));
                 continue;
             };
             let desc0 = SendQueueReqDescSeg0::new(
