@@ -14,7 +14,7 @@ pub(crate) use test::new_test_ring;
 use thiserror::Error;
 
 /// Number of bits used to represent the length of the ring buffer.
-const RING_BUF_LEN_BITS: u8 = 7;
+const RING_BUF_LEN_BITS: u8 = 12;
 /// Highest bit of the ring buffer
 pub(crate) const RING_BUF_LEN: u32 = 1 << RING_BUF_LEN_BITS;
 /// Mask used to calculate the length of the ring buffer
