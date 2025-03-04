@@ -4,7 +4,7 @@ mod header_impl;
 use std::{
     io,
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{fence, AtomicBool, Ordering},
         Arc,
     },
     thread,
@@ -68,7 +68,8 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
     /// Run the handler loop
     fn run(mut self, is_shutdown: Arc<AtomicBool>) -> io::Result<()> {
         while !is_shutdown.load(Ordering::Relaxed) {
-            thread::sleep(Duration::from_millis(1));
+            std::hint::spin_loop();
+            fence(Ordering::AcqRel);
             if let Some(meta) = self.inner.try_recv_meta()? {
                 self.handle_meta(meta);
             };

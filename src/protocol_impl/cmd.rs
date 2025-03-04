@@ -1,4 +1,9 @@
-use std::{io, net::IpAddr, time::Duration};
+use std::{
+    io,
+    net::IpAddr,
+    sync::atomic::{fence, Ordering},
+    time::Duration,
+};
 
 use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
@@ -239,8 +244,9 @@ impl QpUpdate<'_> {
     /// Waits for responses to all pushed commands.
     fn wait(mut self) {
         while self.num != 0 {
-            std::thread::sleep(Duration::from_millis(1));
             if let Some(resp) = self.resp_queue.try_pop() {
+                std::hint::spin_loop();
+                fence(Ordering::AcqRel);
                 self.num = self.num.wrapping_sub(1);
             }
         }
