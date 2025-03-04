@@ -23,7 +23,8 @@ impl AckTracker {
         }
         let rstart = msn.distance(self.base_msn);
         if rstart >= self.inner.len() {
-            self.inner.resize(rstart + 1, false);
+            // makes sure there's always a trailing 0
+            self.inner.resize(rstart + 2, false);
         }
         self.inner.set(rstart, true);
         self.try_advance()
