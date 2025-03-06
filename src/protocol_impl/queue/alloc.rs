@@ -7,7 +7,7 @@ use memmap2::MmapMut;
 
 use crate::{
     mem::page::{ContiguousPages, HostPageAllocator, PageAllocator},
-    ringbuffer::{DescBuffer, Flushable, RingBuffer, RingCtx},
+    ringbuffer::{DescBuffer, RingBuffer, RingCtx, Syncable},
 };
 
 use super::super::desc::RingBufDescUntyped;
@@ -24,9 +24,9 @@ impl PageBuf {
     }
 }
 
-impl Flushable for PageBuf {
-    fn flush(&self) {
-        self.inner.flush();
+impl Syncable for PageBuf {
+    fn sync(&self) {
+        self.inner.sync();
     }
 }
 

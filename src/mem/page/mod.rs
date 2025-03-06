@@ -14,6 +14,8 @@ use std::{
     slice,
 };
 
+use crate::ringbuffer::Syncable;
+
 /// A trait for allocating contiguous physical memory pages.
 ///
 /// The generic parameter `N` specifies the number of contiguous pages to allocate.
@@ -45,9 +47,11 @@ impl<const N: usize> ContiguousPages<N> {
     pub(super) fn new(inner: MmapMut) -> Self {
         Self { inner }
     }
+}
 
-    pub(crate) fn flush(&self) {
-        self.inner.flush();
+impl<const N: usize> Syncable for ContiguousPages<N> {
+    fn sync(&self) {
+        self.inner.sync();
     }
 }
 
@@ -148,25 +152,13 @@ mod mmap_mut_impl {
             self
         }
     }
+}
 
-    #[allow(unsafe_code, clippy::multiple_inherent_impl)]
-    impl MmapMut {
-        pub(crate) fn flush(&self) {
-            const CACHE_LINE_SIZE: usize = 64;
-
-            unsafe {
-                for offset in (0..self.len).step_by(CACHE_LINE_SIZE) {
-                    Self::flush_cache_line(self.ptr.cast::<u8>().add(offset));
-                }
-
-                _mm_mfence();
-            }
-        }
-
-        fn flush_cache_line(addr: *const u8) {
-            unsafe {
-                _mm_clflush(addr);
-            }
+impl Syncable for MmapMut {
+    fn sync(&self) {
+        #[allow(unsafe_code)]
+        unsafe {
+            let _ignore = libc::msync(self.ptr, self.len, libc::MS_SYNC);
         }
     }
 }

@@ -22,7 +22,7 @@ use crate::{
         slot_alloc::{RcSlot, SlotAlloc, SlotSize},
         virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86},
     },
-    ringbuffer::{DescBuffer, Descriptor, Flushable, RingBuffer, RingCtx, RING_BUF_LEN},
+    ringbuffer::{DescBuffer, Descriptor, RingBuffer, RingCtx, Syncable, RING_BUF_LEN},
 };
 
 #[inline]
@@ -70,8 +70,8 @@ impl Descriptor for BenchDesc {
 
 type BenchBuf = RcSlot<ContiguousPages<1>, BenchSlotSize>;
 
-impl Flushable for BenchBuf {
-    fn flush(&self) {}
+impl Syncable for BenchBuf {
+    fn sync(&self) {}
 }
 
 impl DescBuffer<BenchDesc> for BenchBuf {}

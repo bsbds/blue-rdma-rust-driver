@@ -90,14 +90,14 @@ pub(crate) trait Descriptor {
     fn take_valid(&mut self) -> bool;
 }
 
-pub(crate) trait Flushable {
-    fn flush(&self);
+pub(crate) trait Syncable {
+    fn sync(&self);
 }
 
-pub(crate) trait DescBuffer<Desc>: AsMut<[Desc]> + Flushable {}
+pub(crate) trait DescBuffer<Desc>: AsMut<[Desc]> + Syncable {}
 
-impl<Desc> Flushable for Vec<Desc> {
-    fn flush(&self) {}
+impl<Desc> Syncable for Vec<Desc> {
+    fn sync(&self) {}
 }
 
 impl<Desc> DescBuffer<Desc> for Vec<Desc> {}
@@ -141,7 +141,7 @@ where
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;
         self.ctx.inc_head();
-        self.buf.flush();
+        self.buf.sync();
 
         Ok(())
     }
@@ -155,11 +155,12 @@ where
         let buf = self.buf.as_mut();
         buf[self.ctx.head_idx()] = desc;
         self.ctx.inc_head();
-        self.buf.flush();
+        self.buf.sync();
     }
 
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<&Desc> {
+        self.buf.sync();
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
         let ready = buf[tail].take_valid();
