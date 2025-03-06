@@ -35,8 +35,16 @@ pub struct BlueRdmaCore {
 }
 
 impl BlueRdmaCore {
+    fn init_logger() {
+        let _ignore = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .try_init();
+    }
+
     #[allow(clippy::unwrap_used, clippy::unwrap_in_result)]
     fn new_hw(sysfs_name: &str) -> io::Result<HwDeviceCtx<PciHwDevice>> {
+        Self::init_logger();
+
         let (post_recv_ip, post_recv_peer_ip) = match sysfs_name {
             "uverbs0" => (
                 POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
