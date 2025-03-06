@@ -8,7 +8,7 @@ use crate::{
 use super::Fragmenter;
 
 /// (Max) size of a single WR chunk
-const WR_CHUNK_SIZE: u32 = 0x1000;
+const WR_CHUNK_SIZE: u32 = 0x10000;
 
 pub(crate) struct WrChunkFragmenter {
     inner: ChunkFragmenter,
