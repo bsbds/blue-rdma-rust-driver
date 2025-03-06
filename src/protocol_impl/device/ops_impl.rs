@@ -38,8 +38,7 @@ use crate::{
         queue::{
             meta_report_queue::init_and_spawn_meta_worker, DescRingBuffer, DescRingBufferAllocator,
         },
-        spawn_send_workers, CommandController, SendQueueScheduler, SendWorker, SendWorkerBuilder,
-        SimpleNicController,
+        spawn_send_workers, CommandController, SendQueueScheduler, SendWorker, SimpleNicController,
     },
     qp_table::QpTable,
     queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},

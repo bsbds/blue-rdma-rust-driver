@@ -68,41 +68,6 @@ impl WorkReqSend for SendQueueScheduler {
     }
 }
 
-pub(crate) struct SendWorkerBuilder {
-    global: Arc<WrInjector>,
-}
-
-impl SendWorkerBuilder {
-    pub(crate) fn new_with_global_injector(global: Arc<WrInjector>) -> Self {
-        Self { global }
-    }
-
-    pub(crate) fn build_workers<Dev>(
-        self,
-        send_queues: Vec<SendQueue>,
-        adaptors: Vec<SendQueueProxy<Dev>>,
-    ) -> Vec<SendWorker<Dev>> {
-        let workers: Vec<_> = iter::repeat_with(WrWorker::new_fifo)
-            .take(send_queues.len())
-            .collect();
-        let stealers: Vec<_> = workers.iter().map(WrWorker::stealer).collect();
-        workers
-            .into_iter()
-            .zip(send_queues)
-            .zip(adaptors)
-            .enumerate()
-            .map(|(id, ((local, send_queue), csr_adaptor))| SendWorker {
-                id,
-                local,
-                global: Arc::clone(&self.global),
-                remotes: stealers.clone().into_boxed_slice(),
-                send_queue,
-                csr_adaptor,
-            })
-            .collect()
-    }
-}
-
 /// Worker thread for processing send work requests
 pub(crate) struct SendWorker<Dev> {
     /// id of the worker
@@ -231,7 +196,12 @@ where
             id,
             local,
             global: Arc::clone(global_injector),
-            remotes: stealers.clone().into_boxed_slice(),
+            remotes: stealers
+                .clone()
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, x)| (i != id).then_some(x))
+                .collect(),
             send_queue,
             csr_adaptor,
         })
