@@ -100,6 +100,7 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                     now_bitmap: f.now_bitmap(),
                     psn_before_slide: f.psn_before_slide(),
                     pre_bitmap: n.pre_bitmap(),
+                    is_window_slided: f.is_window_slided(),
                     is_send_by_local_hw: f.is_send_by_local_hw(),
                     is_send_by_driver: f.is_send_by_driver(),
                 }),

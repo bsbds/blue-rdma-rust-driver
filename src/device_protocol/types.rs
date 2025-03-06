@@ -187,6 +187,7 @@ pub(crate) struct NakMeta {
     pub(crate) now_bitmap: u128,
     pub(crate) pre_bitmap: u128,
     pub(crate) psn_before_slide: u32,
+    pub(crate) is_window_slided: bool,
     pub(crate) is_send_by_local_hw: bool,
     pub(crate) is_send_by_driver: bool,
 }
