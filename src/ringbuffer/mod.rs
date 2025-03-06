@@ -81,7 +81,7 @@ impl RingCtx {
 }
 
 /// A trait for descriptors in the ring buffer
-pub(crate) trait Descriptor {
+pub(crate) trait Descriptor: Clone + Copy {
     /// Size in bytes of the descriptor
     const SIZE: usize;
 
@@ -159,14 +159,16 @@ where
     }
 
     /// Tries to poll next valid entry from the queue
-    pub(crate) fn try_pop(&mut self) -> Option<&Desc> {
+    pub(crate) fn try_pop(&mut self) -> Option<Desc> {
         self.buf.sync();
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
         let ready = buf[tail].take_valid();
+        let tail = buf[tail];
+        self.buf.sync();
         ready.then(|| {
             self.ctx.inc_tail();
-            &buf[tail]
+            tail
         })
     }
 

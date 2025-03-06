@@ -67,11 +67,7 @@ impl MetaReportQueue {
 
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<MetaReportQueueDesc> {
-        let first = self
-            .inner
-            .try_pop()
-            .copied()
-            .map(MetaReportQueueDescFirst::from)?;
+        let first = self.inner.try_pop().map(MetaReportQueueDescFirst::from)?;
 
         if !first.has_next() {
             return match first {
@@ -85,7 +81,7 @@ impl MetaReportQueue {
             };
         }
 
-        let next = self.inner.try_pop().copied().map_or_else(
+        let next = self.inner.try_pop().map_or_else(
             || unreachable!("failed to read next descriptor"),
             MetaReportQueueDescNext::from,
         );

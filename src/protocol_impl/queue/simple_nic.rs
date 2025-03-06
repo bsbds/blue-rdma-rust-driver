@@ -47,6 +47,6 @@ impl SimpleNicRxQueue {
     }
 
     pub(crate) fn pop(&mut self) -> Option<SimpleNicRxQueueDesc> {
-        self.inner.try_pop().copied().map(Into::into)
+        self.inner.try_pop().map(Into::into)
     }
 }

@@ -97,11 +97,7 @@ impl CmdRespQueue {
 
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<CmdRespQueueDesc> {
-        self.inner
-            .try_pop()
-            .copied()
-            .map(Into::into)
-            .map(CmdRespQueueDesc)
+        self.inner.try_pop().map(Into::into).map(CmdRespQueueDesc)
     }
 
     /// Return tail pointer

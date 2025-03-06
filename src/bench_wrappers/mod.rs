@@ -89,7 +89,7 @@ impl RingWrapper {
         self.inner.push(desc).unwrap();
     }
 
-    pub fn consume(&mut self) -> Option<&BenchDesc> {
+    pub fn consume(&mut self) -> Option<BenchDesc> {
         self.inner.try_pop()
     }
 }
