@@ -136,11 +136,7 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
             if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
                 error!("failed to flush queue pointer");
             }
-            if self.send_queue.remaining() < 2 {
-                let Ok(tail_ptr) = self.csr_adaptor.read_tail() else {
-                    error!("failed to read tail pointer");
-                    continue;
-                };
+            if let Ok(tail_ptr) = self.csr_adaptor.read_tail() {
                 self.send_queue.set_tail(tail_ptr);
             }
         }

@@ -64,6 +64,10 @@ impl CmdQueue {
     pub(crate) fn head(&self) -> u32 {
         self.inner.head()
     }
+
+    pub(crate) fn set_tail(&mut self, tail: u32) {
+        self.inner.set_tail(tail);
+    }
 }
 
 /// Command queue response descriptor type
@@ -103,6 +107,10 @@ impl CmdRespQueue {
     /// Return tail pointer
     pub(crate) fn tail(&self) -> u32 {
         self.inner.tail()
+    }
+
+    pub(crate) fn set_head(&mut self, head: u32) {
+        self.inner.set_head(head);
     }
 }
 

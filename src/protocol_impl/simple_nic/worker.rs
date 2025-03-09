@@ -157,17 +157,12 @@ impl<Dev: DeviceAdaptor + Send + 'static> FrameTx for FrameTxQueue<Dev> {
         let mut desc = self
             .build_desc(buf)
             .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
-        // retry until success
         while self.inner.push(desc).is_err() {
-            thread::yield_now();
+            std::hint::spin_loop();
         }
         self.csr_proxy.write_head(self.inner.head());
-        if self.inner.remaining() == 0 {
-            if let Ok(tail_ptr) = self.csr_proxy.read_tail() {
-                self.inner.set_tail(tail_ptr);
-            } else {
-                error!("failed to read tail pointer");
-            };
+        if let Ok(tail_ptr) = self.csr_proxy.read_tail() {
+            self.inner.set_tail(tail_ptr);
         }
 
         Ok(())

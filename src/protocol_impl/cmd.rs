@@ -130,7 +130,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         update.push(CmdQueueDesc::UpdateMrTable(update_mr_table));
         update.push(CmdQueueDesc::UpdatePGT(update_pgt));
         update.flush(&self.req_csr_proxy);
-        update.wait();
+        update.wait(&self.resp_csr_proxy);
 
         Ok(())
     }
@@ -154,7 +154,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         let mut update = qp.update();
         update.push(CmdQueueDesc::ManageQP(desc));
         update.flush(&self.req_csr_proxy);
-        update.wait();
+        update.wait(&self.resp_csr_proxy);
 
         Ok(())
     }
@@ -175,7 +175,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         let mut update = qp.update();
         update.push(CmdQueueDesc::SetNetworkParam(desc));
         update.flush(&self.req_csr_proxy);
-        update.wait();
+        update.wait(&self.resp_csr_proxy);
 
         Ok(())
     }
@@ -186,7 +186,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         let mut update = qp.update();
         update.push(CmdQueueDesc::SetRawPacketReceiveMeta(desc));
         update.flush(&self.req_csr_proxy);
-        update.wait();
+        update.wait(&self.resp_csr_proxy);
 
         Ok(())
     }
@@ -237,17 +237,22 @@ impl QpUpdate<'_> {
     }
 
     /// Flushes the command queue by writing the head pointer to the CSR proxy.
-    fn flush<Dev: DeviceAdaptor>(&self, req_csr_proxy: &CmdQueueCsrProxy<Dev>) {
+    fn flush<Dev: DeviceAdaptor>(&mut self, req_csr_proxy: &CmdQueueCsrProxy<Dev>) {
         req_csr_proxy.write_head(self.req_queue.head());
+        if let Ok(tail_ptr) = req_csr_proxy.read_tail() {
+            self.req_queue.set_tail(tail_ptr);
+        }
     }
 
     /// Waits for responses to all pushed commands.
-    fn wait(mut self) {
+    fn wait<Dev: DeviceAdaptor>(mut self, resp_csr_proxy: &CmdRespQueueCsrProxy<Dev>) {
         while self.num != 0 {
             if let Some(resp) = self.resp_queue.try_pop() {
-                std::hint::spin_loop();
-                fence(Ordering::AcqRel);
                 self.num = self.num.wrapping_sub(1);
+                resp_csr_proxy.write_tail(self.resp_queue.tail());
+                if let Ok(head_ptr) = resp_csr_proxy.read_head() {
+                    self.resp_queue.set_head(head_ptr);
+                }
             }
         }
     }

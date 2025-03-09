@@ -46,16 +46,11 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
             let Some(desc) = ctx.queue.try_pop() else {
                 continue;
             };
-            if ctx.queue.remaining() * 2 > ctx.queue.capacity() {
-                if let Err(err) = ctx.proxy.write_tail(ctx.queue.tail()) {
-                    error!("failed to update tail pointer: {err}");
-                }
-                if let Ok(head_ptr) = ctx.proxy.read_head() {
-                    ctx.queue.set_head(head_ptr);
-                } else {
-                    error!("failed to read head pointer");
-                }
+            let _ignore = ctx.proxy.write_tail(ctx.queue.tail());
+            if let Ok(head_ptr) = ctx.proxy.read_head() {
+                ctx.queue.set_head(head_ptr);
             }
+
             self.pos = (idx + 1) % num_queues;
             let meta = match desc {
                 MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write(HeaderWriteMeta {
