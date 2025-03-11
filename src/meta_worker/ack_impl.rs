@@ -53,7 +53,12 @@ impl<T> MetaWorker<T> {
             error!("qp number: {qpn} does not exist");
             return;
         };
-        if let Some(psn) = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn) {
+        if let Some(psn) = Self::update_packet_tracker(
+            tracker,
+            psn_now,
+            now_bitmap,
+            (!is_send_by_local_hw).then_some(ack_msn),
+        ) {
             self.send_update(!is_send_by_local_hw, qpn, psn);
         }
     }
@@ -89,6 +94,7 @@ impl<T> MetaWorker<T> {
             error!("qp number: {qpn} does not exist");
             return;
         };
+        let ack_msn = (!is_send_by_local_hw).then_some(ack_msn);
         let x = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn);
         let y = Self::update_packet_tracker(tracker, psn_pre, pre_bitmap, ack_msn);
         for psn in x.into_iter().chain(y) {
@@ -131,10 +137,14 @@ impl<T> MetaWorker<T> {
         tracker: &mut Tracker,
         psn: u32,
         bitmap: u128,
-        ack_msn: u16,
+        ack_msn: Option<u16>, // local acks dose not contains msn
     ) -> Option<u32> {
         let base_psn = psn.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
-        tracker.ack_range(base_psn, bitmap, ack_msn)
+        if let Some(ack_msn) = ack_msn {
+            tracker.ack_range(base_psn, bitmap, ack_msn)
+        } else {
+            tracker.ack_range_local(base_psn, bitmap)
+        }
     }
 
     fn send_update(&self, is_send: bool, qpn: u32, base_psn: u32) {

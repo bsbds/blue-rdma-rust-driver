@@ -2,8 +2,11 @@ use std::io;
 
 use tracing::error;
 
-use crate::device_protocol::{
-    AckMeta, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport, NakMeta, ReportMeta,
+use crate::{
+    constants::PSN_MASK,
+    device_protocol::{
+        AckMeta, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport, NakMeta, ReportMeta,
+    },
 };
 
 use super::{
@@ -33,6 +36,16 @@ pub(crate) struct MetaReportQueueHandler<Dev> {
 impl<Dev> MetaReportQueueHandler<Dev> {
     pub(crate) fn new(inner: Vec<MetaReportQueueCtx<Dev>>) -> Self {
         Self { inner, pos: 0 }
+    }
+
+    fn remap_psn(psn: u32, is_send_by_driver: bool) -> u32 {
+        if is_send_by_driver {
+            psn
+        } else {
+            // 128 (window size) - 16 (first stride)
+            const OFFSET: u32 = 112;
+            psn.wrapping_sub(OFFSET) & PSN_MASK
+        }
     }
 }
 
@@ -82,7 +95,7 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                 MetaReportQueueDesc::Ack(d) => ReportMeta::Ack(AckMeta {
                     qpn: d.qpn(),
                     msn: d.msn(),
-                    psn_now: d.psn_now(),
+                    psn_now: Self::remap_psn(d.psn_now(), d.is_send_by_driver()),
                     now_bitmap: d.now_bitmap(),
                     is_window_slided: d.is_window_slided(),
                     is_send_by_local_hw: d.is_send_by_local_hw(),
@@ -91,9 +104,9 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                 MetaReportQueueDesc::Nak((f, n)) => ReportMeta::Nak(NakMeta {
                     qpn: f.qpn(),
                     msn: f.msn(),
-                    psn_now: f.psn_now(),
+                    psn_now: Self::remap_psn(f.psn_now(), f.is_send_by_driver()),
                     now_bitmap: f.now_bitmap(),
-                    psn_before_slide: f.psn_before_slide(),
+                    psn_before_slide: Self::remap_psn(f.psn_before_slide(), f.is_send_by_driver()),
                     pre_bitmap: n.pre_bitmap(),
                     is_window_slided: f.is_window_slided(),
                     is_send_by_local_hw: f.is_send_by_local_hw(),

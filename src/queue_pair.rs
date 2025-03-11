@@ -208,12 +208,26 @@ impl TrackerTable {
 pub(crate) struct Tracker {
     psn: PacketTracker,
     ack: AckTracker,
+    prev_psn: u32,
 }
 
 impl Tracker {
     /// Acknowledges a single PSN.
     pub(crate) fn ack_one(&mut self, psn: u32) -> Option<u32> {
         self.psn.ack_one(psn)
+    }
+
+    /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
+    pub(crate) fn ack_range_local(&mut self, base_psn: u32, bitmap: u128) -> Option<u32> {
+        let mut acked_psn = None;
+        if let Some(psn) = self.psn.ack_range1(self.prev_psn, base_psn) {
+            acked_psn = Some(psn);
+        }
+        if let Some(psn) = self.psn.ack_range(base_psn, bitmap) {
+            acked_psn = Some(psn);
+        }
+        self.prev_psn = base_psn;
+        acked_psn
     }
 
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.

@@ -40,6 +40,22 @@ impl PacketTracker {
         self.try_advance()
     }
 
+    // exclude `now_psn`
+    pub(crate) fn ack_range1(&mut self, prev_psn: u32, now_psn: u32) -> Option<u32> {
+        if prev_psn <= self.base_psn {
+            return self.ack_before(now_psn);
+        }
+        let rstart: usize = usize::try_from(self.rstart(prev_psn)).ok()?;
+        let rend: usize = usize::try_from(self.rstart(now_psn)).ok()?;
+        if rend >= self.inner.len() {
+            self.inner.resize(rend + 1, false);
+        }
+        for i in rstart..rend {
+            self.inner.set(i, true);
+        }
+        None
+    }
+
     #[allow(clippy::as_conversions)] // u32 to usize
     /// Acknowledges a single PSN.
     ///
