@@ -77,6 +77,7 @@ impl<T: MetaReport + Send + 'static> MetaWorker<T> {
     }
 
     fn handle_meta(&mut self, meta: ReportMeta) {
+        println!("recv meta: {meta:?}");
         match meta {
             ReportMeta::Write(x) => self.handle_header_write(x),
             ReportMeta::Ack(x) => self.handle_ack(x),

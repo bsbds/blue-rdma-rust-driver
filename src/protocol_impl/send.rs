@@ -94,10 +94,13 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
 
     /// Run the worker
     pub(crate) fn run(mut self) {
+        let mut cnt = 0;
         loop {
             let Some(wr) = Self::find_task(&self.local, &self.global, &self.remotes) else {
                 continue;
             };
+            //std::thread::sleep(Duration::from_millis(500));
+            println!("send wr: {wr:?}");
             let desc0 = SendQueueReqDescSeg0::new(
                 wr.opcode,
                 wr.msn,
@@ -133,11 +136,14 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
                 self.local.push(wr);
                 continue;
             }
-            if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
-                error!("failed to flush queue pointer");
-            }
-            if let Ok(tail_ptr) = self.csr_adaptor.read_tail() {
-                self.send_queue.set_tail(tail_ptr);
+            cnt += 1;
+            if cnt == 4 {
+                if self.csr_adaptor.write_head(self.send_queue.head()).is_err() {
+                    error!("failed to flush queue pointer");
+                }
+                if let Ok(tail_ptr) = self.csr_adaptor.read_tail() {
+                    self.send_queue.set_tail(tail_ptr);
+                }
             }
         }
     }

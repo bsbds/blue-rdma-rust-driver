@@ -5,7 +5,7 @@
 #[cfg(test)]
 mod test;
 
-use std::{io, marker::PhantomData, ops::Deref};
+use std::{io, marker::PhantomData, ops::Deref, time::Duration};
 
 use crate::mem::slot_alloc::RcSlot;
 
@@ -164,6 +164,7 @@ where
         let buf = self.buf.as_mut();
         let tail = self.ctx.tail_idx();
         let ready = buf[tail].take_valid();
+        std::thread::sleep(Duration::from_millis(1));
         let tail = buf[tail];
         self.buf.sync();
         ready.then(|| {
