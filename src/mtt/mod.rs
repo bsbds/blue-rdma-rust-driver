@@ -8,6 +8,7 @@ use alloc::Alloc;
 use crate::{
     device_protocol::MttEntry,
     mem::{page::ContiguousPages, virt_to_phy::AddressResolver, PAGE_SIZE},
+    ringbuffer::Syncable,
 };
 
 /// Memory Translation Table implementation
@@ -162,6 +163,8 @@ impl Mtt {
         page.get_mut(..bytes.len())
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
             .copy_from_slice(&bytes);
+
+        page.sync();
 
         Ok(())
     }
