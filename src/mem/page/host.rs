@@ -92,7 +92,7 @@ impl<const N: usize> HostPageAllocator<N> {
     }
 
     /// Checks if the physical pages backing the memory mapping are consecutive.
-    #[allow(clippy::as_conversions)] // casting usize ot u64 is safe
+    #[allow(clippy::unnecessary_wraps)] // casting usize ot u64 is safe
     fn ensure_consecutive(mmap: &MmapMut) -> io::Result<bool> {
         // TODO: implement
         Ok(true)

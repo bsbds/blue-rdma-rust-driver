@@ -96,7 +96,7 @@ impl QpManager {
         let index = self.bitmap.first_zero()? as u32;
         let key = rand::thread_rng().gen_range(0..1 << QPN_KEY_PART_WIDTH);
         self.bitmap.set(index as usize, true);
-        let qpn = index << QPN_KEY_PART_WIDTH | key;
+        let qpn = (index << QPN_KEY_PART_WIDTH) | key;
         Some(qpn)
     }
 

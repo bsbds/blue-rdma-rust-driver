@@ -33,7 +33,7 @@ impl Alloc {
     pub(super) fn alloc(&mut self, num_pages: usize) -> Option<(u32, usize)> {
         let mr_key_idx = self.mr.alloc_mr_key_idx()?;
         let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
-        let mr_key = mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH | key;
+        let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
         let index = self.pgt.alloc(num_pages)?;
         Some((mr_key, index))
     }

@@ -111,8 +111,8 @@ impl MetaReportQueue {
         self.inner.remaining()
     }
 
-    pub(crate) fn capacity(&self) -> usize {
-        self.inner.capacity()
+    pub(crate) fn capacity() -> usize {
+        DescRingBuffer::capacity()
     }
 }
 

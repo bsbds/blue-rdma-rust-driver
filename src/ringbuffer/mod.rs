@@ -194,7 +194,7 @@ where
         self.ctx.remaining()
     }
 
-    pub(crate) fn capacity(&self) -> usize {
+    pub(crate) fn capacity() -> usize {
         RING_BUF_LEN as usize
     }
 }

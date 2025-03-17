@@ -103,8 +103,8 @@ impl DescRingBuffer {
         self.0.remaining()
     }
 
-    pub(crate) fn capacity(&self) -> usize {
-        self.0.capacity()
+    pub(crate) fn capacity() -> usize {
+        RingBuffer::<PageBuf, RingBufDescUntyped>::capacity()
     }
 }
 
