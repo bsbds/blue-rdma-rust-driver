@@ -130,12 +130,13 @@ impl Mtt {
     /// Calculates number of pages needed for memory region
     #[allow(clippy::arithmetic_side_effects)]
     fn get_num_page(addr: u64, length: usize) -> usize {
-        let num = length / PAGE_SIZE;
-        if length % PAGE_SIZE != 0 {
-            num + 1
-        } else {
-            num
+        if length == 0 {
+            return 0;
         }
+        let last = addr.saturating_add(length as u64).saturating_sub(1);
+        let start_page = addr / PAGE_SIZE as u64;
+        let end_page = last / PAGE_SIZE as u64;
+        (end_page.saturating_sub(start_page) + 1) as usize
     }
 
     /// Gets starting virtual addresses for each page in memory region
