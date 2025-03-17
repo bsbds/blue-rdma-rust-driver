@@ -325,7 +325,8 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
     ) -> *mut ibverbs_sys::ibv_mr {
         let context = unsafe { (*pd) }.context;
         let bluerdma = unsafe { get_device(context) };
-        let Ok(mr_key) = bluerdma.reg_mr(addr as u64, length, access as u8) else {
+        let pd_handle = unsafe { *pd }.handle;
+        let Ok(mr_key) = bluerdma.reg_mr(addr as u64, length, pd_handle, access as u8) else {
             return ptr::null_mut();
         };
         let ibv_mr = Box::new(ibverbs_sys::ibv_mr {

@@ -7,7 +7,7 @@ use alloc::Alloc;
 
 use crate::{
     device_protocol::MttEntry,
-    mem::{page::ContiguousPages, virt_to_phy::AddressResolver, PAGE_SIZE},
+    mem::{get_num_page, page::ContiguousPages, virt_to_phy::AddressResolver, PAGE_SIZE},
     ringbuffer::Syncable,
 };
 
@@ -26,95 +26,17 @@ impl Mtt {
     }
 
     /// Register a memory region
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn register<R>(
-        &mut self,
-        addr_resolver: &R,
-        page_buffer: &mut ContiguousPages<1>,
-        page_buffer_phy_addr: u64,
-        addr: u64,
-        length: usize,
-        pd_handle: u32,
-        access: u8,
-    ) -> io::Result<(u32, Vec<MttEntry>)>
-    where
-        R: AddressResolver + ?Sized,
-    {
-        Self::ensure_valid(addr, length)?;
-        Self::try_pin_pages(addr, length)?;
-        let num_pages = Self::get_num_page(addr, length);
-        let virt_addrs = Self::get_page_start_virt_addrs(addr, length)
-            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-
-        let phy_addrs = addr_resolver.virt_to_phys_range(addr, num_pages)?;
-        if phy_addrs.iter().any(Option::is_none) {
-            return Err(io::Error::new(
-                io::ErrorKind::NotFound,
-                "physical address not found",
-            ));
-        }
-        Self::copy_phy_addrs_to_page(phy_addrs.into_iter().flatten(), page_buffer)?;
+    pub(crate) fn register(&mut self, num_pages: usize) -> io::Result<(u32, Vec<PgtEntry>)> {
         let mr_key = self
             .alloc
             .alloc_mr_key()
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
-        let pgt_indices = self
+        let pgt_entries = self
             .alloc
             .alloc_pgt_indices(num_pages)
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
-        let length_u32 =
-            u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
-        let entry_count = u32::try_from(num_pages.saturating_sub(1))
-            .map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
 
-        let entries = pgt_indices
-            .into_iter()
-            .map(|index| {
-                MttEntry::new(
-                    addr,
-                    length_u32,
-                    mr_key,
-                    pd_handle,
-                    access,
-                    index,
-                    page_buffer_phy_addr,
-                    entry_count,
-                )
-            })
-            .collect();
-
-        Ok((mr_key, entries))
-    }
-
-    /// Pins pages in memory to prevent swapping
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the pages could not be locked in memory
-    #[allow(unsafe_code, clippy::as_conversions)]
-    fn try_pin_pages(addr: u64, length: usize) -> io::Result<()> {
-        let result = unsafe { libc::mlock(addr as *const std::ffi::c_void, length) };
-        if result != 0 {
-            return Err(io::Error::new(io::ErrorKind::Other, "failed to lock pages"));
-        }
-        Ok(())
-    }
-
-    /// Unpins pages
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the pages could not be locked in memory
-    #[allow(unsafe_code, clippy::as_conversions)]
-    fn try_unpin_pages(addr: u64, length: usize) -> io::Result<()> {
-        let result = unsafe { libc::munlock(addr as *const std::ffi::c_void, length) };
-        if result != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                "failed to unlock pages",
-            ));
-        }
-        Ok(())
+        Ok((mr_key, pgt_entries))
     }
 
     /// Validates memory region parameters
@@ -131,18 +53,6 @@ impl Mtt {
             return Err(io::ErrorKind::InvalidInput.into());
         }
         Ok(())
-    }
-
-    /// Calculates number of pages needed for memory region
-    #[allow(clippy::arithmetic_side_effects)]
-    fn get_num_page(addr: u64, length: usize) -> usize {
-        if length == 0 {
-            return 0;
-        }
-        let last = addr.saturating_add(length as u64).saturating_sub(1);
-        let start_page = addr / PAGE_SIZE as u64;
-        let end_page = last / PAGE_SIZE as u64;
-        (end_page.saturating_sub(start_page) + 1) as usize
     }
 
     /// Gets starting virtual addresses for each page in memory region
@@ -175,4 +85,9 @@ impl Mtt {
 
         Ok(())
     }
+}
+
+pub(crate) struct PgtEntry {
+    pub(crate) index: u32,
+    pub(crate) count: u32,
 }

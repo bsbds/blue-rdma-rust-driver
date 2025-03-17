@@ -178,6 +178,7 @@ mod constants;
 mod device_protocol;
 mod fragmenter;
 /// Memory operation components
+#[allow(unsafe_code)]
 mod mem;
 mod meta_worker;
 /// Memory translation table

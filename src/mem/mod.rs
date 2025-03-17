@@ -9,6 +9,10 @@ pub(crate) mod page;
 /// Slot allocation implementation
 pub(crate) mod slot_alloc;
 
+mod utils;
+
+pub(crate) use utils::*;
+
 /// Number of bits for a 4KB page size
 #[cfg(target_arch = "x86_64")]
 #[cfg(feature = "page_size_4k")]

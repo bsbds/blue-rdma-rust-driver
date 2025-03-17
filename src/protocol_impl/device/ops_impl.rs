@@ -25,11 +25,12 @@ use crate::{
         SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
     },
     mem::{
+        get_num_page,
         page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
         virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
         PageWithPhysAddr,
     },
-    mtt::Mtt,
+    mtt::{Mtt, PgtEntry},
     net::{
         config::{MacAddress, NetworkConfig},
         tap::TapDevice,
@@ -66,7 +67,7 @@ pub(crate) trait HwDevice {
 }
 
 pub(crate) trait DeviceOps {
-    fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32>;
+    fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32>;
     fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32>;
     fn update_qp(&mut self, qpn: u32, attr: IbvQpAttr) -> io::Result<()>;
     fn destroy_qp(&mut self, qpn: u32);
@@ -232,17 +233,42 @@ where
     H::PageAllocator: PageAllocator<1>,
     H::PhysAddrResolver: AddressResolver,
 {
-    fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
-        let (mr_key, entries) = self.mtt.register(
-            &self.device.new_phys_addr_resolver(),
-            &mut self.mtt_buffer.page,
-            self.mtt_buffer.phys_addr,
-            addr,
-            length,
-            0,
-            access,
-        )?;
-        for entry in entries {
+    fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32> {
+        let addr_resolver = self.device.new_phys_addr_resolver();
+        let num_pages = get_num_page(addr, length);
+        let (mr_key, pgt_entries) = self.mtt.register(num_pages)?;
+        let length_u32 =
+            u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
+        let mut phys_addrs = addr_resolver
+            .virt_to_phys_range(addr, num_pages)?
+            .into_iter()
+            .collect::<Option<Vec<_>>>()
+            .ok_or(io::Error::new(
+                io::ErrorKind::NotFound,
+                "physical address not found",
+            ))?
+            .into_iter();
+        let buf = &mut self.mtt_buffer.page;
+        for PgtEntry { index, count } in pgt_entries {
+            let bytes: Vec<u8> = phys_addrs
+                .by_ref()
+                .take(count as usize)
+                .flat_map(u64::to_ne_bytes)
+                .collect();
+            buf.get_mut(..bytes.len())
+                .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
+                .copy_from_slice(&bytes);
+            let entry = MttEntry::new(
+                addr,
+                length_u32,
+                mr_key,
+                pd_handle,
+                access,
+                index,
+                self.mtt_buffer.phys_addr,
+                count - 1,
+            );
+
             self.cmd_controller.update_mtt(entry)?;
         }
 

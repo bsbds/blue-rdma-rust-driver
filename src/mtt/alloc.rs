@@ -3,6 +3,8 @@ use std::iter;
 use bitvec::{array::BitArray, bitarr};
 use rand::Rng;
 
+use super::PgtEntry;
+
 const MAX_MR_CNT: usize = 8192;
 const LR_KEY_KEY_PART_WIDTH: u32 = 8;
 const LR_KEY_IDX_PART_WIDTH: u32 = 32 - LR_KEY_KEY_PART_WIDTH;
@@ -52,7 +54,7 @@ impl Alloc {
         Some(mr_key)
     }
 
-    pub(super) fn alloc_pgt_indices(&mut self, num_pages: usize) -> Option<Vec<u32>> {
+    pub(super) fn alloc_pgt_indices(&mut self, num_pages: usize) -> Option<Vec<PgtEntry>> {
         let (f, r) = (
             num_pages / MAX_NUM_PGT_ENTRY_PER_ALLOC,
             num_pages % MAX_NUM_PGT_ENTRY_PER_ALLOC,
@@ -60,12 +62,18 @@ impl Alloc {
         let mut indices = iter::repeat_with(|| {
             self.pgt
                 .alloc(MAX_NUM_PGT_ENTRY_PER_ALLOC)
-                .map(|x| x as u32)
+                .map(|x| PgtEntry {
+                    index: x as u32,
+                    count: MAX_NUM_PGT_ENTRY_PER_ALLOC as u32,
+                })
         })
         .take(f)
         .collect::<Option<Vec<_>>>()?;
         if r != 0 {
-            indices.push(self.pgt.alloc(r).map(|x| x as u32)?);
+            indices.push(self.pgt.alloc(r).map(|x| PgtEntry {
+                index: x as u32,
+                count: r as u32,
+            })?);
         }
         Some(indices)
     }
