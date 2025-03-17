@@ -18,17 +18,17 @@ const DEFAULT_LOCAL_ACK_TIMEOUT: u8 = 4;
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub(crate) struct AckTimeoutConfig {
     // 4.096 uS * 2^(CHECK DURATION)
-    check_duration: u8,
+    check_duration_exp: u8,
     // 4.096 uS * 2^(Local ACK Timeout)
-    local_ack_timeout: u8,
+    local_ack_timeout_exp: u8,
     init_retry_count: usize,
 }
 
 impl Default for AckTimeoutConfig {
     fn default() -> Self {
         Self {
-            check_duration: DEFAULT_TIMEOUT_CHECK_DURATION,
-            local_ack_timeout: DEFAULT_LOCAL_ACK_TIMEOUT,
+            check_duration_exp: DEFAULT_TIMEOUT_CHECK_DURATION,
+            local_ack_timeout_exp: DEFAULT_LOCAL_ACK_TIMEOUT,
             init_retry_count: DEFAULT_INIT_RETRY_COUNT,
         }
     }
@@ -37,8 +37,8 @@ impl Default for AckTimeoutConfig {
 impl AckTimeoutConfig {
     pub(crate) fn new(check_duration: u8, local_ack_timeout: u8, init_retry_count: usize) -> Self {
         Self {
-            check_duration,
-            local_ack_timeout,
+            check_duration_exp: check_duration,
+            local_ack_timeout_exp: local_ack_timeout,
             init_retry_count,
         }
     }
@@ -120,7 +120,7 @@ impl TimeoutRetransmitWorker {
         Self {
             receiver,
             wr_sender,
-            table: TransportTimerTable::new(config.local_ack_timeout, config.init_retry_count),
+            table: TransportTimerTable::new(config.local_ack_timeout_exp, config.init_retry_count),
             config,
         }
     }
@@ -135,7 +135,7 @@ impl TimeoutRetransmitWorker {
     #[allow(clippy::needless_pass_by_value)] // consume the flag
     /// Run the handler loop
     fn run(mut self) {
-        let check_duration_ns = Duration::from_nanos(4096u64 << self.config.check_duration);
+        let check_duration_ns = Duration::from_nanos(4096u64 << self.config.check_duration_exp);
         loop {
             spin_sleep::sleep(check_duration_ns);
             for task in self.receiver.try_iter() {
