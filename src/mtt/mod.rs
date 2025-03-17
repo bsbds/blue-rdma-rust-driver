@@ -27,16 +27,16 @@ impl Mtt {
 
     /// Register a memory region
     #[allow(clippy::too_many_arguments)]
-    pub(crate) fn register<'a, R>(
+    pub(crate) fn register<R>(
         &mut self,
         addr_resolver: &R,
-        page_buffer: &'a mut ContiguousPages<1>,
+        page_buffer: &mut ContiguousPages<1>,
         page_buffer_phy_addr: u64,
         addr: u64,
         length: usize,
         pd_handle: u32,
         access: u8,
-    ) -> io::Result<MttEntry<'a>>
+    ) -> io::Result<(u32, Vec<MttEntry>)>
     where
         R: AddressResolver + ?Sized,
     {
@@ -54,30 +54,36 @@ impl Mtt {
             ));
         }
         Self::copy_phy_addrs_to_page(phy_addrs.into_iter().flatten(), page_buffer)?;
-        let (mr_key, index) = self
+        let mr_key = self
             .alloc
-            .alloc(num_pages)
+            .alloc_mr_key()
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
-        let index_u32 = u32::try_from(index)
-            .unwrap_or_else(|_| unreachable!("allocator should not alloc index larger than u32"));
+        let pgt_indices = self
+            .alloc
+            .alloc_pgt_indices(num_pages)
+            .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
         let length_u32 =
             u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
         let entry_count = u32::try_from(num_pages.saturating_sub(1))
             .map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
 
-        let entry = MttEntry::new(
-            page_buffer,
-            addr,
-            length_u32,
-            mr_key,
-            pd_handle,
-            access,
-            index_u32,
-            page_buffer_phy_addr,
-            entry_count,
-        );
+        let entries = pgt_indices
+            .into_iter()
+            .map(|index| {
+                MttEntry::new(
+                    addr,
+                    length_u32,
+                    mr_key,
+                    pd_handle,
+                    access,
+                    index,
+                    page_buffer_phy_addr,
+                    entry_count,
+                )
+            })
+            .collect();
 
-        Ok(entry)
+        Ok((mr_key, entries))
     }
 
     /// Pins pages in memory to prevent swapping

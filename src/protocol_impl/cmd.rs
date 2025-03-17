@@ -106,7 +106,7 @@ impl<Dev: DeviceAdaptor> CommandController<Dev> {
 const UPDATE_PGT_ENTRY_LIMIT: usize = 64;
 
 impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
-    fn update_mtt(&self, entry: MttEntry<'_>) -> io::Result<()> {
+    fn update_mtt(&self, entry: MttEntry) -> io::Result<()> {
         let id0 = 0;
         let id1 = 1;
         let update_mr_table = CmdQueueReqDescUpdateMrTable::new(

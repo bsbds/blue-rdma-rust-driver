@@ -1,3 +1,5 @@
+use std::iter;
+
 use bitvec::{array::BitArray, bitarr};
 use rand::Rng;
 
@@ -6,6 +8,11 @@ const LR_KEY_KEY_PART_WIDTH: u32 = 8;
 const LR_KEY_IDX_PART_WIDTH: u32 = 32 - LR_KEY_KEY_PART_WIDTH;
 /// Maximum number of entries in the secodn stage table
 pub(super) const PGT_LEN: usize = 0x20000;
+
+/// Maximum number of Page Table entries (PGT entries) that can be allocated in a single `PCIe` transaction.
+/// A `PCIe` transaction size is 128 bytes, and each PGT entry is a u64 (8 bytes).
+/// Therefore, 128 bytes / 8 bytes per entry = 16 entries per allocation.
+const MAX_NUM_PGT_ENTRY_PER_ALLOC: usize = 16;
 
 /// Table memory allocator for MTT
 pub(crate) struct Alloc {
@@ -36,6 +43,31 @@ impl Alloc {
         let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
         let index = self.pgt.alloc(num_pages)?;
         Some((mr_key, index))
+    }
+
+    pub(super) fn alloc_mr_key(&mut self) -> Option<u32> {
+        let mr_key_idx = self.mr.alloc_mr_key_idx()?;
+        let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
+        let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
+        Some(mr_key)
+    }
+
+    pub(super) fn alloc_pgt_indices(&mut self, num_pages: usize) -> Option<Vec<u32>> {
+        let (f, r) = (
+            num_pages / MAX_NUM_PGT_ENTRY_PER_ALLOC,
+            num_pages % MAX_NUM_PGT_ENTRY_PER_ALLOC,
+        );
+        let mut indices = iter::repeat_with(|| {
+            self.pgt
+                .alloc(MAX_NUM_PGT_ENTRY_PER_ALLOC)
+                .map(|x| x as u32)
+        })
+        .take(f)
+        .collect::<Option<Vec<_>>>()?;
+        if r != 0 {
+            indices.push(self.pgt.alloc(r).map(|x| x as u32)?);
+        }
+        Some(indices)
     }
 
     /// Deallocates memory region and page table entries
@@ -170,7 +202,7 @@ mod test {
     #[test]
     fn mr_table_alloc_dealloc_ok() {
         let mut alloc = MrTableAlloc::new();
-        let mr_keys: Vec<_> = std::iter::repeat_with(|| alloc.alloc_mr_key_idx())
+        let mr_keys: Vec<_> = iter::repeat_with(|| alloc.alloc_mr_key_idx())
             .take(MAX_MR_CNT)
             .flatten()
             .collect();

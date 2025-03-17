@@ -7,9 +7,7 @@ use crate::{mem::page::ContiguousPages, queue_pair::convert_ibv_mtu_to_u16};
 
 #[allow(clippy::missing_docs_in_private_items)]
 /// Memory Translation Table entry
-pub(crate) struct MttEntry<'a> {
-    /// Reference to the mtt entry buffer, shouldn't be dropped during operations
-    pub(crate) entry_buffer: &'a ContiguousPages<1>,
+pub(crate) struct MttEntry {
     pub(crate) mr_base_va: u64,
     pub(crate) mr_length: u32,
     pub(crate) mr_key: u32,
@@ -20,11 +18,10 @@ pub(crate) struct MttEntry<'a> {
     pub(crate) zero_based_entry_count: u32,
 }
 
-impl<'a> MttEntry<'a> {
+impl MttEntry {
     #[allow(clippy::too_many_arguments)]
     /// Creates a new `MttEntry`
     pub(crate) fn new(
-        entry_buffer: &'a ContiguousPages<1>,
         mr_base_va: u64,
         mr_length: u32,
         mr_key: u32,
@@ -35,7 +32,6 @@ impl<'a> MttEntry<'a> {
         zero_based_entry_count: u32,
     ) -> Self {
         Self {
-            entry_buffer,
             mr_base_va,
             mr_length,
             mr_key,

@@ -233,7 +233,7 @@ where
     H::PhysAddrResolver: AddressResolver,
 {
     fn reg_mr(&mut self, addr: u64, length: usize, access: u8) -> io::Result<u32> {
-        let entry = self.mtt.register(
+        let (mr_key, entries) = self.mtt.register(
             &self.device.new_phys_addr_resolver(),
             &mut self.mtt_buffer.page,
             self.mtt_buffer.phys_addr,
@@ -242,8 +242,9 @@ where
             0,
             access,
         )?;
-        let mr_key = entry.mr_key;
-        self.cmd_controller.update_mtt(entry)?;
+        for entry in entries {
+            self.cmd_controller.update_mtt(entry)?;
+        }
 
         Ok(mr_key)
     }
