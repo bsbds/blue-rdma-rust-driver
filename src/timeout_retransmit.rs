@@ -1,5 +1,6 @@
 use std::{io, iter, thread, time::Duration};
 
+use serde::{Deserialize, Serialize};
 use tracing::error;
 
 use crate::{
@@ -14,7 +15,7 @@ const DEFAULT_INIT_RETRY_COUNT: usize = 5;
 const DEFAULT_TIMEOUT_CHECK_DURATION: u8 = 8;
 const DEFAULT_LOCAL_ACK_TIMEOUT: u8 = 4;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub(crate) struct AckTimeoutConfig {
     // 4.096 uS * 2^(CHECK DURATION)
     check_duration: u8,

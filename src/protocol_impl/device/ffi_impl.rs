@@ -4,6 +4,7 @@ use ipnetwork::{IpNetwork, Ipv4Network};
 
 use crate::{
     completion::Completion,
+    config::{ConfigLoader, DeviceConfig},
     ctx_ops::RdmaCtxOps,
     mem::{page::EmulatedPageAllocator, virt_to_phy::PhysAddrResolverEmulated},
     net::config::{MacAddress, NetworkConfig},
@@ -13,7 +14,6 @@ use crate::{
 };
 
 use super::{
-    config::DeviceConfig,
     emulated::EmulatedDevice,
     hardware::PciHwDevice,
     ops_impl::{
@@ -42,33 +42,13 @@ impl BlueRdmaCore {
     }
 
     #[allow(clippy::unwrap_used, clippy::unwrap_in_result)]
-    fn new_hw(sysfs_name: &str) -> io::Result<HwDeviceCtx<PciHwDevice>> {
+    fn new_hw(sysfs_name: &str) -> Result<HwDeviceCtx<PciHwDevice>, Box<dyn std::error::Error>> {
         Self::init_logger();
-
-        let (post_recv_ip, post_recv_peer_ip) = match sysfs_name {
-            "uverbs0" => (
-                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
-                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
-            ),
-            "uverbs1" => (
-                POST_RECV_TCP_LOOP_BACK_SERVER_ADDRESS,
-                POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS,
-            ),
-            _ => unreachable!("unexpected sysfs_name"),
-        };
-
-        let network_config = NetworkConfig {
-            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
-            gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
-            mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
-            post_recv_ip,
-            post_recv_peer_ip,
-        };
-        let ack_config = AckTimeoutConfig::new(16, 18, 10);
+        let config = ConfigLoader::load_default()?;
         let device = PciHwDevice::open_default()?;
         device.reset()?;
         device.init_dma_engine()?;
-        let mut ctx = HwDeviceCtx::initialize(device, network_config, ack_config).unwrap();
+        let mut ctx = HwDeviceCtx::initialize(device, config)?;
         Ok(ctx)
     }
 
@@ -97,16 +77,15 @@ impl BlueRdmaCore {
             _ => unreachable!("unexpected sysfs_name"),
         };
 
-        let network_config = NetworkConfig {
-            ip_network: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
+        let network = NetworkConfig {
+            ip: Ipv4Network::new(Ipv4Addr::from_bits(CARD_IP_ADDRESS), 24).unwrap(),
             gateway: Ipv4Addr::new(127, 0, 0, 1).into(),
             mac: MacAddress([0x0A, 0xEE, 0xDD, 0xCC, 0xBB, 0xAA]),
-            post_recv_ip,
-            post_recv_peer_ip,
         };
+        let ack = AckTimeoutConfig::new(16, 18, 100);
+        let config = DeviceConfig { network, ack };
         // (check_duration, local_ack_timeout) : (256ms, 1s) because emulator is slow
-        let ack_config = AckTimeoutConfig::new(16, 18, 100);
-        HwDeviceCtx::initialize(device, network_config, ack_config)
+        HwDeviceCtx::initialize(device, config)
     }
 }
 

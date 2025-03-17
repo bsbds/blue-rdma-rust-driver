@@ -172,6 +172,7 @@
 
 mod ack_responder;
 mod completion;
+mod config;
 /// Constants used throughout the driver
 mod constants;
 mod device_protocol;

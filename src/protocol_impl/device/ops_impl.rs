@@ -17,6 +17,7 @@ use crate::{
         Completion, CompletionQueueTable, CompletionTask, CompletionWorker, CqManager, Event,
         PostRecvEvent,
     },
+    config::DeviceConfig,
     constants::PSN_MASK,
     ctx_ops::RdmaCtxOps,
     device_protocol::{
@@ -88,7 +89,7 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     recv_wr_queue_table: RecvWrQueueTable,
     rdma_write_tx: flume::Sender<RdmaWriteTask>,
     completion_tx: flume::Sender<CompletionTask>,
-    network_config: NetworkConfig,
+    config: DeviceConfig,
 }
 
 #[allow(private_bounds)]
@@ -99,11 +100,7 @@ where
     H::PageAllocator: PageAllocator<1>,
     H::PhysAddrResolver: AddressResolver,
 {
-    pub(crate) fn initialize(
-        device: H,
-        network_config: NetworkConfig,
-        ack_config: AckTimeoutConfig,
-    ) -> io::Result<Self> {
+    pub(crate) fn initialize(device: H, config: DeviceConfig) -> io::Result<Self> {
         let mode = Mode::default();
         let adaptor = device.new_adaptor()?;
         let mut allocator = device.new_page_allocator();
@@ -157,7 +154,7 @@ where
             ack_tx,
         )
         .spawn();
-        cmd_controller.set_network(network_config)?;
+        cmd_controller.set_network(config.network())?;
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
 
         let (simple_nic_tx, simple_nic_rx) = simple_nic_controller.into_split();
@@ -188,7 +185,7 @@ where
             recv_wr_queue_table: RecvWrQueueTable::new(),
             rdma_write_tx,
             completion_tx,
-            network_config,
+            config,
         })
     }
 }
@@ -221,6 +218,10 @@ impl<H: HwDevice> HwDeviceCtx<H> {
         result_rx
             .recv()
             .map_err(|err| io::Error::new(io::ErrorKind::Other, err))?
+    }
+
+    fn network_config(&self) -> NetworkConfig {
+        self.config.network()
     }
 }
 
@@ -257,14 +258,13 @@ where
             current.qp_type = attr.qp_type();
             current.send_cq = attr.send_cq();
             current.recv_cq = attr.recv_cq();
-            current.dqp_ip = CARD_IP_ADDRESS;
-            current.mac_addr = CARD_MAC_ADDRESS;
-            current.pmtu = ibverbs_sys::IBV_MTU_1024 as u8;
+            current.mac_addr = self.network_config().mac.into();
+            current.pmtu = ibverbs_sys::IBV_MTU_256 as u8;
         });
         let entry = UpdateQp {
-            ip_addr: CARD_IP_ADDRESS,
+            ip_addr: self.network_config().ip.ip().to_bits(),
+            peer_mac_addr: self.network_config().mac.into(),
             local_udp_port: 0x100,
-            peer_mac_addr: CARD_MAC_ADDRESS,
             qp_type: attr.qp_type(),
             qpn,
             ..Default::default()
@@ -280,9 +280,9 @@ where
             .update_qp(qpn, |current| {
                 let entry = UpdateQp {
                     qpn,
-                    ip_addr: CARD_IP_ADDRESS,
+                    ip_addr: self.network_config().ip.ip().to_bits(),
                     local_udp_port: 0x100,
-                    peer_mac_addr: CARD_MAC_ADDRESS,
+                    peer_mac_addr: self.network_config().mac.into(),
                     qp_type: current.qp_type,
                     peer_qpn: attr.dest_qp_num().unwrap_or(current.dqpn),
                     rq_access_flags: attr
@@ -293,16 +293,22 @@ where
                 current.dqpn = entry.peer_qpn;
                 current.access_flags = entry.rq_access_flags;
                 current.pmtu = entry.pmtu;
+                current.dqp_ip = attr.dest_qp_ip().map_or(0, Ipv4Addr::to_bits);
                 entry
             })
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
 
-        if let Some(dqpn) = attr.dest_qp_num() {
+        let qp = self
+            .qp_manager
+            .get_qp(qpn)
+            .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
+        if qp.dqpn != 0 && qp.dqp_ip != 0 && self.post_recv_tx_table.get_qp_mut(qpn).is_none() {
+            let dqp_ip = Ipv4Addr::from_bits(qp.dqp_ip);
             let (tx, rx) = post_recv_channel::<TcpChannel>(
-                self.network_config.post_recv_ip,
-                self.network_config.post_recv_peer_ip,
+                self.network_config().ip.ip(),
+                dqp_ip,
                 qpn,
-                dqpn,
+                qp.dqpn,
             )?;
             self.post_recv_tx_table.insert(qpn, tx);
             let wr_queue = self
@@ -365,6 +371,8 @@ where
 
 #[allow(unsafe_code, clippy::wildcard_imports)]
 pub(crate) mod qp_attr {
+    use std::net::Ipv4Addr;
+
     use ibverbs_sys::*;
 
     pub(crate) struct IbvQpInitAttr {
@@ -405,6 +413,20 @@ pub(crate) mod qp_attr {
     impl IbvQpAttr {
         pub(crate) fn new(inner: ibv_qp_attr, attr_mask: u32) -> Self {
             Self { inner, attr_mask }
+        }
+
+        pub(crate) fn dest_qp_ip(&self) -> Option<Ipv4Addr> {
+            if self.attr_mask & ibv_qp_attr_mask::IBV_QP_AV.0 == 0 {
+                return None;
+            }
+
+            let gid = unsafe { self.inner.ah_attr.grh.dgid.raw };
+
+            // Format: ::ffff:a.b.c.d
+            let is_ipv4_mapped =
+                gid[..10].iter().all(|&x| x == 0) && gid[10] == 0xFF && gid[11] == 0xFF;
+
+            is_ipv4_mapped.then(|| Ipv4Addr::new(gid[12], gid[13], gid[14], gid[15]))
         }
 
         impl_getter!(qp_state, ibv_qp_state::Type, ibv_qp_attr_mask::IBV_QP_STATE);

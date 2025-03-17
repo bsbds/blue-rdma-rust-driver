@@ -41,11 +41,9 @@ impl TestDevice {
         let cmd_controller =
             CommandController::init_v2(&adaptor, alloc_page()?, alloc_page()?).unwrap();
         let network_config = NetworkConfig {
-            ip_network: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
+            ip: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
             gateway: "10.0.0.1".parse().unwrap(),
             mac: MacAddress([0; 6]),
-            post_recv_ip: Ipv4Addr::new(0, 0, 0, 0),
-            post_recv_peer_ip: Ipv4Addr::new(0, 0, 0, 0),
         };
         cmd_controller.set_network(network_config).unwrap();
 

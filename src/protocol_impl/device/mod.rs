@@ -24,8 +24,6 @@ pub(crate) mod ops_impl;
 
 pub(crate) mod ffi_impl;
 
-mod config;
-
 pub(crate) use adaptor::*;
 
 /// Memory-mapped I/O addresses of device registers

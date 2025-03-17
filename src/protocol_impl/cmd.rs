@@ -163,7 +163,7 @@ impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
         let IpAddr::V4(gateway) = param.gateway else {
             unreachable!("IPv6 unsupported")
         };
-        let network = param.ip_network;
+        let network = param.ip;
         let desc = CmdQueueReqDescSetNetworkParam::new(
             0,
             gateway.to_bits(),

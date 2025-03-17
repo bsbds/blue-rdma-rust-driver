@@ -105,15 +105,11 @@ impl From<u64> for MacAddress {
 #[non_exhaustive]
 pub struct NetworkConfig {
     /// IP network (address and subnet)
-    pub ip_network: Ipv4Network,
+    pub ip: Ipv4Network,
     /// Gateway IP address
     pub gateway: IpAddr,
     /// MAC address
     pub mac: MacAddress,
-    /// TODO: replace this with real nic ip
-    pub post_recv_ip: Ipv4Addr,
-    /// peer ip
-    pub post_recv_peer_ip: Ipv4Addr,
 }
 
 /// Network mode configuration - either static or DHCP
@@ -160,11 +156,9 @@ mod tests {
     impl NetworkResolver for MockDevice {
         fn resolve_dynamic(&self) -> io::Result<NetworkConfig> {
             Ok(NetworkConfig {
-                ip_network: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
+                ip: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
                 gateway: "10.0.0.1".parse().unwrap(),
                 mac: MacAddress([0; 6]),
-                post_recv_ip: Ipv4Addr::new(0, 0, 0, 0),
-                post_recv_peer_ip: Ipv4Addr::new(0, 0, 0, 0),
             })
         }
     }
