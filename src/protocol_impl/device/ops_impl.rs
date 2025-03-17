@@ -160,7 +160,9 @@ where
         cmd_controller.set_network(network_config)?;
         cmd_controller.set_raw_packet_recv_buffer(RecvBufferMeta::new(rx_buffer_pa))?;
 
-        let (simple_nic_tx, _simple_nic_rx) = simple_nic_controller.into_split();
+        let (simple_nic_tx, simple_nic_rx) = simple_nic_controller.into_split();
+        #[allow(clippy::mem_forget)]
+        std::mem::forget(simple_nic_rx); // prevent libc::munmap being called
         AckResponder::new(qp_attr_table.clone_arc(), ack_rx, Box::new(simple_nic_tx)).spawn();
         //TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
         //PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
