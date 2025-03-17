@@ -10,9 +10,6 @@ use crate::{
 
 use super::{CompletionTask, MetaWorker};
 
-/// Offset between the `now_psn` an `base_psn`
-const BASE_PSN_OFFSET: u32 = 0x70;
-
 impl<T> MetaWorker<T> {
     pub(super) fn handle_ack(&mut self, meta: AckMeta) {
         if meta.is_send_by_driver {
@@ -101,14 +98,12 @@ impl<T> MetaWorker<T> {
             self.send_update(!is_send_by_local_hw, qpn, psn);
         }
         // TODO: implement more fine-grained retransmission
-        let psn_low = psn_pre.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
-        let psn_high = psn_now.wrapping_add(128).wrapping_sub(BASE_PSN_OFFSET);
         let _ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::RetransmitRange {
                 qpn,
-                psn_low,
-                psn_high,
+                psn_low: psn_pre,
+                psn_high: psn_now.wrapping_add(128) % PSN_MASK,
             });
     }
 
@@ -135,11 +130,10 @@ impl<T> MetaWorker<T> {
 
     fn update_packet_tracker(
         tracker: &mut Tracker,
-        psn: u32,
+        base_psn: u32,
         bitmap: u128,
         ack_msn: Option<u16>, // local acks dose not contains msn
     ) -> Option<u32> {
-        let base_psn = psn.wrapping_sub(BASE_PSN_OFFSET) & PSN_MASK;
         if let Some(ack_msn) = ack_msn {
             tracker.ack_range(base_psn, bitmap, ack_msn)
         } else {
