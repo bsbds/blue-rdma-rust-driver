@@ -119,8 +119,8 @@ mod test {
     use std::iter;
 
     use crate::{
-        mem::page::HostPageAllocator, protocol_impl::device::dummy::DummyDevice,
-        protocol_impl::queue::DescRingBufferAllocator, ringbuffer::new_test_ring,
+        mem::page::HostPageAllocator, protocol_impl::queue::DescRingBufferAllocator,
+        ringbuffer::new_test_ring,
     };
 
     use super::*;

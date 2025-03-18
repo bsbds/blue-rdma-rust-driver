@@ -1,13 +1,10 @@
 use std::{
     io, iter,
-    marker::PhantomData,
     net::Ipv4Addr,
-    ptr,
-    sync::{atomic::AtomicBool, Arc, OnceLock},
+    sync::{atomic::AtomicBool, Arc},
 };
 
 use crossbeam_deque::Worker;
-use ipnetwork::{IpNetwork, Ipv4Network};
 use parking_lot::Mutex;
 use qp_attr::{IbvQpAttr, IbvQpInitAttr};
 
@@ -18,44 +15,26 @@ use crate::{
         PostRecvEvent,
     },
     config::DeviceConfig,
-    constants::PSN_MASK,
-    ctx_ops::RdmaCtxOps,
     device_protocol::{
-        ChunkPos, DeviceCommand, MetaReport, MttUpdate, PgtUpdate, QpParams, RecvBuffer,
-        RecvBufferMeta, SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk,
-        WrChunkBuilder,
+        DeviceCommand, MttUpdate, PgtUpdate, RecvBufferMeta, SimpleNicTunnel, UpdateQp,
     },
-    mem::{
-        get_num_page,
-        page::{ContiguousPages, EmulatedPageAllocator, PageAllocator},
-        virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
-        PageWithPhysAddr,
-    },
+    mem::{get_num_page, page::PageAllocator, virt_to_phy::AddressResolver, PageWithPhysAddr},
     mtt::{Mtt, PgtEntry},
-    net::{
-        config::{MacAddress, NetworkConfig},
-        tap::TapDevice,
-    },
-    packet_retransmit::{PacketRetransmitTask, PacketRetransmitWorker},
+    net::config::NetworkConfig,
     protocol_impl::{
-        queue::{
-            meta_report_queue::init_and_spawn_meta_worker, DescRingBuffer, DescRingBufferAllocator,
-        },
-        spawn_send_workers, CommandController, SendQueueScheduler, SendWorker, SimpleNicController,
+        queue::meta_report_queue::init_and_spawn_meta_worker, spawn_send_workers,
+        CommandController, SendQueueScheduler, SimpleNicController,
     },
-    qp_table::QpTable,
-    queue_pair::{num_psn, QpManager, QueuePairAttrTable, SenderTable},
+    queue_pair::{QpManager, QueuePairAttrTable},
     rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
     recv::{
         post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
         TcpChannel,
     },
     send::{SendWr, SendWrBase, SendWrRdma},
-    timeout_retransmit::{AckTimeoutConfig, RetransmitTask, TimeoutRetransmitWorker},
-    tracker::Msn,
 };
 
-use super::{mode::Mode, DeviceAdaptor, CARD_IP_ADDRESS, CARD_MAC_ADDRESS};
+use super::{mode::Mode, DeviceAdaptor};
 
 pub(crate) trait HwDevice {
     type Adaptor;
