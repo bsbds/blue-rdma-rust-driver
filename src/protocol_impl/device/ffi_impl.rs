@@ -201,7 +201,7 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             (*port_attr) = ibverbs_sys::ibv_port_attr {
                 state: ibverbs_sys::ibv_port_state::IBV_PORT_ACTIVE,
                 max_mtu: ibverbs_sys::IBV_MTU_4096,
-                active_mtu: ibverbs_sys::IBV_MTU_1024,
+                active_mtu: ibverbs_sys::IBV_MTU_4096,
                 gid_tbl_len: 256,
                 port_cap_flags: 0x0000_2c00,
                 max_msg_sz: 1 << 31,
