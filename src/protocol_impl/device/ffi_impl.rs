@@ -29,10 +29,12 @@ const POST_RECV_TCP_LOOP_BACK_CLIENT_ADDRESS: Ipv4Addr = Ipv4Addr::new(127, 0, 0
 
 static HEAP_ALLOCATOR: bluesimalloc::BlueSimalloc = bluesimalloc::BlueSimalloc::new();
 
-#[allow(missing_debug_implementations)]
-pub struct BlueRdmaCore {
-    inner: HwDeviceCtx<EmulatedHwDevice>,
-}
+#[allow(
+    missing_debug_implementations,
+    missing_copy_implementations,
+    clippy::exhaustive_structs
+)]
+pub struct BlueRdmaCore;
 
 impl BlueRdmaCore {
     fn init_logger() {
