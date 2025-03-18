@@ -9,7 +9,7 @@ use ipnetwork::IpNetwork;
 use parking_lot::Mutex;
 
 use crate::{
-    device_protocol::{DeviceCommand, MttEntry, RecvBufferMeta, UpdateQp},
+    device_protocol::{DeviceCommand, MttUpdate, PgtUpdate, RecvBufferMeta, UpdateQp},
     mem::{page::ContiguousPages, PageWithPhysAddr},
     mtt::Mtt,
     net::config::NetworkConfig,
@@ -101,36 +101,38 @@ impl<Dev: DeviceAdaptor> CommandController<Dev> {
     }
 }
 
-// FIXME: Splits `MttEntry` to multiple `CmdQueueReqDescUpdatePGT` if the entry count exceed `UPDATE_PGT_ENTRY_LIMIT`
-/// The maximum number of page table entries that can be updated in a single PCI Express burst transaction.
-const UPDATE_PGT_ENTRY_LIMIT: usize = 64;
-
 impl<Dev: DeviceAdaptor> DeviceCommand for CommandController<Dev> {
-    fn update_mtt(&self, entry: MttEntry) -> io::Result<()> {
-        let id0 = 0;
-        let id1 = 1;
+    fn update_mtt(&self, update: MttUpdate) -> io::Result<()> {
         let update_mr_table = CmdQueueReqDescUpdateMrTable::new(
-            id0,
-            entry.mr_base_va,
-            entry.mr_length,
-            entry.mr_key,
-            entry.pd_handler,
-            entry.acc_flags,
-            entry.pgt_offset,
+            0,
+            update.mr_base_va,
+            update.mr_length,
+            update.mr_key,
+            update.pd_handler,
+            update.acc_flags,
+            update.base_pgt_offset,
         );
-        let update_pgt = CmdQueueReqDescUpdatePGT::new(
-            id1,
-            entry.dma_addr,
-            entry.pgt_offset,
-            entry.zero_based_entry_count,
-        );
-
         let mut qp = self.cmd_qp.lock();
-        let mut update = qp.update();
-        update.push(CmdQueueDesc::UpdateMrTable(update_mr_table));
-        update.push(CmdQueueDesc::UpdatePGT(update_pgt));
-        update.flush(&self.req_csr_proxy);
-        update.wait(&self.resp_csr_proxy);
+        let mut qp_update = qp.update();
+        qp_update.push(CmdQueueDesc::UpdateMrTable(update_mr_table));
+        qp_update.flush(&self.req_csr_proxy);
+        qp_update.wait(&self.resp_csr_proxy);
+
+        Ok(())
+    }
+
+    fn update_pgt(&self, update: PgtUpdate) -> io::Result<()> {
+        let desc = CmdQueueReqDescUpdatePGT::new(
+            0,
+            update.dma_addr,
+            update.pgt_offset,
+            update.zero_based_entry_count,
+        );
+        let mut qp = self.cmd_qp.lock();
+        let mut qp_update = qp.update();
+        qp_update.push(CmdQueueDesc::UpdatePGT(desc));
+        qp_update.flush(&self.req_csr_proxy);
+        qp_update.wait(&self.resp_csr_proxy);
 
         Ok(())
     }

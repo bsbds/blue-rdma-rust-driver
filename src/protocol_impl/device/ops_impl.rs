@@ -21,8 +21,9 @@ use crate::{
     constants::PSN_MASK,
     ctx_ops::RdmaCtxOps,
     device_protocol::{
-        ChunkPos, DeviceCommand, MetaReport, MttEntry, QpParams, RecvBuffer, RecvBufferMeta,
-        SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk, WrChunkBuilder,
+        ChunkPos, DeviceCommand, MetaReport, MttUpdate, PgtUpdate, QpParams, RecvBuffer,
+        RecvBufferMeta, SimpleNicTunnel, UpdateQp, WorkReqOpCode, WorkReqSend, WrChunk,
+        WrChunkBuilder,
     },
     mem::{
         get_num_page,
@@ -68,6 +69,7 @@ pub(crate) trait HwDevice {
 
 pub(crate) trait DeviceOps {
     fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32>;
+    fn dereg_mr(&mut self, mr_key: u32) -> io::Result<()>;
     fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32>;
     fn update_qp(&mut self, qpn: u32, attr: IbvQpAttr) -> io::Result<()>;
     fn destroy_qp(&mut self, qpn: u32);
@@ -234,9 +236,26 @@ where
     H::PhysAddrResolver: AddressResolver,
 {
     fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32> {
+        fn chunks(entry: PgtEntry) -> Vec<PgtEntry> {
+            /// Maximum number of Page Table entries (PGT entries) that can be allocated in a single `PCIe` transaction.
+            /// A `PCIe` transaction size is 128 bytes, and each PGT entry is a u64 (8 bytes).
+            /// Therefore, 512 bytes / 8 bytes per entry = 16 entries per allocation.
+            const MAX_NUM_PGT_ENTRY_PER_ALLOC: usize = 64;
+
+            let base_index = entry.index;
+            let end_index = base_index + entry.count;
+            (base_index..end_index)
+                .step_by(MAX_NUM_PGT_ENTRY_PER_ALLOC)
+                .map(|index| PgtEntry {
+                    index,
+                    count: (MAX_NUM_PGT_ENTRY_PER_ALLOC as u32).min(end_index - index),
+                })
+                .collect()
+        }
+
         let addr_resolver = self.device.new_phys_addr_resolver();
         let num_pages = get_num_page(addr, length);
-        let (mr_key, pgt_entries) = self.mtt.register(num_pages)?;
+        let (mr_key, pgt_entry) = self.mtt.register(num_pages)?;
         let length_u32 =
             u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
         let mut phys_addrs = addr_resolver
@@ -249,7 +268,11 @@ where
             ))?
             .into_iter();
         let buf = &mut self.mtt_buffer.page;
-        for PgtEntry { index, count } in pgt_entries {
+        let base_index = pgt_entry.index;
+        let mtt_update = MttUpdate::new(addr, length_u32, mr_key, pd_handle, access, base_index);
+        // TODO: makes updates atomic
+        self.cmd_controller.update_mtt(mtt_update)?;
+        for PgtEntry { index, count } in chunks(pgt_entry) {
             let bytes: Vec<u8> = phys_addrs
                 .by_ref()
                 .take(count as usize)
@@ -258,21 +281,15 @@ where
             buf.get_mut(..bytes.len())
                 .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
                 .copy_from_slice(&bytes);
-            let entry = MttEntry::new(
-                addr,
-                length_u32,
-                mr_key,
-                pd_handle,
-                access,
-                index,
-                self.mtt_buffer.phys_addr,
-                count - 1,
-            );
-
-            self.cmd_controller.update_mtt(entry)?;
+            let pgt_update = PgtUpdate::new(self.mtt_buffer.phys_addr, index, count - 1);
+            self.cmd_controller.update_pgt(pgt_update)?;
         }
 
         Ok(mr_key)
+    }
+
+    fn dereg_mr(&mut self, mr_key: u32) -> io::Result<()> {
+        self.mtt.deregister(mr_key)
     }
 
     fn create_qp(&mut self, attr: IbvQpInitAttr) -> io::Result<u32> {

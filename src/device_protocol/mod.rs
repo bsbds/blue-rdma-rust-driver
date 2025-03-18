@@ -9,7 +9,9 @@ use crate::net::config::NetworkConfig;
 /// RDMA device configuration interface
 pub(crate) trait DeviceCommand {
     /// Updates Memory Translation Table entry
-    fn update_mtt(&self, entry: MttEntry) -> io::Result<()>;
+    fn update_mtt(&self, update: MttUpdate) -> io::Result<()>;
+    /// Updates Page Table entry
+    fn update_pgt(&self, update: PgtUpdate) -> io::Result<()>;
     /// Updates Queue Pair entry
     fn update_qp(&self, entry: UpdateQp) -> io::Result<()>;
     /// Sets network parameters

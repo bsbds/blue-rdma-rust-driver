@@ -334,7 +334,7 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
             pd,
             addr,
             length,
-            handle: 0, // TODO: implement mr handle
+            handle: mr_key, // the `mr_key` is used for identify the memory region
             lkey: mr_key,
             rkey: mr_key,
         });
@@ -343,11 +343,19 @@ unsafe impl RdmaCtxOps for BlueRdmaCore {
 
     #[inline]
     fn dereg_mr(mr: *mut ibverbs_sys::ibv_mr) -> ::std::os::raw::c_int {
-        if !mr.is_null() {
-            let mr = unsafe { Box::from_raw(mr) };
-            // TODO: implement dereg mr
-            drop(mr);
+        if mr.is_null() {
+            return libc::EINVAL;
         }
+        let mr = unsafe { *mr };
+        if mr.pd.is_null() {
+            return libc::EINVAL;
+        }
+        let pd = unsafe { *mr.pd };
+        let bluerdma = unsafe { get_device(mr.context) };
+        if bluerdma.dereg_mr(mr.handle).is_err() {
+            return libc::EINVAL;
+        };
+
         0
     }
 

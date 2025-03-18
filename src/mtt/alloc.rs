@@ -11,11 +11,6 @@ const LR_KEY_IDX_PART_WIDTH: u32 = 32 - LR_KEY_KEY_PART_WIDTH;
 /// Maximum number of entries in the secodn stage table
 pub(super) const PGT_LEN: usize = 0x20000;
 
-/// Maximum number of Page Table entries (PGT entries) that can be allocated in a single `PCIe` transaction.
-/// A `PCIe` transaction size is 128 bytes, and each PGT entry is a u64 (8 bytes).
-/// Therefore, 128 bytes / 8 bytes per entry = 16 entries per allocation.
-const MAX_NUM_PGT_ENTRY_PER_ALLOC: usize = 16;
-
 /// Table memory allocator for MTT
 pub(crate) struct Alloc {
     /// First stage table allocator
@@ -34,48 +29,9 @@ impl Alloc {
     }
 
     /// Allocates memory region and page table entries
-    ///
-    /// # Returns
-    ///
-    /// * `Some((mr_key, page_index))`
-    /// * `None` - If allocation fails
-    pub(super) fn alloc(&mut self, num_pages: usize) -> Option<(u32, usize)> {
-        let mr_key_idx = self.mr.alloc_mr_key_idx()?;
-        let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
-        let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
-        let index = self.pgt.alloc(num_pages)?;
-        Some((mr_key, index))
-    }
-
-    pub(super) fn alloc_mr_key(&mut self) -> Option<u32> {
-        let mr_key_idx = self.mr.alloc_mr_key_idx()?;
-        let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
-        let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
-        Some(mr_key)
-    }
-
-    pub(super) fn alloc_pgt_indices(&mut self, num_pages: usize) -> Option<Vec<PgtEntry>> {
-        let (f, r) = (
-            num_pages / MAX_NUM_PGT_ENTRY_PER_ALLOC,
-            num_pages % MAX_NUM_PGT_ENTRY_PER_ALLOC,
-        );
-        let mut indices = iter::repeat_with(|| {
-            self.pgt
-                .alloc(MAX_NUM_PGT_ENTRY_PER_ALLOC)
-                .map(|x| PgtEntry {
-                    index: x as u32,
-                    count: MAX_NUM_PGT_ENTRY_PER_ALLOC as u32,
-                })
-        })
-        .take(f)
-        .collect::<Option<Vec<_>>>()?;
-        if r != 0 {
-            indices.push(self.pgt.alloc(r).map(|x| PgtEntry {
-                index: x as u32,
-                count: r as u32,
-            })?);
-        }
-        Some(indices)
+    pub(super) fn alloc(&mut self, num_pages: usize) -> Option<(u32, PgtEntry)> {
+        self.alloc_mr_key()
+            .and_then(|x| self.alloc_pgt(num_pages).map(|y| (x, y)))
     }
 
     /// Deallocates memory region and page table entries
@@ -88,6 +44,21 @@ impl Alloc {
         let mr_key_idx = mr_key >> LR_KEY_KEY_PART_WIDTH;
         self.mr.dealloc_mr_key(MrKeyIndex(mr_key_idx));
         self.pgt.dealloc(mr_index, length)
+    }
+
+    fn alloc_mr_key(&mut self) -> Option<u32> {
+        let mr_key_idx = self.mr.alloc_mr_key_idx()?;
+        let key = rand::thread_rng().gen_range(0..1 << LR_KEY_KEY_PART_WIDTH);
+        let mr_key = (mr_key_idx.0 << LR_KEY_KEY_PART_WIDTH) | key;
+        Some(mr_key)
+    }
+
+    fn alloc_pgt(&mut self, num_pages: usize) -> Option<PgtEntry> {
+        let index = self.pgt.alloc(num_pages)? as u32;
+        Some(PgtEntry {
+            index,
+            count: num_pages as u32,
+        })
     }
 }
 

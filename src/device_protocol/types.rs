@@ -7,29 +7,23 @@ use crate::{mem::page::ContiguousPages, queue_pair::convert_ibv_mtu_to_u16};
 
 #[allow(clippy::missing_docs_in_private_items)]
 /// Memory Translation Table entry
-pub(crate) struct MttEntry {
+pub(crate) struct MttUpdate {
     pub(crate) mr_base_va: u64,
     pub(crate) mr_length: u32,
     pub(crate) mr_key: u32,
     pub(crate) pd_handler: u32,
     pub(crate) acc_flags: u8,
-    pub(crate) pgt_offset: u32,
-    pub(crate) dma_addr: u64,
-    pub(crate) zero_based_entry_count: u32,
+    pub(crate) base_pgt_offset: u32,
 }
 
-impl MttEntry {
-    #[allow(clippy::too_many_arguments)]
-    /// Creates a new `MttEntry`
+impl MttUpdate {
     pub(crate) fn new(
         mr_base_va: u64,
         mr_length: u32,
         mr_key: u32,
         pd_handler: u32,
         acc_flags: u8,
-        pgt_offset: u32,
-        dma_addr: u64,
-        zero_based_entry_count: u32,
+        base_pgt_offset: u32,
     ) -> Self {
         Self {
             mr_base_va,
@@ -37,12 +31,27 @@ impl MttEntry {
             mr_key,
             pd_handler,
             acc_flags,
-            pgt_offset,
+            base_pgt_offset,
+        }
+    }
+}
+
+pub(crate) struct PgtUpdate {
+    pub(crate) dma_addr: u64,
+    pub(crate) pgt_offset: u32,
+    pub(crate) zero_based_entry_count: u32,
+}
+
+impl PgtUpdate {
+    pub(crate) fn new(dma_addr: u64, pgt_offset: u32, zero_based_entry_count: u32) -> Self {
+        Self {
             dma_addr,
+            pgt_offset,
             zero_based_entry_count,
         }
     }
 }
+
 /// Queue Pair entry
 #[allow(clippy::missing_docs_in_private_items)]
 #[derive(Default)]

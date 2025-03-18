@@ -1,12 +1,12 @@
 /// Mtt allocator
 mod alloc;
 
-use std::io;
+use std::{collections::HashMap, io, mem::take};
 
 use alloc::Alloc;
 
 use crate::{
-    device_protocol::MttEntry,
+    device_protocol::MttUpdate,
     mem::{get_num_page, page::ContiguousPages, virt_to_phy::AddressResolver, PAGE_SIZE},
     ringbuffer::Syncable,
 };
@@ -15,6 +15,8 @@ use crate::{
 pub(crate) struct Mtt {
     /// Table memory allocator
     alloc: Alloc,
+    /// Table tracks `mr_key` to `PgtEntry` mapping
+    mrkey_map: HashMap<u32, PgtEntry>,
 }
 
 impl Mtt {
@@ -22,21 +24,37 @@ impl Mtt {
     pub(crate) fn new() -> Self {
         Self {
             alloc: Alloc::new(),
+            mrkey_map: HashMap::new(),
         }
     }
 
     /// Register a memory region
-    pub(crate) fn register(&mut self, num_pages: usize) -> io::Result<(u32, Vec<PgtEntry>)> {
-        let mr_key = self
+    pub(crate) fn register(&mut self, num_pages: usize) -> io::Result<(u32, PgtEntry)> {
+        let (mr_key, pgt_entry) = self
             .alloc
-            .alloc_mr_key()
+            .alloc(num_pages)
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
-        let pgt_entries = self
-            .alloc
-            .alloc_pgt_indices(num_pages)
-            .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
+        debug_assert!(
+            self.mrkey_map.insert(mr_key, pgt_entry).is_none(),
+            "mr_key exist"
+        );
 
-        Ok((mr_key, pgt_entries))
+        Ok((mr_key, pgt_entry))
+    }
+
+    /// Deregister a memory region
+    pub(crate) fn deregister(&mut self, mr_key: u32) -> io::Result<()> {
+        let entry = self
+            .mrkey_map
+            .remove(&mr_key)
+            .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
+        if !self
+            .alloc
+            .dealloc(mr_key, entry.index as usize, entry.count as usize)
+        {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput));
+        }
+        Ok(())
     }
 
     /// Validates memory region parameters
@@ -87,6 +105,7 @@ impl Mtt {
     }
 }
 
+#[derive(Clone, Copy)]
 pub(crate) struct PgtEntry {
     pub(crate) index: u32,
     pub(crate) count: u32,
