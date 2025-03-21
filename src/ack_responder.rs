@@ -71,7 +71,7 @@ impl AckResponder {
             };
             let frame = match x {
                 AckResponse::Ack { qpn, msn, last_psn } => {
-                    AckFrameBuilder::build_ack(last_psn, u128::MAX, 0, 0, dqpn, false)
+                    AckFrameBuilder::build_ack(last_psn, u128::MAX, 0, 0, dqpn, false, false)
                 }
                 AckResponse::Nak {
                     qpn,
@@ -83,6 +83,7 @@ impl AckResponder {
                     base_psn,
                     0,
                     dqpn,
+                    true,
                     true,
                 ),
             };
@@ -110,6 +111,7 @@ impl AckFrameBuilder {
         prev_bitmap: u128,
         dqpn: u32,
         is_packet_loss: bool,
+        is_window_slided: bool,
     ) -> Vec<u8> {
         const TRANS_TYPE_RC: u8 = 0x00;
         const OPCODE_ACKNOWLEDGE: u8 = 0x11;
@@ -127,6 +129,7 @@ impl AckFrameBuilder {
         let mut aeth_seg0 = AethSeg0::default();
         aeth_seg0.set_is_send_by_driver(true);
         aeth_seg0.set_is_packet_loss(is_packet_loss);
+        aeth_seg0.set_is_window_slided(is_window_slided);
         aeth_seg0.set_pre_psn(u24::from_u32(pre_psn));
         payload[12..28].copy_from_slice(&prev_bitmap.to_be_bytes()); // prev_bitmap
         payload[28..44].copy_from_slice(&now_bitmap.to_be_bytes());
