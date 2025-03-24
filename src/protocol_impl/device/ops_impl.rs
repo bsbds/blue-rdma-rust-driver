@@ -282,7 +282,7 @@ where
             current.send_cq = attr.send_cq();
             current.recv_cq = attr.recv_cq();
             current.mac_addr = self.network_config().mac.into();
-            current.pmtu = ibverbs_sys::IBV_MTU_256 as u8;
+            current.pmtu = ibverbs_sys::IBV_MTU_4096 as u8;
         });
         let entry = UpdateQp {
             ip_addr: self.network_config().ip.ip().to_bits(),
