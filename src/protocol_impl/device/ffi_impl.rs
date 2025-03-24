@@ -50,6 +50,7 @@ impl BlueRdmaCore {
         let device = PciHwDevice::open_default()?;
         device.reset()?;
         device.init_dma_engine()?;
+        device.set_custom()?;
         let mut ctx = HwDeviceCtx::initialize(device, config)?;
         Ok(ctx)
     }

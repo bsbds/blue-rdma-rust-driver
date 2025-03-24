@@ -147,6 +147,15 @@ impl PciHwDevice {
 
         Ok(())
     }
+
+    pub(crate) fn set_custom(&self) -> io::Result<()> {
+        let mut cfg = CustomCsrConfigurator::new(&self.sysfs_path)?;
+        cfg.set_loopback();
+        cfg.set_drop_thresh(1);
+        cfg.set_seed(0x3131_3131);
+
+        Ok(())
+    }
 }
 
 impl HwDevice for PciHwDevice {
@@ -199,6 +208,54 @@ impl DmaEngineConfigurator {
                 .add(ADDR1)
                 .cast::<u32>()
                 .write_volatile(1);
+        }
+    }
+}
+
+pub(crate) struct CustomCsrConfigurator {
+    bar: MmapMut,
+}
+
+#[allow(unsafe_code, clippy::cast_ptr_alignment)]
+impl CustomCsrConfigurator {
+    pub(crate) fn new(sysfs_path: impl AsRef<Path>) -> io::Result<Self> {
+        let bar_path = sysfs_path.as_ref().join(format!("resource{BAR_INDEX}"));
+        let file = OpenOptions::new().read(true).write(true).open(&bar_path)?;
+        let mmap = unsafe { MmapOptions::new().map_mut(&file)? };
+
+        Ok(Self { bar: mmap })
+    }
+
+    pub(crate) fn set_loopback(&mut self) {
+        const ADDR: usize = 0x180;
+        unsafe {
+            self.bar
+                .as_mut_ptr()
+                .add(ADDR)
+                .cast::<u32>()
+                .write_volatile(1);
+        }
+    }
+
+    pub(crate) fn set_seed(&mut self, seed: u32) {
+        const ADDR: usize = 0x184;
+        unsafe {
+            self.bar
+                .as_mut_ptr()
+                .add(ADDR)
+                .cast::<u32>()
+                .write_volatile(seed);
+        }
+    }
+
+    pub(crate) fn set_drop_thresh(&mut self, rate: u8) {
+        const ADDR: usize = 0x188;
+        unsafe {
+            self.bar
+                .as_mut_ptr()
+                .add(ADDR)
+                .cast::<u32>()
+                .write_volatile(u32::from(rate));
         }
     }
 }
