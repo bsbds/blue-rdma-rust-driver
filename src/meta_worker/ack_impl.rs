@@ -97,14 +97,17 @@ impl<T> MetaWorker<T> {
         for psn in x.into_iter().chain(y) {
             self.send_update(!is_send_by_local_hw, qpn, psn);
         }
-        // TODO: implement more fine-grained retransmission
-        let _ignore = self
-            .packet_retransmit_tx
-            .send(PacketRetransmitTask::RetransmitRange {
-                qpn,
-                psn_low: psn_pre,
-                psn_high: psn_now.wrapping_add(128) % PSN_MASK,
-            });
+
+        if !is_send_by_local_hw {
+            // TODO: implement more fine-grained retransmission
+            let _ignore = self
+                .packet_retransmit_tx
+                .send(PacketRetransmitTask::RetransmitRange {
+                    qpn,
+                    psn_low: psn_pre,
+                    psn_high: psn_now.wrapping_add(128) % PSN_MASK,
+                });
+        }
     }
 
     fn handle_nak_driver(&mut self, meta: NakMeta) {
