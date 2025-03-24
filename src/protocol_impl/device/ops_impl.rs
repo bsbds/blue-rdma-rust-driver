@@ -321,6 +321,8 @@ where
             })
             .ok_or(io::Error::from(io::ErrorKind::NotFound))?;
 
+        self.cmd_controller.update_qp(entry);
+
         let qp = self
             .qp_manager
             .get_qp(qpn)
@@ -341,7 +343,7 @@ where
             RecvWorker::new(rx, wr_queue).spawn();
         }
 
-        self.cmd_controller.update_qp(entry)
+        Ok(())
     }
 
     fn destroy_qp(&mut self, qpn: u32) {
