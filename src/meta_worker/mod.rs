@@ -1,5 +1,7 @@
-mod ack_impl;
-mod header_impl;
+mod ack;
+mod header_read;
+mod header_write;
+mod nak;
 
 use std::{
     io,

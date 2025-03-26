@@ -2,18 +2,14 @@ use tracing::error;
 
 use crate::{
     ack_responder::AckResponse,
-    completion::{Completion, Event, MessageMeta, RecvEvent, RecvEventOp, SendEvent, SendEventOp},
+    completion::{Event, MessageMeta, RecvEvent, RecvEventOp},
     constants::PSN_MASK,
-    device_protocol::{HeaderReadMeta, HeaderType, HeaderWriteMeta, PacketPos, WorkReqOpCode},
-    queue_pair::num_psn,
-    send::{SendWrBase, SendWrRdma},
-    tracker::Msn,
+    device_protocol::{HeaderType, HeaderWriteMeta, PacketPos},
 };
 
 use super::{CompletionTask, MetaWorker, RdmaWriteTask};
 
 impl<T> MetaWorker<T> {
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn handle_header_write(&mut self, meta: HeaderWriteMeta) {
         let HeaderWriteMeta {
             pos,
@@ -100,49 +96,5 @@ impl<T> MetaWorker<T> {
                 ack_req_packet_psn: psn.wrapping_sub(1) % PSN_MASK,
             });
         }
-    }
-
-    pub(super) fn handle_header_read(&mut self, meta: HeaderReadMeta) {
-        if meta.ack_req {
-            let end_psn = (meta.psn + 1) % PSN_MASK;
-            let event = Event::Recv(RecvEvent::new(
-                RecvEventOp::WriteAckReq,
-                MessageMeta::new(meta.msn, end_psn),
-            ));
-            let _ignore = self.completion_tx.send(CompletionTask::Register {
-                qpn: meta.dqpn,
-                event,
-            });
-            let tracker = self
-                .recv_table
-                .get_mut(meta.dqpn)
-                .unwrap_or_else(|| unreachable!());
-            if let Some(base_psn) = tracker.ack_one(meta.psn) {
-                let __ignore = self.completion_tx.send(CompletionTask::Ack {
-                    qpn: meta.dqpn,
-                    base_psn,
-                    is_send: false,
-                });
-            }
-        }
-
-        let flags = if meta.ack_req {
-            ibverbs_sys::ibv_send_flags::IBV_SEND_SOLICITED.0
-        } else {
-            0
-        };
-
-        let base = SendWrBase::new(
-            0,
-            flags,
-            meta.raddr,
-            meta.total_len,
-            meta.rkey,
-            0,
-            WorkReqOpCode::RdmaReadResp,
-        );
-        let send_wr = SendWrRdma::new_from_base(base, meta.laddr, meta.lkey);
-        let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr);
-        let _ignore = self.rdma_write_tx.send(task);
     }
 }
