@@ -40,12 +40,11 @@ impl<T> MetaWorker<T> {
             return;
         };
         let ack_msn = (!is_send_by_local_hw).then_some(ack_msn);
-        let x = Self::update_packet_tracker(tracker, psn_now, now_bitmap, ack_msn);
-        let y = Self::update_packet_tracker(tracker, psn_pre, pre_bitmap, ack_msn);
+        let x = Self::update_packet_tracker_nak(tracker, psn_now, now_bitmap);
+        let y = Self::update_packet_tracker_nak(tracker, psn_pre, pre_bitmap);
         for psn in x.into_iter().chain(y) {
             self.send_update(!is_send_by_local_hw, qpn, psn);
         }
-
         if !is_send_by_local_hw {
             // TODO: implement more fine-grained retransmission
             let _ignore = self
@@ -77,5 +76,14 @@ impl<T> MetaWorker<T> {
                 psn_low: psn_pre,
                 psn_high: psn_now,
             });
+    }
+
+    // TODO: handles msn of NAKs
+    fn update_packet_tracker_nak(
+        tracker: &mut Tracker,
+        base_psn: u32,
+        bitmap: u128,
+    ) -> Option<u32> {
+        tracker.merge_bitmap(base_psn, bitmap)
     }
 }

@@ -242,6 +242,10 @@ impl Tracker {
         acked_psn
     }
 
+    pub(crate) fn merge_bitmap(&mut self, base_psn: u32, bitmap: u128) -> Option<u32> {
+        self.psn.ack_range(base_psn, bitmap)
+    }
+
     pub(crate) fn ack_before(&mut self, psn: u32) -> Option<u32> {
         self.psn.ack_before(psn)
     }
