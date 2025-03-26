@@ -97,7 +97,7 @@ impl<T> MetaWorker<T> {
             let _ignore = self.ack_tx.send(AckResponse::Nak {
                 qpn: dqpn,
                 base_psn: tracker.base_psn(),
-                ack_req_packet_psn: psn,
+                ack_req_packet_psn: psn.wrapping_sub(1) % PSN_MASK,
             });
         }
     }
