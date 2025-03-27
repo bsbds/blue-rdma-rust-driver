@@ -10,7 +10,7 @@ use crate::{
         virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86},
         PageWithPhysAddr,
     },
-    meta_worker::MetaWorker,
+    meta_worker::{MetaHandler, MetaWorker},
     packet_retransmit::PacketRetransmitTask,
     protocol_impl::{
         desc::{
@@ -142,15 +142,14 @@ where
         .map(|(q, p)| MetaReportQueueCtx::new(q, p))
         .collect();
 
-    MetaWorker::new(
-        MetaReportQueueHandler::new(ctxs),
+    let handler = MetaHandler::new(
         ack_tx,
         retransmit_tx,
         packet_retransmit_tx,
         completion_tx,
         rdma_write_tx,
-    )
-    .spawn(is_shutdown);
+    );
+    MetaWorker::new(MetaReportQueueHandler::new(ctxs), handler).spawn(is_shutdown);
 
     Ok(())
 }

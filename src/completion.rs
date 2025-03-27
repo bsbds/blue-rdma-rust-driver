@@ -41,15 +41,9 @@ impl CompletionQueueRegistry {
 #[derive(Debug)]
 #[allow(variant_size_differences)]
 pub(crate) enum CompletionTask {
-    Register {
-        qpn: u32,
-        event: Event,
-    },
-    Ack {
-        qpn: u32,
-        base_psn: u32,
-        is_send: bool,
-    },
+    Register { qpn: u32, event: Event },
+    AckSend { qpn: u32, base_psn: u32 },
+    AckRecv { qpn: u32, base_psn: u32 },
 }
 
 pub(crate) struct CompletionWorker {
@@ -86,7 +80,9 @@ impl CompletionWorker {
     fn run(mut self) {
         while let Ok(x) = self.completion_rx.recv() {
             let qpn = match x {
-                CompletionTask::Register { qpn, .. } | CompletionTask::Ack { qpn, .. } => qpn,
+                CompletionTask::Register { qpn, .. }
+                | CompletionTask::AckSend { qpn, .. }
+                | CompletionTask::AckRecv { qpn, .. } => qpn,
             };
             let Some(tracker) = self.tracker_table.get_qp_mut(qpn) else {
                 continue;
@@ -98,20 +94,12 @@ impl CompletionWorker {
                 CompletionTask::Register { event, .. } => {
                     tracker.append(event);
                 }
-                CompletionTask::Ack {
-                    base_psn,
-                    is_send: true,
-                    ..
-                } => {
+                CompletionTask::AckSend { base_psn, .. } => {
                     if let Some(send_cq) = qp_attr.send_cq.and_then(|h| self.cq_table.get_cq(h)) {
                         tracker.ack_send(Some(base_psn), send_cq);
                     }
                 }
-                CompletionTask::Ack {
-                    base_psn,
-                    is_send: false,
-                    ..
-                } => {
+                CompletionTask::AckRecv { base_psn, .. } => {
                     let send_cq = qp_attr.send_cq.and_then(|h| self.cq_table.get_cq(h));
                     if let Some(recv_cq) = qp_attr.recv_cq.and_then(|h| self.cq_table.get_cq(h)) {
                         tracker.ack_recv(base_psn, recv_cq, send_cq, qpn, &self.ack_resp_tx);

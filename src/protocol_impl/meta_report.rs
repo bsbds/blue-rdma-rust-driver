@@ -5,7 +5,8 @@ use tracing::error;
 use crate::{
     constants::PSN_MASK,
     device_protocol::{
-        AckMeta, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport, NakMeta, ReportMeta,
+        AckMetaLocalHw, AckMetaRemoteDriver, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport,
+        NakMetaLocalHw, NakMetaRemoteDriver, NakMetaRemoteHw, ReportMeta,
     },
 };
 
@@ -38,14 +39,10 @@ impl<Dev> MetaReportQueueHandler<Dev> {
         Self { inner, pos: 0 }
     }
 
-    fn remap_psn(psn: u32, is_send_by_driver: bool) -> u32 {
-        if is_send_by_driver {
-            psn
-        } else {
-            // 128 (window size) - 16 (first stride)
-            const OFFSET: u32 = 112;
-            psn.wrapping_sub(OFFSET) & PSN_MASK
-        }
+    fn remap_psn(psn: u32) -> u32 {
+        // 128 (window size) - 16 (first stride)
+        const OFFSET: u32 = 112;
+        psn.wrapping_sub(OFFSET) & PSN_MASK
     }
 }
 
@@ -66,52 +63,76 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
 
             self.pos = (idx + 1) % num_queues;
             let meta = match desc {
-                MetaReportQueueDesc::WritePacketInfo(d) => ReportMeta::Write(HeaderWriteMeta {
-                    pos: d.packet_pos(),
-                    msn: d.msn(),
-                    psn: d.psn(),
-                    solicited: d.solicited(),
-                    ack_req: d.ack_req(),
-                    is_retry: d.is_retry(),
-                    dqpn: d.dqpn(),
-                    total_len: d.total_len(),
-                    raddr: d.raddr(),
-                    rkey: d.rkey(),
-                    imm: d.imm_data(),
-                    header_type: d.header_type(),
-                }),
-                MetaReportQueueDesc::ReadPacketInfo((f, n)) => ReportMeta::Read(HeaderReadMeta {
-                    dqpn: f.dqpn(),
-                    raddr: f.raddr(),
-                    rkey: f.rkey(),
-                    total_len: n.total_len(),
-                    laddr: n.laddr(),
-                    lkey: n.lkey(),
-                    ack_req: f.ack_req(),
-                    msn: f.msn(),
-                    psn: f.psn(),
-                }),
+                MetaReportQueueDesc::WritePacketInfo(d) => {
+                    ReportMeta::HeaderWrite(HeaderWriteMeta {
+                        pos: d.packet_pos(),
+                        msn: d.msn(),
+                        psn: d.psn(),
+                        solicited: d.solicited(),
+                        ack_req: d.ack_req(),
+                        is_retry: d.is_retry(),
+                        dqpn: d.dqpn(),
+                        total_len: d.total_len(),
+                        raddr: d.raddr(),
+                        rkey: d.rkey(),
+                        imm: d.imm_data(),
+                        header_type: d.header_type(),
+                    })
+                }
+                MetaReportQueueDesc::ReadPacketInfo((f, n)) => {
+                    ReportMeta::HeaderRead(HeaderReadMeta {
+                        dqpn: f.dqpn(),
+                        raddr: f.raddr(),
+                        rkey: f.rkey(),
+                        total_len: n.total_len(),
+                        laddr: n.laddr(),
+                        lkey: n.lkey(),
+                        ack_req: f.ack_req(),
+                        msn: f.msn(),
+                        psn: f.psn(),
+                    })
+                }
                 MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp(CnpMeta { qpn: d.dqpn() }),
-                MetaReportQueueDesc::Ack(d) => ReportMeta::Ack(AckMeta {
-                    qpn: d.qpn(),
-                    msn: d.msn(),
-                    psn_now: Self::remap_psn(d.psn_now(), d.is_send_by_driver()),
-                    now_bitmap: d.now_bitmap(),
-                    is_window_slided: d.is_window_slided(),
-                    is_send_by_local_hw: d.is_send_by_local_hw(),
-                    is_send_by_driver: d.is_send_by_driver(),
-                }),
-                MetaReportQueueDesc::Nak((f, n)) => ReportMeta::Nak(NakMeta {
-                    qpn: f.qpn(),
-                    msn: f.msn(),
-                    psn_now: Self::remap_psn(f.psn_now(), f.is_send_by_driver()),
-                    now_bitmap: f.now_bitmap(),
-                    psn_before_slide: Self::remap_psn(f.psn_before_slide(), f.is_send_by_driver()),
-                    pre_bitmap: n.pre_bitmap(),
-                    is_window_slided: f.is_window_slided(),
-                    is_send_by_local_hw: f.is_send_by_local_hw(),
-                    is_send_by_driver: f.is_send_by_driver(),
-                }),
+                MetaReportQueueDesc::Ack(d) => {
+                    match (d.is_send_by_driver(), d.is_send_by_local_hw()) {
+                        (true, false) => ReportMeta::AckRemoteDriver(AckMetaRemoteDriver {
+                            qpn: d.qpn(),
+                            psn_now: d.psn_now(),
+                        }),
+                        (false, true) => ReportMeta::AckLocalHw(AckMetaLocalHw {
+                            qpn: d.qpn(),
+                            psn_now: Self::remap_psn(d.psn_now()),
+                            now_bitmap: d.now_bitmap(),
+                        }),
+                        (false, false) | (true, true) => unreachable!("invalid ack branch"),
+                    }
+                }
+                MetaReportQueueDesc::Nak((f, n)) => {
+                    match (f.is_send_by_driver(), f.is_send_by_local_hw()) {
+                        (true, false) => ReportMeta::NakRemoteDriver(NakMetaRemoteDriver {
+                            qpn: f.qpn(),
+                            psn_now: f.psn_now(),
+                            psn_pre: f.psn_before_slide(),
+                        }),
+                        (false, true) => ReportMeta::NakLocalHw(NakMetaLocalHw {
+                            qpn: f.qpn(),
+                            msn: f.msn(),
+                            psn_now: Self::remap_psn(f.psn_now()),
+                            now_bitmap: f.now_bitmap(),
+                            psn_pre: Self::remap_psn(f.psn_before_slide()),
+                            pre_bitmap: n.pre_bitmap(),
+                        }),
+                        (false, false) => ReportMeta::NakRemoteHw(NakMetaRemoteHw {
+                            qpn: f.qpn(),
+                            msn: f.msn(),
+                            psn_now: Self::remap_psn(f.psn_now()),
+                            now_bitmap: f.now_bitmap(),
+                            psn_pre: Self::remap_psn(f.psn_before_slide()),
+                            pre_bitmap: n.pre_bitmap(),
+                        }),
+                        (true, true) => unreachable!("invalid nak branch"),
+                    }
+                }
             };
             return Ok(Some(meta));
         }
