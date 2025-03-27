@@ -4,12 +4,12 @@ use super::msn::Msn;
 
 /// Tracker for tracking message sequence number of ACK packets
 #[derive(Default, Debug, Clone)]
-pub(crate) struct AckTracker {
+pub(crate) struct MsnTracker {
     base_msn: Msn,
     inner: BitVec,
 }
 
-impl AckTracker {
+impl MsnTracker {
     /// Acknowledges a single MSN.
     ///
     /// # Returns

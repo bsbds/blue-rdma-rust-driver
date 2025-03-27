@@ -7,17 +7,18 @@ use crate::{
         NakMetaLocalHw, NakMetaRemoteDriver, NakMetaRemoteHw, PacketPos, WorkReqOpCode,
     },
     packet_retransmit::PacketRetransmitTask,
-    queue_pair::TrackerTable,
+    qp_table::QpTable,
     rdma_write_worker::RdmaWriteTask,
     send::{SendWrBase, SendWrRdma},
     timeout_retransmit::RetransmitTask,
+    tracker::{LocalAckTracker, RemoteAckTracker},
 };
 
 use super::ReportMeta;
 
 pub(crate) struct MetaHandler {
-    pub(super) send_table: TrackerTable,
-    pub(super) recv_table: TrackerTable,
+    pub(super) send_table: QpTable<RemoteAckTracker>,
+    pub(super) recv_table: QpTable<LocalAckTracker>,
     pub(super) ack_tx: flume::Sender<AckResponse>,
     pub(super) retransmit_tx: flume::Sender<RetransmitTask>,
     pub(super) packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
@@ -34,8 +35,8 @@ impl MetaHandler {
         rdma_write_tx: flume::Sender<RdmaWriteTask>,
     ) -> Self {
         Self {
-            send_table: TrackerTable::new(),
-            recv_table: TrackerTable::new(),
+            send_table: QpTable::new(),
+            recv_table: QpTable::new(),
             ack_tx,
             retransmit_tx,
             packet_retransmit_tx,
@@ -58,8 +59,8 @@ impl MetaHandler {
     }
 
     fn handle_ack_local_hw(&mut self, meta: AckMetaLocalHw) -> Option<()> {
-        let tracker = self.recv_table.get_mut(meta.qpn)?;
-        if let Some(psn) = tracker.ack_range_local(meta.psn_now, meta.now_bitmap) {
+        let tracker = self.recv_table.get_qp_mut(meta.qpn)?;
+        if let Some(psn) = tracker.ack_bitmap(meta.psn_now, meta.now_bitmap) {
             self.receiver_updates(meta.qpn, psn);
         }
 
@@ -67,7 +68,7 @@ impl MetaHandler {
     }
 
     fn handle_ack_remote_driver(&mut self, meta: AckMetaRemoteDriver) -> Option<()> {
-        let tracker = self.send_table.get_mut(meta.qpn)?;
+        let tracker = self.send_table.get_qp_mut(meta.qpn)?;
         if let Some(psn) = tracker.ack_before(meta.psn_now) {
             self.sender_updates(meta.qpn, psn);
         }
@@ -76,10 +77,10 @@ impl MetaHandler {
     }
 
     fn handle_nak_local_hw(&mut self, meta: NakMetaLocalHw) -> Option<()> {
-        let tracker = self.recv_table.get_mut(meta.qpn)?;
-        let x = tracker.merge_bitmap(meta.psn_pre, meta.pre_bitmap);
-        let y = tracker.merge_bitmap(meta.psn_now, meta.now_bitmap);
-        for psn in x.into_iter().chain(y) {
+        let tracker = self.recv_table.get_qp_mut(meta.qpn)?;
+        if let Some(psn) =
+            tracker.nak_bitmap(meta.psn_pre, meta.pre_bitmap, meta.psn_now, meta.now_bitmap)
+        {
             self.receiver_updates(meta.qpn, psn);
         }
 
@@ -87,10 +88,14 @@ impl MetaHandler {
     }
 
     fn handle_nak_remote_hw(&mut self, meta: NakMetaRemoteHw) -> Option<()> {
-        let tracker = self.send_table.get_mut(meta.qpn)?;
-        let x = tracker.merge_bitmap(meta.psn_pre, meta.pre_bitmap);
-        let y = tracker.merge_bitmap(meta.psn_now, meta.now_bitmap);
-        for psn in x.into_iter().chain(y) {
+        let tracker = self.send_table.get_qp_mut(meta.qpn)?;
+        if let Some(psn) = tracker.nak_bitmap(
+            meta.msn,
+            meta.psn_pre,
+            meta.pre_bitmap,
+            meta.psn_now,
+            meta.now_bitmap,
+        ) {
             self.sender_updates(meta.qpn, psn);
         }
 
@@ -105,9 +110,8 @@ impl MetaHandler {
         Some(())
     }
 
-    fn handle_nak_remote_driver(&mut self, meta: NakMetaRemoteDriver) -> Option<()> {
-        let table = &mut self.send_table;
-        let tracker = table.get_mut(meta.qpn)?;
+    #[allow(clippy::unnecessary_wraps)]
+    fn handle_nak_remote_driver(&self, meta: NakMetaRemoteDriver) -> Option<()> {
         let _ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::RetransmitRange {
@@ -148,7 +152,7 @@ impl MetaHandler {
                 qpn: meta.dqpn,
                 event,
             });
-            let tracker = self.recv_table.get_mut(meta.dqpn)?;
+            let tracker = self.recv_table.get_qp_mut(meta.dqpn)?;
             if let Some(base_psn) = tracker.ack_one(meta.psn) {
                 let __ignore = self.completion_tx.send(CompletionTask::AckRecv {
                     qpn: meta.dqpn,
@@ -194,7 +198,7 @@ impl MetaHandler {
             imm,
             header_type,
         } = meta;
-        let tracker = self.recv_table.get_mut(dqpn)?;
+        let tracker = self.recv_table.get_qp_mut(dqpn)?;
 
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
             let end_psn = (psn + 1) % PSN_MASK;

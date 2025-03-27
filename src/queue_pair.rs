@@ -15,7 +15,7 @@ use crate::{
     constants::{MAX_MSN_WINDOW, MAX_PSN_WINDOW, MAX_QP_CNT, MAX_SEND_WR, QPN_KEY_PART_WIDTH},
     device_protocol::{WithQpParams, WrChunkBuilder},
     send::SendWrRdma,
-    tracker::{AckTracker, Msn, PacketTracker},
+    tracker::{Msn, MsnTracker, PsnTracker},
 };
 
 #[derive(Default, Clone, Copy)]
@@ -183,75 +183,6 @@ impl Sender {
 
     fn update_msn_acked(&mut self, msn: u16) {
         self.base_msn_acked = msn;
-    }
-}
-
-pub(crate) struct TrackerTable {
-    inner: Box<[Tracker]>,
-}
-
-impl TrackerTable {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: iter::repeat_with(Tracker::default)
-                .take(MAX_QP_CNT)
-                .collect(),
-        }
-    }
-
-    pub(crate) fn get_mut(&mut self, qpn: u32) -> Option<&mut Tracker> {
-        self.inner.get_mut(index(qpn))
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct Tracker {
-    psn: PacketTracker,
-    ack: AckTracker,
-    prev_psn: u32,
-}
-
-impl Tracker {
-    /// Acknowledges a single PSN.
-    pub(crate) fn ack_one(&mut self, psn: u32) -> Option<u32> {
-        self.psn.ack_one(psn)
-    }
-
-    /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
-    pub(crate) fn ack_range_local(&mut self, base_psn: u32, bitmap: u128) -> Option<u32> {
-        let mut acked_psn = None;
-        if let Some(psn) = self.psn.ack_range1(self.prev_psn, base_psn) {
-            acked_psn = Some(psn);
-        }
-        if let Some(psn) = self.psn.ack_range(base_psn, bitmap) {
-            acked_psn = Some(psn);
-        }
-        self.prev_psn = base_psn;
-        acked_psn
-    }
-
-    /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
-    pub(crate) fn ack_range(&mut self, base_psn: u32, bitmap: u128, ack_msn: u16) -> Option<u32> {
-        let mut acked_psn = None;
-        if self.ack.ack(Msn(ack_msn)).is_some() {
-            acked_psn = self.psn.ack_before(base_psn);
-        }
-        if let Some(psn) = self.psn.ack_range(base_psn, bitmap) {
-            acked_psn = Some(psn);
-        }
-        acked_psn
-    }
-
-    pub(crate) fn merge_bitmap(&mut self, base_psn: u32, bitmap: u128) -> Option<u32> {
-        self.psn.ack_range(base_psn, bitmap)
-    }
-
-    pub(crate) fn ack_before(&mut self, psn: u32) -> Option<u32> {
-        self.psn.ack_before(psn)
-    }
-
-    pub(crate) fn base_psn(&self) -> u32 {
-        self.psn.base_psn()
     }
 }
 

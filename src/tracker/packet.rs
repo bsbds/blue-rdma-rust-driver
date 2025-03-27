@@ -8,13 +8,13 @@ use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
 
 #[derive(Default, Debug, Clone)]
-pub(crate) struct PacketTracker {
+pub(crate) struct PsnTracker {
     base_psn: u32,
     inner: BitVec,
 }
 
 #[allow(clippy::cast_possible_wrap, clippy::cast_sign_loss)] // won't wrap since we only use 24bits of the u32
-impl PacketTracker {
+impl PsnTracker {
     #[allow(clippy::as_conversions)] // u32 to usize
     /// Acknowledges a range of PSNs starting from `base_psn` using a bitmap.
     ///
@@ -22,7 +22,7 @@ impl PacketTracker {
     ///
     /// Returns `Some(PSN)` if the left edge of the PSN window is advanced, where the
     /// returned `PSN` is the new base PSN value after the advance.
-    pub(crate) fn ack_range(&mut self, mut now_psn: u32, mut bitmap: u128) -> Option<u32> {
+    pub(crate) fn ack_bitmap(&mut self, mut now_psn: u32, mut bitmap: u128) -> Option<u32> {
         let rstart = self.rstart(now_psn);
         let rend = rstart + 128;
         if let Ok(x) = usize::try_from(rend) {
@@ -40,13 +40,17 @@ impl PacketTracker {
         self.try_advance()
     }
 
-    // exclude `now_psn`
-    pub(crate) fn ack_range1(&mut self, prev_psn: u32, now_psn: u32) -> Option<u32> {
-        if prev_psn <= self.base_psn {
-            return self.ack_before(now_psn);
+    /// Acknowledges a range of PSNs from `psn_low` to `psn_high` (exclusive).
+    ///
+    /// # Returns
+    /// * `Some(PSN)` - If the acknowledgment causes the base PSN to advance, returns the new base PSN
+    /// * `None` - If the base PSN doesn't change
+    pub(crate) fn ack_range(&mut self, psn_low: u32, psn_high: u32) -> Option<u32> {
+        if psn_low <= self.base_psn {
+            return self.ack_before(psn_high);
         }
-        let rstart: usize = usize::try_from(self.rstart(prev_psn)).ok()?;
-        let rend: usize = usize::try_from(self.rstart(now_psn)).ok()?;
+        let rstart: usize = usize::try_from(self.rstart(psn_low)).ok()?;
+        let rend: usize = usize::try_from(self.rstart(psn_high)).ok()?;
         if rend >= self.inner.len() {
             self.inner.resize(rend + 1, false);
         }
@@ -56,7 +60,6 @@ impl PacketTracker {
         None
     }
 
-    #[allow(clippy::as_conversions)] // u32 to usize
     /// Acknowledges a single PSN.
     ///
     /// # Returns
@@ -72,7 +75,6 @@ impl PacketTracker {
         self.try_advance()
     }
 
-    #[allow(clippy::as_conversions)] // u32 to usize
     /// Acknowledges all PSNs before the given PSN.
     ///
     /// # Returns
@@ -90,7 +92,6 @@ impl PacketTracker {
         Some(psn)
     }
 
-    #[allow(clippy::as_conversions)] // u32 to usize
     /// Returns `true` if all PSNs up to and including the given PSN have been acknowledged.
     pub(crate) fn all_acked(&self, psn_to: u32) -> bool {
         let x = self.base_psn.wrapping_sub(psn_to) & PSN_MASK;
@@ -116,7 +117,6 @@ impl PacketTracker {
     ///
     /// Returns `Some(PSN)` if `base_psn` was advanced, where the returned `PSN` is the new
     /// base PSN value after the advance.
-    #[allow(clippy::as_conversions)] // pos should never larger than u32::MAX
     fn try_advance(&mut self) -> Option<u32> {
         let pos = self.inner.first_zero().unwrap_or(self.inner.len());
         if pos == 0 {
@@ -135,7 +135,7 @@ mod tests {
 
     #[test]
     fn test_ack_one() {
-        let mut tracker = PacketTracker::default();
+        let mut tracker = PsnTracker::default();
         tracker.ack_one(5);
         assert!(!tracker.inner[0..5].iter().any(|b| *b));
         assert!(tracker.inner[5]);
@@ -143,27 +143,27 @@ mod tests {
 
     #[test]
     fn test_ack_range() {
-        let mut tracker = PacketTracker::default();
-        tracker.ack_range(0, 0b11); // PSN 0 and 1
+        let mut tracker = PsnTracker::default();
+        tracker.ack_bitmap(0, 0b11); // PSN 0 and 1
         assert_eq!(tracker.base_psn, 2);
         assert!(tracker.inner.not_all());
 
-        let mut tracker = PacketTracker {
+        let mut tracker = PsnTracker {
             base_psn: 5,
             ..Default::default()
         };
-        tracker.ack_range(5, 0b11);
+        tracker.ack_bitmap(5, 0b11);
         assert_eq!(tracker.base_psn, 7);
         assert!(tracker.inner.not_all());
 
-        let mut tracker = PacketTracker {
+        let mut tracker = PsnTracker {
             base_psn: 10,
             ..Default::default()
         };
-        tracker.ack_range(5, 0b11);
+        tracker.ack_bitmap(5, 0b11);
         assert_eq!(tracker.base_psn, 10);
         assert!(tracker.inner.not_all());
-        tracker.ack_range(20, 0b11);
+        tracker.ack_bitmap(20, 0b11);
         assert_eq!(tracker.base_psn, 10);
         assert!(tracker.inner[10]);
         assert!(tracker.inner[11]);
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn test_all_acked() {
-        let tracker = PacketTracker {
+        let tracker = PsnTracker {
             base_psn: 10,
             ..Default::default()
         };
@@ -182,10 +182,10 @@ mod tests {
 
     #[test]
     fn test_wrapping_ack() {
-        let mut tracker = PacketTracker {
+        let mut tracker = PsnTracker {
             base_psn: PSN_MASK - 1,
             ..Default::default()
         };
-        tracker.ack_range(0, 0b11);
+        tracker.ack_bitmap(0, 0b11);
     }
 }
