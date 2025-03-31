@@ -196,6 +196,7 @@ mod send;
 mod timeout_retransmit;
 mod timer;
 mod tracker;
+mod utils;
 
 #[allow(unsafe_code)]
 /// Context operations
