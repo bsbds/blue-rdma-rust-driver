@@ -192,6 +192,7 @@ mod recv;
 mod ringbuffer;
 /// Send Queue implementations
 mod send;
+mod sq_worker;
 mod timeout_retransmit;
 mod timer;
 mod tracker;
