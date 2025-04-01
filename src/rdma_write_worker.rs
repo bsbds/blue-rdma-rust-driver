@@ -1,5 +1,7 @@
 use std::io;
 
+use parking_lot::Mutex;
+
 use crate::{
     completion::{Completion, CompletionTask, Event, MessageMeta, SendEvent, SendEventOp},
     constants::PSN_MASK,
@@ -7,9 +9,10 @@ use crate::{
     fragmenter::{WrChunkFragmenter, WrPacketFragmenter},
     packet_retransmit::{PacketRetransmitTask, SendQueueElem},
     protocol_impl::SendQueueScheduler,
-    qp::{num_psn, QueuePairAttrTable, SenderTable},
+    qp::{num_psn, QueuePairAttrTable, SqContext},
     send::SendWrRdma,
     timeout_retransmit::RetransmitTask,
+    utils::QpTable,
 };
 
 pub(crate) struct RdmaWriteTask {
@@ -26,10 +29,10 @@ impl RdmaWriteTask {
 }
 
 pub(crate) struct RdmaWriteWorker {
-    rdma_write_rx: flume::Receiver<RdmaWriteTask>,
-    sender_table: SenderTable,
+    sq_ctx_table: QpTable<SqContext>,
     qp_attr_table: QueuePairAttrTable,
     send_scheduler: SendQueueScheduler,
+    rdma_write_rx: flume::Receiver<RdmaWriteTask>,
     retransmit_tx: flume::Sender<RetransmitTask>,
     packet_retransmit_tx: flume::Sender<PacketRetransmitTask>,
     completion_tx: flume::Sender<CompletionTask>,
@@ -46,7 +49,7 @@ impl RdmaWriteWorker {
     ) -> Self {
         Self {
             rdma_write_rx,
-            sender_table: SenderTable::new(),
+            sq_ctx_table: QpTable::new(),
             qp_attr_table,
             send_scheduler,
             retransmit_tx,
@@ -79,7 +82,7 @@ impl RdmaWriteWorker {
         }
     }
 
-    fn rdma_read(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
+    fn rdma_read(&mut self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
         let qp = self
             .qp_attr_table
             .get(qpn)
@@ -89,9 +92,9 @@ impl RdmaWriteWorker {
         let length = wr.length();
         let num_psn = 1;
         let (msn, psn) = self
-            .sender_table
-            .map_qp_mut(qpn, |sender| sender.next_wr(num_psn))
-            .flatten()
+            .sq_ctx_table
+            .get_qp_mut(qpn)
+            .and_then(|ctx| ctx.next_wr(num_psn))
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let end_psn = psn + num_psn;
         let qp_params = QpParams::new(
@@ -149,7 +152,7 @@ impl RdmaWriteWorker {
         Ok(())
     }
 
-    fn write(&self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
+    fn write(&mut self, qpn: u32, wr: SendWrRdma) -> io::Result<()> {
         let qp = self
             .qp_attr_table
             .get(qpn)
@@ -159,9 +162,9 @@ impl RdmaWriteWorker {
         let num_psn =
             num_psn(qp.pmtu, addr, length).ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let (msn, psn) = self
-            .sender_table
-            .map_qp_mut(qpn, |sender| sender.next_wr(num_psn))
-            .flatten()
+            .sq_ctx_table
+            .get_qp_mut(qpn)
+            .and_then(|ctx| ctx.next_wr(num_psn))
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
         let end_psn = psn + num_psn;
         let flags = wr.send_flags();

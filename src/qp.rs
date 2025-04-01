@@ -130,35 +130,15 @@ impl QpManager {
     }
 }
 
-#[derive(Debug)]
-pub(crate) struct SenderTable {
-    inner: Box<[Mutex<Sender>]>,
-}
-
-impl SenderTable {
-    pub(crate) fn new() -> Self {
-        Self {
-            inner: iter::repeat_with(Mutex::default).take(MAX_QP_CNT).collect(),
-        }
-    }
-
-    pub(crate) fn map_qp_mut<F, T>(&self, qpn: u32, mut f: F) -> Option<T>
-    where
-        F: FnMut(&mut Sender) -> T,
-    {
-        Some(f(&mut self.inner.get(index(qpn))?.lock()))
-    }
-}
-
 #[derive(Default, Debug)]
-pub(crate) struct Sender {
+pub(crate) struct SqContext {
     msn: u16,
     psn: Psn,
     base_psn_acked: Psn,
     base_msn_acked: u16,
 }
 
-impl Sender {
+impl SqContext {
     // FIXME: refactor `next_wr`
     #[allow(clippy::similar_names)]
     pub(crate) fn next_wr(&mut self, num_psn: u32) -> Option<(u16, Psn)> {
