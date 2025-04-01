@@ -12,19 +12,30 @@ use crate::{
     qp::{num_psn, QueuePairAttrTable, SqContext},
     send::SendWrRdma,
     timeout_retransmit::RetransmitTask,
-    utils::QpTable,
+    utils::{Psn, QpTable},
 };
 
-pub(crate) struct RdmaWriteTask {
-    qpn: u32,
-    wr: SendWrRdma,
-    resp_tx: oneshot::Sender<io::Result<()>>,
+#[derive(Debug)]
+pub(crate) enum RdmaWriteTask {
+    Write {
+        qpn: u32,
+        wr: SendWrRdma,
+        resp_tx: oneshot::Sender<io::Result<()>>,
+    },
+    Ack {
+        qpn: u32,
+        base_psn: Psn,
+    },
 }
 
 impl RdmaWriteTask {
-    pub(crate) fn new(qpn: u32, wr: SendWrRdma) -> (Self, oneshot::Receiver<io::Result<()>>) {
+    pub(crate) fn new_write(qpn: u32, wr: SendWrRdma) -> (Self, oneshot::Receiver<io::Result<()>>) {
         let (resp_tx, resp_rx) = oneshot::channel();
-        (Self { qpn, wr, resp_tx }, resp_rx)
+        (Self::Write { qpn, wr, resp_tx }, resp_rx)
+    }
+
+    pub(crate) fn new_ack(qpn: u32, base_psn: Psn) -> Self {
+        Self::Ack { qpn, base_psn }
     }
 }
 
@@ -67,18 +78,26 @@ impl RdmaWriteWorker {
 
     fn run(mut self) {
         while let Ok(task) = self.rdma_write_rx.recv() {
-            let RdmaWriteTask { qpn, wr, resp_tx } = task;
-            #[allow(clippy::wildcard_enum_match_arm)]
-            let resp = match wr.opcode() {
-                WorkReqOpCode::RdmaWrite
-                | WorkReqOpCode::RdmaWriteWithImm
-                | WorkReqOpCode::Send
-                | WorkReqOpCode::SendWithImm
-                | WorkReqOpCode::RdmaReadResp => self.write(qpn, wr),
-                WorkReqOpCode::RdmaRead => self.rdma_read(qpn, wr),
-                _ => unreachable!("opcode unsupported"),
-            };
-            resp_tx.send(resp);
+            match task {
+                RdmaWriteTask::Write { qpn, wr, resp_tx } => {
+                    #[allow(clippy::wildcard_enum_match_arm)]
+                    let resp = match wr.opcode() {
+                        WorkReqOpCode::RdmaWrite
+                        | WorkReqOpCode::RdmaWriteWithImm
+                        | WorkReqOpCode::Send
+                        | WorkReqOpCode::SendWithImm
+                        | WorkReqOpCode::RdmaReadResp => self.write(qpn, wr),
+                        WorkReqOpCode::RdmaRead => self.rdma_read(qpn, wr),
+                        _ => unreachable!("opcode unsupported"),
+                    };
+                    resp_tx.send(resp);
+                }
+                RdmaWriteTask::Ack { qpn, base_psn } => {
+                    if let Some(ctx) = self.sq_ctx_table.get_qp_mut(qpn) {
+                        ctx.update_psn_acked(base_psn);
+                    }
+                }
+            }
         }
     }
 

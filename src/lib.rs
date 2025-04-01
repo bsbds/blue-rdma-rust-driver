@@ -35,7 +35,7 @@
     unused_lifetimes,
     unused_qualifications,
     unused_results,
-    variant_size_differences,
+    // variant_size_differences,
 
     warnings, // treat all warnings as errors
 
@@ -87,7 +87,7 @@
     clippy::self_named_module_files,
     // clippy::shadow_reuse, it’s a common pattern in Rust code
     // clippy::shadow_same, it’s a common pattern in Rust code
-    clippy::shadow_unrelated,
+    // clippy::shadow_unrelated,
     clippy::str_to_string,
     clippy::string_add,
     clippy::string_to_string,

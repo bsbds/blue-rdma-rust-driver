@@ -159,11 +159,11 @@ impl SqContext {
         Some((current_msn, current_psn))
     }
 
-    fn update_psn_acked(&mut self, psn: Psn) {
+    pub(crate) fn update_psn_acked(&mut self, psn: Psn) {
         self.base_psn_acked = psn;
     }
 
-    fn update_msn_acked(&mut self, msn: u16) {
+    pub(crate) fn update_msn_acked(&mut self, msn: u16) {
         self.base_msn_acked = msn;
     }
 }

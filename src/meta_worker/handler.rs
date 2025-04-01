@@ -127,16 +127,19 @@ impl MetaHandler {
         let _ignore = self
             .completion_tx
             .send(CompletionTask::AckSend { qpn, base_psn });
-        let __ignore = self
+        let _ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::Ack { qpn, psn: base_psn });
+        let _ignore = self
+            .rdma_write_tx
+            .send(RdmaWriteTask::new_ack(qpn, base_psn));
     }
 
     pub(crate) fn receiver_updates(&self, qpn: u32, base_psn: Psn) {
         let _ignore = self
             .completion_tx
             .send(CompletionTask::AckRecv { qpn, base_psn });
-        let __ignore = self
+        let _ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::Ack { qpn, psn: base_psn });
     }
@@ -177,7 +180,7 @@ impl MetaHandler {
             WorkReqOpCode::RdmaReadResp,
         );
         let send_wr = SendWrRdma::new_from_base(base, meta.laddr, meta.lkey);
-        let (task, _) = RdmaWriteTask::new(meta.dqpn, send_wr);
+        let (task, _) = RdmaWriteTask::new_write(meta.dqpn, send_wr);
         let _ignore = self.rdma_write_tx.send(task);
 
         Some(())
