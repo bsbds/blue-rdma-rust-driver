@@ -7,8 +7,8 @@ use crate::{
     constants::MAX_QP_CNT,
     device_protocol::{WorkReqSend, WrChunk},
     protocol_impl::SendQueueScheduler,
-    qp::qpn_index,
     timer::TransportTimer,
+    utils::qpn_index,
 };
 
 const DEFAULT_INIT_RETRY_COUNT: usize = 5;

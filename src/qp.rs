@@ -221,8 +221,3 @@ pub(crate) fn convert_ibv_mtu_to_u16(ibv_mtu: u8) -> Option<u16> {
     };
     Some(pmtu)
 }
-
-#[allow(clippy::as_conversions)] // u32 to usize
-pub(crate) fn qpn_index(qpn: u32) -> usize {
-    (qpn >> QPN_KEY_PART_WIDTH) as usize
-}
