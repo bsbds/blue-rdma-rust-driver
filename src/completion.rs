@@ -7,7 +7,7 @@ use crate::{
     ack_responder::AckResponse,
     constants::MAX_CQ_CNT,
     qp::QueuePairAttrTable,
-    tracker::Msn,
+    utils::Msn,
     utils::{Psn, QpTable},
 };
 
