@@ -9,7 +9,7 @@ use std::{
 use parking_lot::Mutex;
 use serde::{Deserialize, Serialize};
 
-use crate::{qp_table::QpTable, queue_pair::qpn_index};
+use crate::{queue_pair::qpn_index, utils::QpTable};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct RecvWr {

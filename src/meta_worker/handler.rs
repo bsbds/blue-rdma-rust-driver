@@ -7,12 +7,11 @@ use crate::{
         NakMetaLocalHw, NakMetaRemoteDriver, NakMetaRemoteHw, PacketPos, WorkReqOpCode,
     },
     packet_retransmit::PacketRetransmitTask,
-    qp_table::QpTable,
     rdma_write_worker::RdmaWriteTask,
     send::{SendWrBase, SendWrRdma},
     timeout_retransmit::RetransmitTask,
     tracker::{LocalAckTracker, RemoteAckTracker},
-    utils::Psn,
+    utils::{Psn, QpTable},
 };
 
 use super::ReportMeta;

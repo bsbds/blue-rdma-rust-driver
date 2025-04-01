@@ -5,10 +5,9 @@ use crate::{
     device_protocol::{QpParams, WorkReqOpCode, WorkReqSend},
     fragmenter::WrPacketFragmenter,
     protocol_impl::SendQueueScheduler,
-    qp_table::QpTable,
     queue_pair::qpn_index,
     send::SendWrRdma,
-    utils::Psn,
+    utils::{Psn, QpTable},
 };
 
 #[allow(variant_size_differences)]
