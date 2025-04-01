@@ -23,7 +23,7 @@ use crate::{
         },
         MetaReportQueueCtx, MetaReportQueueHandler,
     },
-    queue_pair::QueuePairAttrTable,
+    qp::QueuePairAttrTable,
     rdma_write_worker::RdmaWriteTask,
     timeout_retransmit::RetransmitTask,
 };

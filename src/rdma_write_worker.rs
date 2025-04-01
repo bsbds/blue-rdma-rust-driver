@@ -7,7 +7,7 @@ use crate::{
     fragmenter::{WrChunkFragmenter, WrPacketFragmenter},
     packet_retransmit::{PacketRetransmitTask, SendQueueElem},
     protocol_impl::SendQueueScheduler,
-    queue_pair::{num_psn, QueuePairAttrTable, SenderTable},
+    qp::{num_psn, QueuePairAttrTable, SenderTable},
     send::SendWrRdma,
     timeout_retransmit::RetransmitTask,
 };

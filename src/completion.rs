@@ -6,7 +6,7 @@ use parking_lot::Mutex;
 use crate::{
     ack_responder::AckResponse,
     constants::MAX_CQ_CNT,
-    queue_pair::QueuePairAttrTable,
+    qp::QueuePairAttrTable,
     tracker::Msn,
     utils::{Psn, QpTable},
 };

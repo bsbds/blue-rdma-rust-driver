@@ -185,7 +185,7 @@ mod meta_worker;
 mod mtt;
 mod packet_retransmit;
 mod protocol_impl;
-mod queue_pair;
+mod qp;
 mod rdma_write_worker;
 mod recv;
 /// RDMA ring buffer implementation

@@ -5,7 +5,7 @@ use crate::{
     device_protocol::{QpParams, WorkReqOpCode, WorkReqSend},
     fragmenter::WrPacketFragmenter,
     protocol_impl::SendQueueScheduler,
-    queue_pair::qpn_index,
+    qp::qpn_index,
     send::SendWrRdma,
     utils::{Psn, QpTable},
 };

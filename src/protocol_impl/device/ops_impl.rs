@@ -25,7 +25,7 @@ use crate::{
         queue::meta_report_queue::init_and_spawn_meta_worker, spawn_send_workers,
         CommandController, SendQueueScheduler, SimpleNicController,
     },
-    queue_pair::{QpManager, QueuePairAttrTable},
+    qp::{QpManager, QueuePairAttrTable},
     rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
     recv::{
         post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
