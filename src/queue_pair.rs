@@ -16,6 +16,7 @@ use crate::{
     device_protocol::{WithQpParams, WrChunkBuilder},
     send::SendWrRdma,
     tracker::{Msn, MsnTracker, PsnTracker},
+    utils::Psn,
 };
 
 #[derive(Default, Clone, Copy)]
@@ -152,17 +153,18 @@ impl SenderTable {
 #[derive(Default, Debug)]
 pub(crate) struct Sender {
     msn: u16,
-    psn: u32,
-    base_psn_acked: u32,
+    psn: Psn,
+    base_psn_acked: Psn,
     base_msn_acked: u16,
 }
 
 impl Sender {
+    // FIXME: refactor `next_wr`
     #[allow(clippy::similar_names)]
-    pub(crate) fn next_wr(&mut self, num_psn: u32) -> Option<(u16, u32)> {
-        let outstanding_num_psn = self.psn.wrapping_sub(self.base_psn_acked);
+    pub(crate) fn next_wr(&mut self, num_psn: u32) -> Option<(u16, Psn)> {
+        let outstanding_num_psn = self.psn - self.base_psn_acked;
         let outstanding_num_msn = self.msn.wrapping_sub(self.base_msn_acked);
-        if outstanding_num_psn.saturating_add(num_psn) as usize > MAX_PSN_WINDOW
+        if (outstanding_num_psn + num_psn).into_inner() as usize > MAX_PSN_WINDOW
             || outstanding_num_msn as usize >= MAX_SEND_WR
         {
             return None;
@@ -170,14 +172,14 @@ impl Sender {
         let current_psn = self.psn;
         let current_msn = self.msn;
         let next_msn = self.msn.wrapping_add(1);
-        let next_psn = self.psn.wrapping_add(num_psn);
+        let next_psn = self.psn + num_psn;
         self.msn = next_msn;
         self.psn = next_psn;
 
         Some((current_msn, current_psn))
     }
 
-    fn update_psn_acked(&mut self, psn: u32) {
+    fn update_psn_acked(&mut self, psn: Psn) {
         self.base_psn_acked = psn;
     }
 

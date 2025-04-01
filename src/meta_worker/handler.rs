@@ -12,6 +12,7 @@ use crate::{
     send::{SendWrBase, SendWrRdma},
     timeout_retransmit::RetransmitTask,
     tracker::{LocalAckTracker, RemoteAckTracker},
+    utils::Psn,
 };
 
 use super::ReportMeta;
@@ -104,7 +105,7 @@ impl MetaHandler {
             .send(PacketRetransmitTask::RetransmitRange {
                 qpn: meta.qpn,
                 psn_low: meta.psn_pre,
-                psn_high: meta.psn_now.wrapping_add(128) % PSN_MASK,
+                psn_high: meta.psn_now + 128,
             });
 
         Some(())
@@ -123,7 +124,7 @@ impl MetaHandler {
         Some(())
     }
 
-    pub(crate) fn sender_updates(&self, qpn: u32, base_psn: u32) {
+    pub(crate) fn sender_updates(&self, qpn: u32, base_psn: Psn) {
         let _ignore = self
             .completion_tx
             .send(CompletionTask::AckSend { qpn, base_psn });
@@ -132,7 +133,7 @@ impl MetaHandler {
             .send(PacketRetransmitTask::Ack { qpn, psn: base_psn });
     }
 
-    pub(crate) fn receiver_updates(&self, qpn: u32, base_psn: u32) {
+    pub(crate) fn receiver_updates(&self, qpn: u32, base_psn: Psn) {
         let _ignore = self
             .completion_tx
             .send(CompletionTask::AckRecv { qpn, base_psn });
@@ -143,7 +144,7 @@ impl MetaHandler {
 
     pub(super) fn handle_header_read(&mut self, meta: HeaderReadMeta) -> Option<()> {
         if meta.ack_req {
-            let end_psn = (meta.psn + 1) % PSN_MASK;
+            let end_psn = meta.psn + 1;
             let event = Event::Recv(RecvEvent::new(
                 RecvEventOp::WriteAckReq,
                 MessageMeta::new(meta.msn, end_psn),
@@ -201,7 +202,7 @@ impl MetaHandler {
         let tracker = self.recv_table.get_qp_mut(dqpn)?;
 
         if matches!(pos, PacketPos::Last | PacketPos::Only) {
-            let end_psn = (psn + 1) % PSN_MASK;
+            let end_psn = psn + 1;
             match header_type {
                 HeaderType::Write => {}
                 HeaderType::WriteWithImm => {
@@ -262,7 +263,7 @@ impl MetaHandler {
             let _ignore = self.ack_tx.send(AckResponse::Nak {
                 qpn: dqpn,
                 base_psn: tracker.base_psn(),
-                ack_req_packet_psn: psn.wrapping_sub(1) % PSN_MASK,
+                ack_req_packet_psn: psn - 1,
             });
         }
 

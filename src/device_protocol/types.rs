@@ -3,7 +3,7 @@
 // TODO: add field validations
 use std::marker::PhantomData;
 
-use crate::{mem::page::ContiguousPages, queue_pair::convert_ibv_mtu_to_u16};
+use crate::{mem::page::ContiguousPages, queue_pair::convert_ibv_mtu_to_u16, utils::Psn};
 
 #[allow(clippy::missing_docs_in_private_items)]
 /// Memory Translation Table entry
@@ -147,7 +147,7 @@ pub(crate) enum ReportMeta {
 pub(crate) struct HeaderWriteMeta {
     pub(crate) pos: PacketPos,
     pub(crate) msn: u16,
-    pub(crate) psn: u32,
+    pub(crate) psn: Psn,
     pub(crate) solicited: bool,
     pub(crate) ack_req: bool,
     pub(crate) is_retry: bool,
@@ -162,7 +162,7 @@ pub(crate) struct HeaderWriteMeta {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct HeaderReadMeta {
     pub(crate) msn: u16,
-    pub(crate) psn: u32,
+    pub(crate) psn: Psn,
     pub(crate) dqpn: u32,
     pub(crate) raddr: u64,
     pub(crate) rkey: u32,
@@ -181,23 +181,23 @@ pub(crate) struct CnpMeta {
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AckMetaLocalHw {
     pub(crate) qpn: u32,
-    pub(crate) psn_now: u32,
+    pub(crate) psn_now: Psn,
     pub(crate) now_bitmap: u128,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct AckMetaRemoteDriver {
     pub(crate) qpn: u32,
-    pub(crate) psn_now: u32,
+    pub(crate) psn_now: Psn,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct NakMetaLocalHw {
     pub(crate) qpn: u32,
     pub(crate) msn: u16,
-    pub(crate) psn_now: u32,
+    pub(crate) psn_now: Psn,
     pub(crate) now_bitmap: u128,
-    pub(crate) psn_pre: u32,
+    pub(crate) psn_pre: Psn,
     pub(crate) pre_bitmap: u128,
 }
 
@@ -205,17 +205,17 @@ pub(crate) struct NakMetaLocalHw {
 pub(crate) struct NakMetaRemoteHw {
     pub(crate) qpn: u32,
     pub(crate) msn: u16,
-    pub(crate) psn_now: u32,
+    pub(crate) psn_now: Psn,
     pub(crate) now_bitmap: u128,
-    pub(crate) psn_pre: u32,
+    pub(crate) psn_pre: Psn,
     pub(crate) pre_bitmap: u128,
 }
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) struct NakMetaRemoteDriver {
     pub(crate) qpn: u32,
-    pub(crate) psn_now: u32,
-    pub(crate) psn_pre: u32,
+    pub(crate) psn_now: Psn,
+    pub(crate) psn_pre: Psn,
 }
 
 #[derive(Clone, Copy, Debug, Default)]
@@ -299,7 +299,7 @@ impl WrChunkBuilder<WithQpParams> {
 impl WrChunkBuilder<WithIbvParams> {
     pub(crate) fn set_chunk_meta(
         mut self,
-        psn: u32,
+        psn: Psn,
         laddr: u64,
         raddr: u64,
         len: u32,
@@ -366,7 +366,7 @@ pub(crate) struct WrChunk {
     pub(crate) is_first: bool,
     pub(crate) is_last: bool,
     pub(crate) msn: u16,
-    pub(crate) psn: u32,
+    pub(crate) psn: Psn,
     pub(crate) is_retry: bool,
     pub(crate) enable_ecn: bool,
 }

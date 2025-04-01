@@ -42,8 +42,8 @@ impl CompletionQueueRegistry {
 #[allow(variant_size_differences)]
 pub(crate) enum CompletionTask {
     Register { qpn: u32, event: Event },
-    AckSend { qpn: u32, base_psn: u32 },
-    AckRecv { qpn: u32, base_psn: u32 },
+    AckSend { qpn: u32, base_psn: Psn },
+    AckRecv { qpn: u32, base_psn: Psn },
 }
 
 pub(crate) struct CompletionWorker {
@@ -154,7 +154,7 @@ impl QueuePairMessageTracker {
         }
     }
 
-    fn ack_send(&mut self, psn: Option<u32>, send_cq: &CompletionQueue) {
+    fn ack_send(&mut self, psn: Option<Psn>, send_cq: &CompletionQueue) {
         if let Some(psn) = psn {
             self.send.ack(psn);
         }
@@ -184,7 +184,7 @@ impl QueuePairMessageTracker {
 
     fn ack_recv(
         &mut self,
-        psn: u32,
+        psn: Psn,
         recv_cq: &CompletionQueue,
         send_cq: Option<&CompletionQueue>,
         qpn: u32,
@@ -241,14 +241,14 @@ impl QueuePairMessageTracker {
 #[derive(Debug)]
 struct MessageTracker<E> {
     inner: VecDeque<E>,
-    base_psn: u32,
+    base_psn: Psn,
 }
 
 impl<E> Default for MessageTracker<E> {
     fn default() -> Self {
         Self {
             inner: VecDeque::default(),
-            base_psn: 0,
+            base_psn: Psn::default(),
         }
     }
 }
@@ -271,18 +271,18 @@ impl<E: EventMeta> MessageTracker<E> {
         }
     }
 
-    fn ack(&mut self, base_psn: u32) {
+    fn ack(&mut self, base_psn: Psn) {
         self.base_psn = base_psn;
     }
 
     fn peek(&self) -> Option<&E> {
         let front = self.inner.front()?;
-        (Psn(front.meta().end_psn) <= Psn(self.base_psn)).then_some(front)
+        (front.meta().end_psn <= self.base_psn).then_some(front)
     }
 
     fn pop(&mut self) -> Option<E> {
         let front = self.inner.front()?;
-        if Psn(front.meta().end_psn) <= Psn(self.base_psn) {
+        if front.meta().end_psn <= self.base_psn {
             self.inner.pop_front()
         } else {
             None
@@ -369,11 +369,11 @@ impl PostRecvEvent {
 #[derive(Default, Debug, Clone, Copy)]
 pub(crate) struct MessageMeta {
     pub(crate) msn: u16,
-    pub(crate) end_psn: u32,
+    pub(crate) end_psn: Psn,
 }
 
 impl MessageMeta {
-    pub(crate) fn new(msn: u16, end_psn: u32) -> Self {
+    pub(crate) fn new(msn: u16, end_psn: Psn) -> Self {
         Self { msn, end_psn }
     }
 }

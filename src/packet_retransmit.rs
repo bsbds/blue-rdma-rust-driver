@@ -20,13 +20,13 @@ pub(crate) enum PacketRetransmitTask {
     RetransmitRange {
         qpn: u32,
         // Inclusive
-        psn_low: u32,
+        psn_low: Psn,
         // Exclusive
-        psn_high: u32,
+        psn_high: Psn,
     },
     Ack {
         qpn: u32,
-        psn: u32,
+        psn: Psn,
     },
 }
 
@@ -111,15 +111,15 @@ impl IbvSendQueue {
         self.inner.push_back(elem);
     }
 
-    pub(crate) fn pop_until(&mut self, psn: u32) {
-        let mut a = self.inner.partition_point(|x| x.psn < Psn(psn));
+    pub(crate) fn pop_until(&mut self, psn: Psn) {
+        let mut a = self.inner.partition_point(|x| x.psn < psn);
         let _drop = self.inner.drain(..a);
     }
 
     /// Find range [`psn_low`, `psn_high`)
-    pub(crate) fn range(&self, psn_low: u32, psn_high: u32) -> Vec<SendQueueElem> {
-        let mut a = self.inner.partition_point(|x| x.psn <= Psn(psn_low));
-        let mut b = self.inner.partition_point(|x| x.psn < Psn(psn_high));
+    pub(crate) fn range(&self, psn_low: Psn, psn_high: Psn) -> Vec<SendQueueElem> {
+        let mut a = self.inner.partition_point(|x| x.psn <= psn_low);
+        let mut b = self.inner.partition_point(|x| x.psn < psn_high);
         a = a.saturating_sub(1);
         self.inner.range(a..b).copied().collect()
     }
@@ -133,16 +133,12 @@ pub(crate) struct SendQueueElem {
 }
 
 impl SendQueueElem {
-    pub(crate) fn new(wr: SendWrRdma, psn: u32, qp_param: QpParams) -> Self {
-        Self {
-            wr,
-            psn: Psn(psn),
-            qp_param,
-        }
+    pub(crate) fn new(wr: SendWrRdma, psn: Psn, qp_param: QpParams) -> Self {
+        Self { psn, wr, qp_param }
     }
 
-    pub(crate) fn psn(&self) -> u32 {
-        self.psn.0
+    pub(crate) fn psn(&self) -> Psn {
+        self.psn
     }
 
     pub(crate) fn wr(&self) -> SendWrRdma {

@@ -8,6 +8,7 @@ use crate::{
         AckMetaLocalHw, AckMetaRemoteDriver, CnpMeta, HeaderReadMeta, HeaderWriteMeta, MetaReport,
         NakMetaLocalHw, NakMetaRemoteDriver, NakMetaRemoteHw, ReportMeta,
     },
+    utils::Psn,
 };
 
 use super::{
@@ -39,10 +40,10 @@ impl<Dev> MetaReportQueueHandler<Dev> {
         Self { inner, pos: 0 }
     }
 
-    fn remap_psn(psn: u32) -> u32 {
+    fn remap_psn(psn: Psn) -> Psn {
         // 128 (window size) - 16 (first stride)
         const OFFSET: u32 = 112;
-        psn.wrapping_sub(OFFSET) & PSN_MASK
+        psn - OFFSET
     }
 }
 
@@ -67,7 +68,7 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                     ReportMeta::HeaderWrite(HeaderWriteMeta {
                         pos: d.packet_pos(),
                         msn: d.msn(),
-                        psn: d.psn(),
+                        psn: d.psn().into(),
                         solicited: d.solicited(),
                         ack_req: d.ack_req(),
                         is_retry: d.is_retry(),
@@ -89,7 +90,7 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                         lkey: n.lkey(),
                         ack_req: f.ack_req(),
                         msn: f.msn(),
-                        psn: f.psn(),
+                        psn: f.psn().into(),
                     })
                 }
                 MetaReportQueueDesc::CnpPacketInfo(d) => ReportMeta::Cnp(CnpMeta { qpn: d.dqpn() }),
@@ -97,11 +98,11 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                     match (d.is_send_by_driver(), d.is_send_by_local_hw()) {
                         (true, false) => ReportMeta::AckRemoteDriver(AckMetaRemoteDriver {
                             qpn: d.qpn(),
-                            psn_now: d.psn_now(),
+                            psn_now: d.psn_now().into(),
                         }),
                         (false, true) => ReportMeta::AckLocalHw(AckMetaLocalHw {
                             qpn: d.qpn(),
-                            psn_now: Self::remap_psn(d.psn_now()),
+                            psn_now: Self::remap_psn(d.psn_now().into()),
                             now_bitmap: d.now_bitmap(),
                         }),
                         (false, false) | (true, true) => unreachable!("invalid ack branch"),
@@ -111,23 +112,23 @@ impl<Dev: DeviceAdaptor> MetaReport for MetaReportQueueHandler<Dev> {
                     match (f.is_send_by_driver(), f.is_send_by_local_hw()) {
                         (true, false) => ReportMeta::NakRemoteDriver(NakMetaRemoteDriver {
                             qpn: f.qpn(),
-                            psn_now: f.psn_now(),
-                            psn_pre: f.psn_before_slide(),
+                            psn_now: f.psn_now().into(),
+                            psn_pre: f.psn_before_slide().into(),
                         }),
                         (false, true) => ReportMeta::NakLocalHw(NakMetaLocalHw {
                             qpn: f.qpn(),
                             msn: f.msn(),
-                            psn_now: Self::remap_psn(f.psn_now()),
+                            psn_now: Self::remap_psn(f.psn_now().into()),
                             now_bitmap: f.now_bitmap(),
-                            psn_pre: Self::remap_psn(f.psn_before_slide()),
+                            psn_pre: Self::remap_psn(f.psn_before_slide().into()),
                             pre_bitmap: n.pre_bitmap(),
                         }),
                         (false, false) => ReportMeta::NakRemoteHw(NakMetaRemoteHw {
                             qpn: f.qpn(),
                             msn: f.msn(),
-                            psn_now: Self::remap_psn(f.psn_now()),
+                            psn_now: Self::remap_psn(f.psn_now().into()),
                             now_bitmap: f.now_bitmap(),
-                            psn_pre: Self::remap_psn(f.psn_before_slide()),
+                            psn_pre: Self::remap_psn(f.psn_before_slide().into()),
                             pre_bitmap: n.pre_bitmap(),
                         }),
                         (true, true) => unreachable!("invalid nak branch"),

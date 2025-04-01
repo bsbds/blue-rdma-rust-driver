@@ -101,7 +101,7 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
             let desc0 = SendQueueReqDescSeg0::new(
                 wr.opcode,
                 wr.msn,
-                wr.psn,
+                wr.psn.into_inner(),
                 wr.qp_type,
                 wr.dqpn,
                 wr.flags,

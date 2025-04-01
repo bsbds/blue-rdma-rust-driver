@@ -12,19 +12,21 @@ use pnet::{
 };
 use tracing::error;
 
-use crate::{constants::PSN_MASK, device_protocol::FrameTx, queue_pair::QueuePairAttrTable};
+use crate::{
+    constants::PSN_MASK, device_protocol::FrameTx, queue_pair::QueuePairAttrTable, utils::Psn,
+};
 
 #[derive(Debug)]
 pub(crate) enum AckResponse {
     Ack {
         qpn: u32,
         msn: u16,
-        last_psn: u32,
+        last_psn: Psn,
     },
     Nak {
         qpn: u32,
-        base_psn: u32,
-        ack_req_packet_psn: u32,
+        base_psn: Psn,
+        ack_req_packet_psn: Psn,
     },
 }
 
@@ -71,14 +73,14 @@ impl AckResponder {
             };
             let frame = match x {
                 AckResponse::Ack { qpn, msn, last_psn } => {
-                    AckFrameBuilder::build_ack(last_psn, u128::MAX, 0, 0, dqpn, false, false)
+                    AckFrameBuilder::build_ack(last_psn, u128::MAX, 0.into(), 0, dqpn, false, false)
                 }
                 AckResponse::Nak {
                     qpn,
                     base_psn,
                     ack_req_packet_psn,
                 } => AckFrameBuilder::build_ack(
-                    ack_req_packet_psn.wrapping_add(1) & PSN_MASK,
+                    ack_req_packet_psn + 1,
                     0,
                     base_psn,
                     0,
@@ -105,9 +107,9 @@ struct AckFrameBuilder;
 )]
 impl AckFrameBuilder {
     fn build_ack(
-        now_psn: u32,
+        now_psn: Psn,
         now_bitmap: u128,
-        pre_psn: u32,
+        pre_psn: Psn,
         prev_bitmap: u128,
         dqpn: u32,
         is_packet_loss: bool,
@@ -121,7 +123,7 @@ impl AckFrameBuilder {
 
         let mut bth = Bth::default();
         bth.set_opcode(u5::from_u8(OPCODE_ACKNOWLEDGE));
-        bth.set_psn(u24::from_u32(now_psn));
+        bth.set_psn(u24::from_u32(now_psn.into_inner()));
         bth.set_dqpn(u24::from_u32(dqpn));
         bth.set_trans_type(u3::from_u8(TRANS_TYPE_RC));
         payload[..12].copy_from_slice(&bth.value.to_be_bytes());
@@ -130,7 +132,7 @@ impl AckFrameBuilder {
         aeth_seg0.set_is_send_by_driver(true);
         aeth_seg0.set_is_packet_loss(is_packet_loss);
         aeth_seg0.set_is_window_slided(is_window_slided);
-        aeth_seg0.set_pre_psn(u24::from_u32(pre_psn));
+        aeth_seg0.set_pre_psn(u24::from_u32(pre_psn.into_inner()));
         payload[12..28].copy_from_slice(&prev_bitmap.to_be_bytes()); // prev_bitmap
         payload[28..44].copy_from_slice(&now_bitmap.to_be_bytes());
         payload[44..].copy_from_slice(&aeth_seg0.value.to_be_bytes());

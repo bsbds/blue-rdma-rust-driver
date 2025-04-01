@@ -3,6 +3,7 @@ use crate::{
     device_protocol::{QpParams, WithIbvParams, WorkReqOpCode, WrChunk, WrChunkBuilder},
     queue_pair::convert_ibv_mtu_to_u16,
     send::SendWrRdma,
+    utils::Psn,
 };
 
 use super::Fragmenter;
@@ -15,7 +16,7 @@ pub(crate) struct WrChunkFragmenter {
 }
 
 impl WrChunkFragmenter {
-    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: u32) -> Self {
+    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: Psn) -> Self {
         Self {
             inner: ChunkFragmenter::new(wr, qp_param, base_psn, WR_CHUNK_SIZE.into(), false),
         }
@@ -37,7 +38,7 @@ pub(crate) struct WrPacketFragmenter {
 }
 
 impl WrPacketFragmenter {
-    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: u32) -> Self {
+    pub(crate) fn new(wr: SendWrRdma, qp_param: QpParams, base_psn: Psn) -> Self {
         let pmtu = convert_ibv_mtu_to_u16(qp_param.pmtu)
             .unwrap_or_else(|| unreachable!("invalid ibv_mtu"))
             .into();
@@ -62,7 +63,7 @@ impl IntoIterator for WrPacketFragmenter {
 struct ChunkFragmenter {
     wr: SendWrRdma,
     qp_param: QpParams,
-    base_psn: u32,
+    base_psn: Psn,
     chunk_size: u64,
     is_retry: bool,
 }
@@ -71,7 +72,7 @@ impl ChunkFragmenter {
     fn new(
         wr: SendWrRdma,
         qp_param: QpParams,
-        base_psn: u32,
+        base_psn: Psn,
         chunk_size: u64,
         is_retry: bool,
     ) -> Self {
@@ -125,7 +126,7 @@ impl IntoIterator for ChunkFragmenter {
 
 pub(crate) struct IntoIter {
     inner: super::IntoIter,
-    psn: u32,
+    psn: Psn,
     wr: SendWrRdma,
     builder: WrChunkBuilder<WithIbvParams>,
     laddr: u64,
@@ -147,7 +148,7 @@ impl Iterator for IntoIter {
             builder.build()
         };
         let num_packets = f.len.div_ceil(self.pmtu) as u32;
-        self.psn = (self.psn + num_packets) % PSN_MASK;
+        self.psn += num_packets;
         self.laddr += f.len;
 
         Some(chunk)

@@ -93,7 +93,7 @@ impl RdmaWriteWorker {
             .map_qp_mut(qpn, |sender| sender.next_wr(num_psn))
             .flatten()
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let end_psn = (psn + num_psn) & PSN_MASK;
+        let end_psn = psn + num_psn;
         let qp_params = QpParams::new(
             msn,
             qp.qp_type,
@@ -163,7 +163,7 @@ impl RdmaWriteWorker {
             .map_qp_mut(qpn, |sender| sender.next_wr(num_psn))
             .flatten()
             .ok_or(io::Error::from(io::ErrorKind::InvalidInput))?;
-        let end_psn = (psn + num_psn) & PSN_MASK;
+        let end_psn = psn + num_psn;
         let flags = wr.send_flags();
         let mut ack_req = false;
         if flags & ibverbs_sys::ibv_send_flags::IBV_SEND_SIGNALED.0 != 0 {
