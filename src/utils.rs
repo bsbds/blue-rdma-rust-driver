@@ -2,6 +2,7 @@
 
 use std::{
     cmp::Ordering,
+    fmt::Display,
     ops::{Add, AddAssign, Sub, SubAssign},
 };
 
@@ -92,6 +93,12 @@ impl SubAssign<u32> for Psn {
 impl SubAssign<Psn> for Psn {
     fn sub_assign(&mut self, rhs: Psn) {
         self.0 = self.0.wrapping_sub(rhs.0) & PSN_MASK;
+    }
+}
+
+impl Display for Psn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
     }
 }
 
