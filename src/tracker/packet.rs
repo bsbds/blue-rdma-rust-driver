@@ -5,7 +5,10 @@ use std::sync::{
 
 use bitvec::{bits, order::Lsb0, vec::BitVec, view::BitView};
 
-use crate::constants::{MAX_PSN_WINDOW, PSN_MASK};
+use crate::{
+    constants::{MAX_PSN_WINDOW, PSN_MASK},
+    utils::Psn,
+};
 
 #[derive(Default, Debug, Clone)]
 pub(crate) struct PsnTracker {
@@ -46,7 +49,7 @@ impl PsnTracker {
     /// * `Some(PSN)` - If the acknowledgment causes the base PSN to advance, returns the new base PSN
     /// * `None` - If the base PSN doesn't change
     pub(crate) fn ack_range(&mut self, psn_low: u32, psn_high: u32) -> Option<u32> {
-        if psn_low <= self.base_psn {
+        if Psn(psn_low) <= Psn(self.base_psn) {
             return self.ack_before(psn_high);
         }
         let rstart: usize = usize::try_from(self.rstart(psn_low)).ok()?;
@@ -103,9 +106,9 @@ impl PsnTracker {
     }
 
     fn rstart(&self, psn: u32) -> i32 {
-        let x = self.base_psn.wrapping_sub(psn) & PSN_MASK;
-        if x > 0 && (x as usize) < MAX_PSN_WINDOW {
-            -(x as i32)
+        let x = psn.wrapping_sub(self.base_psn);
+        if ((x >> 23) & 1) != 0 {
+            (x | 0xFF00_0000) as i32
         } else {
             x as i32
         }
