@@ -111,7 +111,12 @@ impl MetaHandler {
     }
 
     #[allow(clippy::unnecessary_wraps)]
-    fn handle_nak_remote_driver(&self, meta: NakMetaRemoteDriver) -> Option<()> {
+    fn handle_nak_remote_driver(&mut self, meta: NakMetaRemoteDriver) -> Option<()> {
+        let tracker = self.send_table.get_qp_mut(meta.qpn)?;
+        if let Some(psn) = tracker.ack_before(meta.psn_pre) {
+            self.sender_updates(meta.qpn, psn);
+        }
+
         let _ignore = self
             .packet_retransmit_tx
             .send(PacketRetransmitTask::RetransmitRange {
