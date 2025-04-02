@@ -258,19 +258,19 @@ impl<E> Default for MessageTracker<E> {
 
 impl<E: EventMeta> MessageTracker<E> {
     fn append(&mut self, event: E) {
+        let pos = self
+            .inner
+            .iter()
+            .rev()
+            .position(|e| Msn(e.meta().msn) < Msn(event.meta().msn))
+            .unwrap_or(self.inner.len());
+        let index = self.inner.len() - pos;
         if self
             .inner
-            .back()
-            .is_some_and(|last| Msn(last.meta().msn) > Msn(event.meta().msn))
+            .get(index)
+            .is_none_or(|e| e.meta().msn != event.meta().msn)
         {
-            let insert_pos = self
-                .inner
-                .iter()
-                .position(|e| Msn(e.meta().msn) > Msn(event.meta().msn))
-                .unwrap_or(self.inner.len());
-            self.inner.insert(insert_pos, event);
-        } else {
-            self.inner.push_back(event);
+            self.inner.insert(index, event);
         }
     }
 
