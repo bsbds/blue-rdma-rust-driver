@@ -95,7 +95,7 @@ impl PsnTracker {
     }
 
     fn rstart(&self, psn: Psn) -> i32 {
-        let x = (psn - self.base_psn).into_inner();
+        let x = psn.into_inner().wrapping_sub(self.base_psn.into_inner());
         if ((x >> 23) & 1) != 0 {
             (x | 0xFF00_0000) as i32
         } else {
