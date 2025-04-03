@@ -21,6 +21,7 @@ use crate::{
     mem::{get_num_page, page::PageAllocator, virt_to_phy::AddressResolver, PageWithPhysAddr},
     mtt::{Mtt, PgtEntry},
     net::config::NetworkConfig,
+    packet_retransmit::PacketRetransmitWorker,
     protocol_impl::{
         queue::meta_report_queue::init_and_spawn_meta_worker, spawn_send_workers,
         CommandController, SendQueueScheduler, SimpleNicController,
@@ -32,6 +33,7 @@ use crate::{
         TcpChannel,
     },
     send::{SendWr, SendWrBase, SendWrRdma},
+    timeout_retransmit::TimeoutRetransmitWorker,
 };
 
 use super::{mode::Mode, DeviceAdaptor};
@@ -143,8 +145,9 @@ where
         #[allow(clippy::mem_forget)]
         std::mem::forget(simple_nic_rx); // prevent libc::munmap being called
         AckResponder::new(qp_attr_table.clone_arc(), ack_rx, Box::new(simple_nic_tx)).spawn();
-        //TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), ack_config).spawn();
-        //PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
+        TimeoutRetransmitWorker::new(retransmit_rx, send_scheduler.clone_arc(), config.ack())
+            .spawn();
+        PacketRetransmitWorker::new(packet_retransmit_rx, send_scheduler.clone_arc()).spawn();
         RdmaWriteWorker::new(
             rdma_write_rx,
             qp_attr_table,
