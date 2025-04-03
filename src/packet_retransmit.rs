@@ -112,7 +112,7 @@ impl IbvSendQueue {
 
     pub(crate) fn pop_until(&mut self, psn: Psn) {
         let mut a = self.inner.partition_point(|x| x.psn < psn);
-        let _drop = self.inner.drain(..a);
+        let _drop = self.inner.drain(..a.saturating_sub(1));
     }
 
     /// Find range [`psn_low`, `psn_high`)
