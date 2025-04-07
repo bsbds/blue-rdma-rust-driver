@@ -18,7 +18,10 @@ use crate::{
     device_protocol::{
         DeviceCommand, MttUpdate, PgtUpdate, RecvBufferMeta, SimpleNicTunnel, UpdateQp,
     },
-    mem::{get_num_page, page::PageAllocator, virt_to_phy::AddressResolver, PageWithPhysAddr},
+    mem::{
+        get_num_page, page::PageAllocator, pin_pages, virt_to_phy::AddressResolver,
+        PageWithPhysAddr,
+    },
     mtt::{Mtt, PgtEntry},
     net::config::NetworkConfig,
     packet_retransmit::PacketRetransmitWorker,
@@ -234,6 +237,8 @@ where
                 })
                 .collect()
         }
+
+        pin_pages(addr, length)?;
 
         let addr_resolver = self.device.new_phys_addr_resolver();
         let num_pages = get_num_page(addr, length);
