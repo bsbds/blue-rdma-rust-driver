@@ -29,11 +29,11 @@ impl UDmaBufAllocator {
         Ok(Self { fd, offset: 0 })
     }
 
-    fn size_total() -> io::Result<usize> {
+    pub(crate) fn size_total() -> io::Result<usize> {
         Self::read_attribute("size")
     }
 
-    fn phys_addr() -> io::Result<u64> {
+    pub(crate) fn phys_addr() -> io::Result<u64> {
         Self::read_attribute("phys_addr")
     }
 
@@ -75,7 +75,7 @@ impl UDmaBufAllocator {
                 ptr::null_mut(),
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
-                libc::MAP_SHARED | libc::MAP_HUGETLB | libc::MAP_HUGE_2MB,
+                libc::MAP_SHARED,
                 self.fd.as_raw_fd(),
                 offset_in_bytes as i64,
             )
@@ -96,5 +96,37 @@ impl UDmaBufAllocator {
 impl<const N: usize> PageAllocator<N> for UDmaBufAllocator {
     fn alloc(&mut self) -> io::Result<ContiguousPages<N>> {
         self.create(N).map(ContiguousPages::new)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mem::virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86};
+
+    use super::*;
+    use std::io::ErrorKind;
+
+    #[test]
+    fn allocate_pages() {
+        let mut allocator = UDmaBufAllocator::open().unwrap();
+        let mut x = allocator.create(1).unwrap();
+        let buf: &mut [u8] = x.as_mut();
+        assert_eq!(buf.len(), PAGE_SIZE_2MB);
+        buf.fill(1);
+        let mut x = allocator.create(2).unwrap();
+        let buf: &mut [u8] = x.as_mut();
+        assert_eq!(buf.len(), PAGE_SIZE_2MB * 2);
+        buf.fill(1);
+    }
+
+    #[test]
+    fn consistent_phys_addr() {
+        let pa = UDmaBufAllocator::phys_addr().unwrap();
+        let mut allocator = UDmaBufAllocator::open().unwrap();
+        let mut x = allocator.create(1).unwrap();
+        let va = x.as_ptr() as u64;
+        let resolver = PhysAddrResolverLinuxX86;
+        let pa_resolved = resolver.virt_to_phys(va).unwrap().unwrap();
+        assert_eq!(pa, pa_resolved);
     }
 }
