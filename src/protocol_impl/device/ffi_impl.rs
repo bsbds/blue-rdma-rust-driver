@@ -113,8 +113,10 @@ impl HwDevice for EmulatedHwDevice {
         Ok(EmulatedDevice::new_with_addr(&self.addr))
     }
 
-    fn new_page_allocator(&self) -> Self::PageAllocator {
-        EmulatedPageAllocator::new(bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr())
+    fn new_page_allocator(&self) -> io::Result<Self::PageAllocator> {
+        Ok(EmulatedPageAllocator::new(
+            bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
+        ))
     }
 
     fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver {

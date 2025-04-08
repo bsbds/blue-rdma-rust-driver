@@ -47,7 +47,7 @@ pub(crate) trait HwDevice {
     type PhysAddrResolver;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor>;
-    fn new_page_allocator(&self) -> Self::PageAllocator;
+    fn new_page_allocator(&self) -> io::Result<Self::PageAllocator>;
     fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver;
 }
 
@@ -90,7 +90,7 @@ where
     pub(crate) fn initialize(device: H, config: DeviceConfig) -> io::Result<Self> {
         let mode = Mode::default();
         let adaptor = device.new_adaptor()?;
-        let mut allocator = device.new_page_allocator();
+        let mut allocator = device.new_page_allocator()?;
         let addr_resolver = device.new_phys_addr_resolver();
         let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
         let cmd_controller = CommandController::init_v2(&adaptor, alloc_page()?, alloc_page()?)?;

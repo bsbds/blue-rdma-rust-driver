@@ -11,6 +11,8 @@ pub(crate) mod slot_alloc;
 
 pub(crate) mod dmabuf;
 
+pub(crate) mod u_dma_buf;
+
 mod utils;
 
 pub(crate) use utils::*;

@@ -35,7 +35,7 @@ impl TestDevice {
         device.reset().unwrap();
         device.init_dma_engine().unwrap();
         let adaptor = device.new_adaptor().unwrap();
-        let mut allocator = device.new_page_allocator();
+        let mut allocator = device.new_page_allocator().unwrap();
         let addr_resolver = device.new_phys_addr_resolver();
         let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
         let cmd_controller =
