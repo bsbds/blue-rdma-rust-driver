@@ -20,7 +20,7 @@ use crate::{
     },
     mem::{
         get_num_page, page::PageAllocator, pin_pages, virt_to_phy::AddressResolver,
-        PageWithPhysAddr,
+        DmaBufAllocator, PageWithPhysAddr,
     },
     mtt::{Mtt, PgtEntry},
     net::config::NetworkConfig,
@@ -43,11 +43,11 @@ use super::{mode::Mode, DeviceAdaptor};
 
 pub(crate) trait HwDevice {
     type Adaptor;
-    type PageAllocator;
+    type DmaBufAllocator;
     type PhysAddrResolver;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor>;
-    fn new_page_allocator(&self) -> io::Result<Self::PageAllocator>;
+    fn new_dma_buf_allocator(&self) -> io::Result<Self::DmaBufAllocator>;
     fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver;
 }
 
@@ -84,21 +84,22 @@ impl<H> HwDeviceCtx<H>
 where
     H: HwDevice,
     H::Adaptor: DeviceAdaptor + Send + 'static,
-    H::PageAllocator: PageAllocator<1>,
+    H::DmaBufAllocator: DmaBufAllocator,
     H::PhysAddrResolver: AddressResolver,
 {
     pub(crate) fn initialize(device: H, config: DeviceConfig) -> io::Result<Self> {
         let mode = Mode::default();
         let adaptor = device.new_adaptor()?;
-        let mut allocator = device.new_page_allocator()?;
-        let addr_resolver = device.new_phys_addr_resolver();
-        let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
-        let cmd_controller = CommandController::init_v2(&adaptor, alloc_page()?, alloc_page()?)?;
+        let mut allocator = device.new_dma_buf_allocator()?;
+        // let addr_resolver = device.new_phys_addr_resolver();
+        // let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
+        let cmd_controller =
+            CommandController::init_v2(&adaptor, allocator.alloc()?, allocator.alloc()?)?;
         let send_scheduler = SendQueueScheduler::new();
-        let send_pages = iter::repeat_with(&mut alloc_page)
+        let send_pages = iter::repeat_with(|| allocator.alloc())
             .take(mode.num_channel())
             .collect::<Result<_, _>>()?;
-        let meta_pages = iter::repeat_with(&mut alloc_page)
+        let meta_pages = iter::repeat_with(|| allocator.alloc())
             .take(mode.num_channel())
             .collect::<Result<_, _>>()?;
 
@@ -108,7 +109,7 @@ where
         let (retransmit_tx, retransmit_rx) = flume::unbounded();
         let (packet_retransmit_tx, packet_retransmit_rx) = flume::unbounded();
         let (rdma_write_tx, rdma_write_rx) = flume::unbounded();
-        let rx_buffer = alloc_page()?;
+        let rx_buffer = allocator.alloc()?;
         let rx_buffer_pa = rx_buffer.phys_addr;
         let qp_attr_table = QueuePairAttrTable::new();
         let qp_manager = QpManager::new(qp_attr_table.clone_arc());
@@ -117,9 +118,9 @@ where
 
         let simple_nic_controller = SimpleNicController::init_v2(
             &adaptor,
-            alloc_page()?,
-            alloc_page()?,
-            alloc_page()?,
+            allocator.alloc()?,
+            allocator.alloc()?,
+            allocator.alloc()?,
             rx_buffer,
         )?;
         spawn_send_workers(&adaptor, send_pages, mode, &send_scheduler.injector())?;
@@ -167,7 +168,7 @@ where
             qp_manager,
             cq_manager,
             cq_table,
-            mtt_buffer: alloc_page()?,
+            mtt_buffer: allocator.alloc()?,
             mtt: Mtt::new(),
             post_recv_tx_table: PostRecvTxTable::new(),
             recv_wr_queue_table: RecvWrQueueTable::new(),
@@ -217,7 +218,6 @@ impl<H> DeviceOps for HwDeviceCtx<H>
 where
     H: HwDevice,
     H::Adaptor: DeviceAdaptor + Send + 'static,
-    H::PageAllocator: PageAllocator<1>,
     H::PhysAddrResolver: AddressResolver,
 {
     fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32> {

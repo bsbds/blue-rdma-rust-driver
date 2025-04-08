@@ -4,7 +4,7 @@ use ipnetwork::Ipv4Network;
 
 use crate::{
     device_protocol::DeviceCommand,
-    mem::PageWithPhysAddr,
+    mem::{DmaBufAllocator, PageWithPhysAddr},
     net::config::{MacAddress, NetworkConfig},
 };
 
@@ -35,11 +35,9 @@ impl TestDevice {
         device.reset().unwrap();
         device.init_dma_engine().unwrap();
         let adaptor = device.new_adaptor().unwrap();
-        let mut allocator = device.new_page_allocator().unwrap();
-        let addr_resolver = device.new_phys_addr_resolver();
-        let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
+        let mut allocator = device.new_dma_buf_allocator().unwrap();
         let cmd_controller =
-            CommandController::init_v2(&adaptor, alloc_page()?, alloc_page()?).unwrap();
+            CommandController::init_v2(&adaptor, allocator.alloc()?, allocator.alloc()?).unwrap();
         let network_config = NetworkConfig {
             ip: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
             gateway: "10.0.0.1".parse().unwrap(),

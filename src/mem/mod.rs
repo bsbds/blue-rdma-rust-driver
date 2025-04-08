@@ -55,6 +55,10 @@ pub(crate) struct PageWithPhysAddr {
 }
 
 impl PageWithPhysAddr {
+    pub(crate) fn new(page: page::ContiguousPages<1>, phys_addr: u64) -> Self {
+        Self { page, phys_addr }
+    }
+
     pub(crate) fn alloc<A, R>(allocator: &mut A, resolver: &R) -> io::Result<Self>
     where
         A: page::PageAllocator<1>,
@@ -67,4 +71,8 @@ impl PageWithPhysAddr {
 
         Ok(Self { page, phys_addr })
     }
+}
+
+pub(crate) trait DmaBufAllocator {
+    fn alloc(&mut self) -> io::Result<PageWithPhysAddr>;
 }

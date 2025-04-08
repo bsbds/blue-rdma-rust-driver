@@ -105,7 +105,7 @@ impl EmulatedHwDevice {
 impl HwDevice for EmulatedHwDevice {
     type Adaptor = EmulatedDevice;
 
-    type PageAllocator = EmulatedPageAllocator<1>;
+    type DmaBufAllocator = EmulatedPageAllocator<1>;
 
     type PhysAddrResolver = PhysAddrResolverEmulated;
 
@@ -113,7 +113,7 @@ impl HwDevice for EmulatedHwDevice {
         Ok(EmulatedDevice::new_with_addr(&self.addr))
     }
 
-    fn new_page_allocator(&self) -> io::Result<Self::PageAllocator> {
+    fn new_dma_buf_allocator(&self) -> io::Result<Self::DmaBufAllocator> {
         Ok(EmulatedPageAllocator::new(
             bluesimalloc::page_start_addr()..bluesimalloc::heap_start_addr(),
         ))

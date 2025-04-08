@@ -8,7 +8,10 @@ use std::{
 
 use tracing_subscriber::Layer;
 
-use super::page::{ContiguousPages, MmapMut, PageAllocator};
+use super::{
+    page::{ContiguousPages, MmapMut, PageAllocator},
+    DmaBufAllocator, PageWithPhysAddr,
+};
 
 const CLASS_PATH: &str = "/sys/class/u-dma-buf/udmabuf0";
 const PAGE_SIZE_2MB: usize = 1 << 21;
@@ -56,7 +59,7 @@ impl UDmaBufAllocator {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn create(&mut self, n: usize) -> io::Result<MmapMut> {
+    fn create(&mut self, n: usize) -> io::Result<(MmapMut, u64)> {
         let size = PAGE_SIZE_2MB * n;
         let size_total = Self::size_total()?;
         let offset_in_bytes = self.offset * PAGE_SIZE_2MB;
@@ -91,13 +94,16 @@ impl UDmaBufAllocator {
 
         let mmap = MmapMut::new(ptr, size);
 
-        Ok(mmap)
+        let phys_addr = Self::phys_addr()? + offset_in_bytes as u64;
+
+        Ok((mmap, phys_addr))
     }
 }
 
-impl<const N: usize> PageAllocator<N> for UDmaBufAllocator {
-    fn alloc(&mut self) -> io::Result<ContiguousPages<N>> {
-        self.create(N).map(ContiguousPages::new)
+impl DmaBufAllocator for UDmaBufAllocator {
+    fn alloc(&mut self) -> io::Result<PageWithPhysAddr> {
+        let (mmap, phys_addr) = self.create(1)?;
+        Ok(PageWithPhysAddr::new(ContiguousPages::new(mmap), phys_addr))
     }
 }
 
@@ -111,24 +117,13 @@ mod tests {
     #[test]
     fn allocate_pages() {
         let mut allocator = UDmaBufAllocator::open().unwrap();
-        let mut x = allocator.create(1).unwrap();
+        let (mut x, _) = allocator.create(1).unwrap();
         let buf: &mut [u8] = x.as_mut();
         assert_eq!(buf.len(), PAGE_SIZE_2MB);
         buf.fill(1);
-        let mut x = allocator.create(2).unwrap();
+        let (mut x, _) = allocator.create(2).unwrap();
         let buf: &mut [u8] = x.as_mut();
         assert_eq!(buf.len(), PAGE_SIZE_2MB * 2);
         buf.fill(1);
-    }
-
-    #[test]
-    fn consistent_phys_addr() {
-        let pa = UDmaBufAllocator::phys_addr().unwrap();
-        let mut allocator = UDmaBufAllocator::open().unwrap();
-        let mut x = allocator.create(1).unwrap();
-        let va = x.as_ptr() as u64;
-        let resolver = PhysAddrResolverLinuxX86;
-        let pa_resolved = resolver.virt_to_phys(va).unwrap().unwrap();
-        assert_eq!(pa, pa_resolved);
     }
 }

@@ -164,7 +164,7 @@ impl PciHwDevice {
 impl HwDevice for PciHwDevice {
     type Adaptor = SysfsPciCsrAdaptor;
 
-    type PageAllocator = UDmaBufAllocator;
+    type DmaBufAllocator = UDmaBufAllocator;
 
     type PhysAddrResolver = PhysAddrResolverLinuxX86;
 
@@ -172,7 +172,7 @@ impl HwDevice for PciHwDevice {
         SysfsPciCsrAdaptor::new(&self.sysfs_path)
     }
 
-    fn new_page_allocator(&self) -> io::Result<Self::PageAllocator> {
+    fn new_dma_buf_allocator(&self) -> io::Result<Self::DmaBufAllocator> {
         UDmaBufAllocator::open()
     }
 
