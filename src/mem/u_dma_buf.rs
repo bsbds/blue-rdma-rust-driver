@@ -70,19 +70,13 @@ impl UDmaBufAllocator {
             ));
         }
 
-        let fd = OpenOptions::new()
-            .read(true)
-            .write(true)
-            .custom_flags(libc::O_SYNC)
-            .open("/dev/udmabuf0")?;
-
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
                 size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED | libc::MAP_HUGETLB | libc::MAP_HUGE_2MB,
-                fd.as_raw_fd(),
+                self.fd.as_raw_fd(),
                 offset_in_bytes as i64,
             )
         };
