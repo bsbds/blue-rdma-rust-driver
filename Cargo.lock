@@ -156,6 +156,7 @@ dependencies = [
  "netlink-packet-core",
  "netlink-packet-route",
  "netlink-sys",
+ "nix",
  "oneshot",
  "parking_lot",
  "pci-driver",

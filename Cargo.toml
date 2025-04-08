@@ -42,6 +42,7 @@ spin_sleep = "1.3.0"
 oneshot = "0.1.10"
 pci-driver = "0.1.4"
 pci-info = "0.3.0"
+nix = { version = "0.29.0", features = ["ioctl", "fs"] }
 
 [dev-dependencies]
 criterion = "0.5.1"

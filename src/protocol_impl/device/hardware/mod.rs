@@ -13,7 +13,9 @@ use std::{
     sync::Arc,
 };
 
-use crate::mem::{page::HostPageAllocator, virt_to_phy::PhysAddrResolverLinuxX86};
+use crate::mem::{
+    dmabuf::DmaBufAllocator, page::HostPageAllocator, virt_to_phy::PhysAddrResolverLinuxX86,
+};
 
 use super::{ops_impl::HwDevice, DeviceAdaptor};
 
@@ -161,7 +163,7 @@ impl PciHwDevice {
 impl HwDevice for PciHwDevice {
     type Adaptor = SysfsPciCsrAdaptor;
 
-    type PageAllocator = HostPageAllocator<1>;
+    type PageAllocator = DmaBufAllocator;
 
     type PhysAddrResolver = PhysAddrResolverLinuxX86;
 
@@ -170,7 +172,7 @@ impl HwDevice for PciHwDevice {
     }
 
     fn new_page_allocator(&self) -> Self::PageAllocator {
-        HostPageAllocator
+        DmaBufAllocator
     }
 
     fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver {

@@ -9,6 +9,8 @@ pub(crate) mod page;
 /// Slot allocation implementation
 pub(crate) mod slot_alloc;
 
+pub(crate) mod dmabuf;
+
 mod utils;
 
 pub(crate) use utils::*;
