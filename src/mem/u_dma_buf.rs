@@ -30,27 +30,29 @@ impl UDmaBufAllocator {
     }
 
     pub(crate) fn size_total() -> io::Result<usize> {
-        Self::read_attribute("size")
+        Self::read_attribute("size")?.parse().map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse size: {e}"),
+            )
+        })
     }
 
     pub(crate) fn phys_addr() -> io::Result<u64> {
-        Self::read_attribute("phys_addr")
+        let str = Self::read_attribute("phys_addr")?;
+        u64::from_str_radix(str.trim_start_matches("0x"), 16).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to parse size: {e}"),
+            )
+        })
     }
 
-    fn read_attribute<T: std::str::FromStr>(attr: &str) -> io::Result<T>
-    where
-        T::Err: std::fmt::Display,
-    {
+    fn read_attribute(attr: &str) -> io::Result<String> {
         let path = PathBuf::from(CLASS_PATH).join(attr);
         let mut content = String::new();
         let _ignore = File::open(&path)?.read_to_string(&mut content)?;
-
-        content.trim().parse().map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                format!("Failed to parse '{attr}': {e}"),
-            )
-        })
+        Ok(content.trim().to_owned())
     }
 
     #[allow(clippy::cast_possible_wrap)]
