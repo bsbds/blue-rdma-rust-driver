@@ -25,7 +25,6 @@ use crate::{
     },
     qp::QueuePairAttrTable,
     rdma_write_worker::RdmaWriteTask,
-    ringbuffer::Descriptor,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -105,10 +104,6 @@ impl MetaReportQueue {
 
     pub(crate) fn remaining(&self) -> usize {
         self.inner.remaining()
-    }
-
-    pub(crate) fn capacity() -> usize {
-        DescRingBuffer::capacity()
     }
 }
 

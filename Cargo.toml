@@ -52,10 +52,6 @@ name = "virt_to_phy"
 harness = false
 
 [[bench]]
-name = "ring_buffer"
-harness = false
-
-[[bench]]
 name = "descriptor"
 harness = false
 

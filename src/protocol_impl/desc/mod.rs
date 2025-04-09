@@ -20,7 +20,7 @@ pub(crate) use simple_nic::*;
 
 use bilge::prelude::*;
 
-use crate::{device_protocol::WorkReqOpCode, ringbuffer::Descriptor};
+use crate::device_protocol::WorkReqOpCode;
 
 /// Size of a descriptor in bytes.
 pub(crate) const DESC_SIZE: usize = 32;
@@ -133,16 +133,6 @@ impl RingBufDescUntyped {
         let mut this = Self::default();
         this.head.set_valid(true);
         this
-    }
-}
-
-impl Descriptor for RingBufDescUntyped {
-    const SIZE: usize = 32;
-
-    fn take_valid(&mut self) -> bool {
-        let valid = self.head.valid();
-        self.head.set_valid(false);
-        valid
     }
 }
 
@@ -316,7 +306,7 @@ mod test {
             head,
             rest: [0; 30],
         };
-        assert!(desc.take_valid());
+        assert!(desc.is_valid());
         assert!(!desc.head.valid());
     }
 }

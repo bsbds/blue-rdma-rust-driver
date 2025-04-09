@@ -7,7 +7,6 @@ use crate::{
         proxy::{CmdQueueCsrProxy, CmdRespQueueCsrProxy},
         CsrReaderAdaptor, CsrWriterAdaptor, DeviceAdaptor,
     },
-    ringbuffer::{Descriptor, RingBuffer},
 };
 
 use super::super::desc::{

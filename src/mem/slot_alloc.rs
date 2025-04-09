@@ -2,8 +2,6 @@ use std::{fmt, io, marker::PhantomData, sync::Arc};
 
 use std::ops::{Deref, DerefMut};
 
-use crate::ringbuffer::DescBuffer;
-
 /// Trait for types that can specify their size requirements for memory slots.
 pub(crate) trait SlotSize {
     /// Returns the size in bytes required for this slot type.

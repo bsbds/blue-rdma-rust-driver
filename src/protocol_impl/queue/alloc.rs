@@ -10,44 +10,9 @@ use crate::{
     },
     protocol_impl::desc::DESC_SIZE,
     ringbuf::{DmaRingBuf, RING_BUF_LEN},
-    ringbuffer::{DescBuffer, RingBuffer, RingCtx, Syncable},
 };
 
 use super::super::desc::RingBufDescUntyped;
-
-/// A buffer backed by contiguous physical pages.
-pub(crate) struct PageBuf {
-    /// The underlying contiguous physical pages
-    inner: MmapMut,
-}
-
-impl PageBuf {
-    pub(crate) fn new(inner: MmapMut) -> Self {
-        Self { inner }
-    }
-}
-
-impl Syncable for PageBuf {
-    fn sync(&self) {
-        self.inner.sync();
-    }
-}
-
-impl AsMut<[RingBufDescUntyped]> for PageBuf {
-    #[allow(unsafe_code, clippy::transmute_ptr_to_ptr)]
-    fn as_mut(&mut self) -> &mut [RingBufDescUntyped] {
-        unsafe { std::mem::transmute(self.inner.as_mut()) }
-    }
-}
-
-impl AsRef<[RingBufDescUntyped]> for PageBuf {
-    #[allow(unsafe_code, clippy::transmute_ptr_to_ptr)]
-    fn as_ref(&self) -> &[RingBufDescUntyped] {
-        unsafe { std::mem::transmute(self.inner.as_ref()) }
-    }
-}
-
-impl DescBuffer<RingBufDescUntyped> for PageBuf {}
 
 /// Ring buffer storing RDMA descriptors
 pub(crate) struct DescRingBuffer(DmaRingBuf<RingBufDescUntyped>);
@@ -60,10 +25,6 @@ impl DescRingBuffer {
 
     pub(crate) fn remaining(&self) -> usize {
         self.0.remaining()
-    }
-
-    pub(crate) fn capacity() -> usize {
-        RingBuffer::<PageBuf, RingBufDescUntyped>::capacity()
     }
 
     pub(crate) fn pop(&mut self) -> Option<RingBufDescUntyped> {

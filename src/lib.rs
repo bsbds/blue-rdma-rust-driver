@@ -189,8 +189,6 @@ mod qp;
 mod rdma_write_worker;
 mod recv;
 mod ringbuf;
-/// RDMA ring buffer implementation
-mod ringbuffer;
 /// Send Queue implementations
 mod send;
 mod sq_worker;
