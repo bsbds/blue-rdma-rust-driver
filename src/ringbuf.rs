@@ -14,17 +14,19 @@ pub(crate) struct DmaRingBuf<T> {
     ptr: *mut T,
     head: usize,
     tail: usize,
+
+    _mmap: MmapMut,
 }
 
 #[allow(unsafe_code)]
 impl<T: Copy> DmaRingBuf<T> {
-    #[allow(clippy::needless_pass_by_value)]
-    pub(crate) fn new(buf: MmapMut) -> Self {
-        assert!(buf.len >= RING_BUF_LEN * size_of::<T>(), "invalid length");
+    pub(crate) fn new(mmap: MmapMut) -> Self {
+        assert!(mmap.len >= RING_BUF_LEN * size_of::<T>(), "invalid length");
         Self {
-            ptr: buf.ptr.cast(),
+            ptr: mmap.ptr.cast(),
             head: 0,
             tail: 0,
+            _mmap: mmap,
         }
     }
 
