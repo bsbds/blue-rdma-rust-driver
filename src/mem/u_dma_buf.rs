@@ -82,11 +82,10 @@ impl UDmaBufAllocator {
             return Err(io::Error::new(io::ErrorKind::Other, "Failed to map memory"));
         }
 
-        self.offset += len;
-
         let mmap = MmapMut::new(ptr, len);
-
         let phys_addr = Self::phys_addr()? + self.offset as u64;
+
+        self.offset += len;
 
         Ok(DmaBuf::new(mmap, phys_addr))
     }
