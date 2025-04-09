@@ -25,6 +25,7 @@ use crate::{
     },
     qp::QueuePairAttrTable,
     rdma_write_worker::RdmaWriteTask,
+    ringbuffer::Descriptor,
     timeout_retransmit::RetransmitTask,
 };
 
@@ -60,14 +61,9 @@ impl MetaReportQueue {
         Self { inner }
     }
 
-    /// Returns the base address of the buffer
-    pub(crate) fn base_addr(&self) -> u64 {
-        self.inner.base_addr()
-    }
-
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<MetaReportQueueDesc> {
-        let first = self.inner.try_pop().map(MetaReportQueueDescFirst::from)?;
+        let first = self.inner.pop().map(MetaReportQueueDescFirst::from)?;
 
         if !first.has_next() {
             return match first {
@@ -81,7 +77,7 @@ impl MetaReportQueue {
             };
         }
 
-        let next = self.inner.try_pop().map_or_else(
+        let next = self.inner.pop().map_or_else(
             || unreachable!("failed to read next descriptor"),
             MetaReportQueueDescNext::from,
         );
@@ -100,7 +96,7 @@ impl MetaReportQueue {
     }
 
     pub(crate) fn tail(&self) -> u32 {
-        self.inner.tail()
+        self.inner.tail() as u32
     }
 
     pub(crate) fn set_head(&mut self, head: u32) {

@@ -6,7 +6,6 @@ use crate::{
     device_protocol::DeviceCommand,
     mem::{DmaBufAllocator, PageWithPhysAddr},
     net::config::{MacAddress, NetworkConfig},
-    ringbuffer::RingBufAllocator,
 };
 
 use super::{
@@ -14,6 +13,7 @@ use super::{
         hardware::{DmaEngineConfigurator, PciHwDevice},
         ops_impl::HwDevice,
     },
+    queue::alloc::DescRingBufAllocator,
     CommandController,
 };
 
@@ -37,7 +37,7 @@ impl TestDevice {
         device.init_dma_engine().unwrap();
         let adaptor = device.new_adaptor().unwrap();
         let mut allocator = device.new_dma_buf_allocator().unwrap();
-        let mut rb_allocator = RingBufAllocator::new(allocator);
+        let mut rb_allocator = DescRingBufAllocator::new(allocator);
         let cmd_controller =
             CommandController::init_v2(&adaptor, rb_allocator.alloc()?, rb_allocator.alloc()?)
                 .unwrap();

@@ -125,11 +125,11 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
                 wr.laddr,
             );
 
-            if self.send_queue.push(SendQueueDesc::Seg0(desc0)).is_err() {
+            if !self.send_queue.push(SendQueueDesc::Seg0(desc0)) {
                 self.local.push(wr);
                 continue;
             }
-            if self.send_queue.push(SendQueueDesc::Seg1(desc1)).is_err() {
+            if !self.send_queue.push(SendQueueDesc::Seg1(desc1)) {
                 self.local.push(wr);
                 continue;
             }

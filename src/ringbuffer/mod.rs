@@ -208,17 +208,3 @@ where
         self.buf.as_ref().as_ptr() as u64
     }
 }
-
-pub(crate) struct RingBufAllocator<A> {
-    dma_buf_allocator: A,
-}
-
-impl<A: DmaBufAllocator> RingBufAllocator<A> {
-    pub(crate) fn new(dma_buf_allocator: A) -> Self {
-        Self { dma_buf_allocator }
-    }
-
-    pub(crate) fn alloc(&mut self) -> io::Result<DmaBuf> {
-        self.dma_buf_allocator.alloc(RING_BUF_LEN as usize)
-    }
-}

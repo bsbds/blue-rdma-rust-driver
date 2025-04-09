@@ -36,19 +36,13 @@ impl SendQueue {
         Self { inner: ring_buffer }
     }
 
-    pub(crate) fn push(&mut self, desc: SendQueueDesc) -> io::Result<()> {
-        let addr = self.inner.base_addr();
+    pub(crate) fn push(&mut self, desc: SendQueueDesc) -> bool {
         self.inner.push(desc.into())
-    }
-
-    /// Returns the base address of the buffer
-    pub(crate) fn base_addr(&self) -> u64 {
-        self.inner.base_addr()
     }
 
     /// Returns the head pointer of the buffer
     pub(crate) fn head(&self) -> u32 {
-        self.inner.head()
+        self.inner.head() as u32
     }
 
     /// Returns the head pointer of the buffer

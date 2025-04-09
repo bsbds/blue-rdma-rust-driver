@@ -231,7 +231,8 @@ impl QpUpdate<'_> {
     /// Pushes a new command queue descriptor to the queue.
     fn push(&mut self, desc: CmdQueueDesc) {
         self.num = self.num.wrapping_add(1);
-        self.req_queue.push(desc);
+        //FIXME: handle failed condition
+        let _ignore = self.req_queue.push(desc);
     }
 
     /// Flushes the command queue by writing the head pointer to the CSR proxy.

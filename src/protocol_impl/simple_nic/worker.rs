@@ -136,7 +136,7 @@ impl<Dev: DeviceAdaptor + Send + 'static> FrameTx for FrameTxQueue<Dev> {
         let mut desc = self
             .build_desc(buf)
             .unwrap_or_else(|| unreachable!("buffer is smaller than u32::MAX"));
-        while self.inner.push(desc).is_err() {
+        while !self.inner.push(desc) {
             std::hint::spin_loop();
         }
         self.csr_proxy.write_head(self.inner.head());

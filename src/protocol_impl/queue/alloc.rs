@@ -4,7 +4,12 @@ use std::{
 };
 
 use crate::{
-    mem::page::{ContiguousPages, HostPageAllocator, MmapMut, PageAllocator},
+    mem::{
+        page::{ContiguousPages, HostPageAllocator, MmapMut, PageAllocator},
+        DmaBuf, DmaBufAllocator,
+    },
+    protocol_impl::desc::DESC_SIZE,
+    ringbuf::{DmaRingBuf, RING_BUF_LEN},
     ringbuffer::{DescBuffer, RingBuffer, RingCtx, Syncable},
 };
 
@@ -45,20 +50,12 @@ impl AsRef<[RingBufDescUntyped]> for PageBuf {
 impl DescBuffer<RingBufDescUntyped> for PageBuf {}
 
 /// Ring buffer storing RDMA descriptors
-pub(crate) struct DescRingBuffer(RingBuffer<PageBuf, RingBufDescUntyped>);
+pub(crate) struct DescRingBuffer(DmaRingBuf<RingBufDescUntyped>);
 
 impl DescRingBuffer {
     pub(crate) fn new(buf: MmapMut) -> Self {
-        let ctx = RingCtx::new();
-        let page_buf = PageBuf { inner: buf };
-        let rb = RingBuffer::new(ctx, page_buf)
-            .unwrap_or_else(|| unreachable!("ringbuffer creation should never fail"));
+        let rb = DmaRingBuf::new(buf);
         Self(rb)
-    }
-
-    /// Returns the base address of the buffer
-    pub(crate) fn base_addr(&self) -> u64 {
-        self.0.base_addr()
     }
 
     pub(crate) fn remaining(&self) -> usize {
@@ -68,10 +65,14 @@ impl DescRingBuffer {
     pub(crate) fn capacity() -> usize {
         RingBuffer::<PageBuf, RingBufDescUntyped>::capacity()
     }
+
+    pub(crate) fn pop(&mut self) -> Option<RingBufDescUntyped> {
+        self.0.pop(RingBufDescUntyped::is_valid)
+    }
 }
 
 impl Deref for DescRingBuffer {
-    type Target = RingBuffer<PageBuf, RingBufDescUntyped>;
+    type Target = DmaRingBuf<RingBufDescUntyped>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -81,5 +82,19 @@ impl Deref for DescRingBuffer {
 impl DerefMut for DescRingBuffer {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.0
+    }
+}
+
+pub(crate) struct DescRingBufAllocator<A> {
+    dma_buf_allocator: A,
+}
+
+impl<A: DmaBufAllocator> DescRingBufAllocator<A> {
+    pub(crate) fn new(dma_buf_allocator: A) -> Self {
+        Self { dma_buf_allocator }
+    }
+
+    pub(crate) fn alloc(&mut self) -> io::Result<DmaBuf> {
+        self.dma_buf_allocator.alloc(RING_BUF_LEN * DESC_SIZE)
     }
 }

@@ -121,6 +121,12 @@ pub(crate) struct RingBufDescUntyped {
     rest: [u8; 30],
 }
 
+impl RingBufDescUntyped {
+    pub(crate) fn is_valid(&self) -> bool {
+        self.head.valid()
+    }
+}
+
 #[cfg(test)]
 impl RingBufDescUntyped {
     pub(crate) fn new_valid_default() -> Self {

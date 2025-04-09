@@ -26,8 +26,8 @@ use crate::{
     net::config::NetworkConfig,
     packet_retransmit::PacketRetransmitWorker,
     protocol_impl::{
-        queue::meta_report_queue::init_and_spawn_meta_worker, spawn_send_workers,
-        CommandController, SendQueueScheduler, SimpleNicController,
+        queue::{alloc::DescRingBufAllocator, meta_report_queue::init_and_spawn_meta_worker},
+        spawn_send_workers, CommandController, SendQueueScheduler, SimpleNicController,
     },
     qp::{QpManager, QueuePairAttrTable},
     rdma_write_worker::{RdmaWriteTask, RdmaWriteWorker},
@@ -35,7 +35,6 @@ use crate::{
         post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
         TcpChannel,
     },
-    ringbuffer::RingBufAllocator,
     send::{SendWr, SendWrBase, SendWrRdma},
     timeout_retransmit::TimeoutRetransmitWorker,
 };
@@ -93,7 +92,7 @@ where
         let mode = Mode::default();
         let adaptor = device.new_adaptor()?;
         let mut allocator = device.new_dma_buf_allocator()?;
-        let mut rb_allocator = RingBufAllocator::new(&mut allocator);
+        let mut rb_allocator = DescRingBufAllocator::new(&mut allocator);
         let cmd_controller =
             CommandController::init_v2(&adaptor, rb_allocator.alloc()?, rb_allocator.alloc()?)?;
         let send_scheduler = SendQueueScheduler::new();

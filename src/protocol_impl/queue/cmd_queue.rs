@@ -44,13 +44,8 @@ impl CmdQueue {
         Self { inner: ring_buffer }
     }
 
-    /// Returns the base address of the buffer
-    pub(crate) fn base_addr(&self) -> u64 {
-        self.inner.base_addr()
-    }
-
     /// Produces command descriptors to the queue
-    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> io::Result<()> {
+    pub(crate) fn push(&mut self, desc: CmdQueueDesc) -> bool {
         match desc {
             CmdQueueDesc::UpdateMrTable(d) => self.inner.push(d.into()),
             CmdQueueDesc::UpdatePGT(d) => self.inner.push(d.into()),
@@ -62,7 +57,7 @@ impl CmdQueue {
 
     /// Returns the head pointer
     pub(crate) fn head(&self) -> u32 {
-        self.inner.head()
+        self.inner.head() as u32
     }
 
     pub(crate) fn set_tail(&mut self, tail: u32) {
@@ -94,19 +89,14 @@ impl CmdRespQueue {
         Self { inner: ring_buffer }
     }
 
-    /// Returns the base address of the buffer
-    pub(crate) fn base_addr(&self) -> u64 {
-        self.inner.base_addr()
-    }
-
     /// Tries to poll next valid entry from the queue
     pub(crate) fn try_pop(&mut self) -> Option<CmdRespQueueDesc> {
-        self.inner.try_pop().map(Into::into).map(CmdRespQueueDesc)
+        self.inner.pop().map(Into::into).map(CmdRespQueueDesc)
     }
 
     /// Return tail pointer
     pub(crate) fn tail(&self) -> u32 {
-        self.inner.tail()
+        self.inner.tail() as u32
     }
 
     pub(crate) fn set_head(&mut self, head: u32) {

@@ -85,9 +85,9 @@ impl<const N: usize> AsRef<[u8]> for ContiguousPages<N> {
 #[derive(Debug)]
 pub(crate) struct MmapMut {
     /// Raw pointer to the start of the mapped memory region
-    ptr: *mut c_void,
+    pub(crate) ptr: *mut c_void,
     /// Length of the mapped memory region in bytes
-    len: usize,
+    pub(crate) len: usize,
 }
 
 impl MmapMut {
