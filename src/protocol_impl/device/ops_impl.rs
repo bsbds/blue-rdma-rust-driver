@@ -78,6 +78,7 @@ pub(crate) struct HwDeviceCtx<H: HwDevice> {
     rdma_write_tx: flume::Sender<RdmaWriteTask>,
     completion_tx: flume::Sender<CompletionTask>,
     config: DeviceConfig,
+    allocator: H::DmaBufAllocator,
 }
 
 #[allow(private_bounds)]
@@ -175,6 +176,7 @@ where
             rdma_write_tx,
             completion_tx,
             config,
+            allocator,
         })
     }
 }
