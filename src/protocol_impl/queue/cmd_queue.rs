@@ -113,38 +113,3 @@ impl CmdRespQueue {
         self.inner.set_head(head);
     }
 }
-
-#[cfg(test)]
-mod test {
-    use std::iter;
-
-    use crate::{
-        mem::page::HostPageAllocator, protocol_impl::queue::DescRingBufferAllocator,
-        ringbuffer::new_test_ring,
-    };
-
-    use super::*;
-
-    #[test]
-    fn cmd_queue_produce_ok() {
-        let ring = new_test_ring::<RingBufDescUntyped>();
-        let buffer = DescRingBufferAllocator::new_host_allocator()
-            .alloc()
-            .unwrap();
-        let mut queue = CmdQueue::new(buffer);
-        let desc = CmdQueueDesc::UpdatePGT(CmdQueueReqDescUpdatePGT::new(1, 1, 1, 1));
-        queue.push(desc).unwrap();
-    }
-
-    #[test]
-    fn cmd_resp_queue_consume_ok() {
-        let mut ring = new_test_ring::<RingBufDescUntyped>();
-        let buffer = DescRingBufferAllocator::new_host_allocator()
-            .alloc()
-            .unwrap();
-        let desc = RingBufDescUntyped::new_valid_default();
-        ring.push(desc).unwrap();
-        let mut queue = CmdRespQueue::new(buffer);
-        let desc = queue.try_pop().unwrap();
-    }
-}

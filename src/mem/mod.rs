@@ -1,4 +1,7 @@
-use std::io;
+use std::{
+    io,
+    ops::{Deref, DerefMut},
+};
 
 /// Tools for converting virtual address to physicall address
 pub(crate) mod virt_to_phy;
@@ -15,6 +18,7 @@ pub(crate) mod u_dma_buf;
 
 mod utils;
 
+use page::MmapMut;
 pub(crate) use utils::*;
 
 /// Number of bits for a 4KB page size
@@ -73,6 +77,53 @@ impl PageWithPhysAddr {
     }
 }
 
+pub(crate) struct DmaBuf {
+    pub(crate) buf: MmapMut,
+    pub(crate) phys_addr: u64,
+}
+
+impl DmaBuf {
+    pub(crate) fn new(buf: MmapMut, phys_addr: u64) -> Self {
+        Self { buf, phys_addr }
+    }
+
+    pub(crate) fn phys_addr(&self) -> u64 {
+        self.phys_addr
+    }
+}
+
+impl Deref for DmaBuf {
+    type Target = MmapMut;
+
+    fn deref(&self) -> &Self::Target {
+        &self.buf
+    }
+}
+
+impl DerefMut for DmaBuf {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.buf
+    }
+}
+
+impl AsRef<[u8]> for DmaBuf {
+    fn as_ref(&self) -> &[u8] {
+        &self.buf
+    }
+}
+
+impl AsMut<[u8]> for DmaBuf {
+    fn as_mut(&mut self) -> &mut [u8] {
+        &mut self.buf
+    }
+}
+
 pub(crate) trait DmaBufAllocator {
-    fn alloc(&mut self) -> io::Result<PageWithPhysAddr>;
+    fn alloc(&mut self, len: usize) -> io::Result<DmaBuf>;
+}
+
+impl<A: DmaBufAllocator> DmaBufAllocator for &mut A {
+    fn alloc(&mut self, len: usize) -> io::Result<DmaBuf> {
+        (**self).alloc(len)
+    }
 }

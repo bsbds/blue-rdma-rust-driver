@@ -8,7 +8,7 @@ use crate::{
     completion::CompletionTask,
     mem::{
         virt_to_phy::{AddressResolver, PhysAddrResolverLinuxX86},
-        PageWithPhysAddr,
+        DmaBuf, PageWithPhysAddr,
     },
     meta_worker::{MetaHandler, MetaWorker},
     packet_retransmit::PacketRetransmitTask,
@@ -119,7 +119,7 @@ impl MetaReportQueue {
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn init_and_spawn_meta_worker<Dev>(
     dev: &Dev,
-    pages: Vec<PageWithPhysAddr>,
+    pages: Vec<DmaBuf>,
     mode: Mode,
     ack_tx: flume::Sender<AckResponse>,
     retransmit_tx: flume::Sender<RetransmitTask>,
@@ -137,7 +137,7 @@ where
     }
     let ctxs: Vec<_> = pages
         .into_iter()
-        .map(|p| MetaReportQueue::new(DescRingBuffer::new(p.page)))
+        .map(|p| MetaReportQueue::new(DescRingBuffer::new(p.buf)))
         .zip(mrq_proxies)
         .map(|(q, p)| MetaReportQueueCtx::new(q, p))
         .collect();

@@ -19,7 +19,7 @@ use crate::{
         DeviceCommand, MttUpdate, PgtUpdate, RecvBufferMeta, SimpleNicTunnel, UpdateQp,
     },
     mem::{
-        get_num_page, page::PageAllocator, pin_pages, virt_to_phy::AddressResolver,
+        get_num_page, page::PageAllocator, pin_pages, virt_to_phy::AddressResolver, DmaBuf,
         DmaBufAllocator, PageWithPhysAddr,
     },
     mtt::{Mtt, PgtEntry},
@@ -35,6 +35,7 @@ use crate::{
         post_recv_channel, PostRecvTx, PostRecvTxTable, RecvWorker, RecvWr, RecvWrQueueTable,
         TcpChannel,
     },
+    ringbuffer::RingBufAllocator,
     send::{SendWr, SendWrBase, SendWrRdma},
     timeout_retransmit::TimeoutRetransmitWorker,
 };
@@ -67,7 +68,7 @@ pub(crate) trait DeviceOps {
 pub(crate) struct HwDeviceCtx<H: HwDevice> {
     device: H,
     mtt: Mtt,
-    mtt_buffer: PageWithPhysAddr,
+    mtt_buffer: DmaBuf,
     qp_manager: QpManager,
     cq_manager: CqManager,
     cq_table: CompletionQueueTable,
@@ -91,15 +92,14 @@ where
         let mode = Mode::default();
         let adaptor = device.new_adaptor()?;
         let mut allocator = device.new_dma_buf_allocator()?;
-        // let addr_resolver = device.new_phys_addr_resolver();
-        // let mut alloc_page = || PageWithPhysAddr::alloc(&mut allocator, &addr_resolver);
+        let mut rb_allocator = RingBufAllocator::new(&mut allocator);
         let cmd_controller =
-            CommandController::init_v2(&adaptor, allocator.alloc()?, allocator.alloc()?)?;
+            CommandController::init_v2(&adaptor, rb_allocator.alloc()?, rb_allocator.alloc()?)?;
         let send_scheduler = SendQueueScheduler::new();
-        let send_pages = iter::repeat_with(|| allocator.alloc())
+        let send_bufs = iter::repeat_with(|| rb_allocator.alloc())
             .take(mode.num_channel())
             .collect::<Result<_, _>>()?;
-        let meta_pages = iter::repeat_with(|| allocator.alloc())
+        let meta_bufs = iter::repeat_with(|| rb_allocator.alloc())
             .take(mode.num_channel())
             .collect::<Result<_, _>>()?;
 
@@ -109,7 +109,7 @@ where
         let (retransmit_tx, retransmit_rx) = flume::unbounded();
         let (packet_retransmit_tx, packet_retransmit_rx) = flume::unbounded();
         let (rdma_write_tx, rdma_write_rx) = flume::unbounded();
-        let rx_buffer = allocator.alloc()?;
+        let rx_buffer = rb_allocator.alloc()?;
         let rx_buffer_pa = rx_buffer.phys_addr;
         let qp_attr_table = QueuePairAttrTable::new();
         let qp_manager = QpManager::new(qp_attr_table.clone_arc());
@@ -118,15 +118,15 @@ where
 
         let simple_nic_controller = SimpleNicController::init_v2(
             &adaptor,
-            allocator.alloc()?,
-            allocator.alloc()?,
-            allocator.alloc()?,
+            rb_allocator.alloc()?,
+            rb_allocator.alloc()?,
+            rb_allocator.alloc()?,
             rx_buffer,
         )?;
-        spawn_send_workers(&adaptor, send_pages, mode, &send_scheduler.injector())?;
+        spawn_send_workers(&adaptor, send_bufs, mode, &send_scheduler.injector())?;
         init_and_spawn_meta_worker(
             &adaptor,
-            meta_pages,
+            meta_bufs,
             mode,
             ack_tx.clone(),
             retransmit_tx.clone(),
@@ -168,7 +168,7 @@ where
             qp_manager,
             cq_manager,
             cq_table,
-            mtt_buffer: allocator.alloc()?,
+            mtt_buffer: rb_allocator.alloc()?,
             mtt: Mtt::new(),
             post_recv_tx_table: PostRecvTxTable::new(),
             recv_wr_queue_table: RecvWrQueueTable::new(),
@@ -254,7 +254,7 @@ where
                 "physical address not found",
             ))?
             .into_iter();
-        let buf = &mut self.mtt_buffer.page;
+        let buf = &mut self.mtt_buffer.buf;
         let base_index = pgt_entry.index;
         let mtt_update = MttUpdate::new(addr, length_u32, mr_key, pd_handle, access, base_index);
         // TODO: makes updates atomic

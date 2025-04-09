@@ -2,7 +2,7 @@ use std::{ffi::c_void, io, ops::Range};
 
 use crate::mem::{
     virt_to_phy::{AddressResolver, PhysAddrResolverEmulated},
-    DmaBufAllocator, PageWithPhysAddr, PAGE_SIZE,
+    DmaBuf, DmaBufAllocator, PageWithPhysAddr, PAGE_SIZE,
 };
 
 use super::{ContiguousPages, MmapMut, PageAllocator};
@@ -45,14 +45,13 @@ impl<const N: usize> PageAllocator<N> for EmulatedPageAllocator<N> {
 
 impl DmaBufAllocator for EmulatedPageAllocator<1> {
     #[allow(clippy::unwrap_in_result, clippy::unwrap_used)]
-    fn alloc(&mut self) -> io::Result<PageWithPhysAddr> {
+    fn alloc(&mut self, _len: usize) -> io::Result<DmaBuf> {
         let buf = self
             .inner
             .pop()
-            .map(ContiguousPages::new)
             .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?;
         let resolver = PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64);
         let phys_addr = resolver.virt_to_phys(buf.as_ptr() as u64)?.unwrap();
-        Ok(PageWithPhysAddr::new(buf, phys_addr))
+        Ok(DmaBuf::new(buf, phys_addr))
     }
 }

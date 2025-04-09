@@ -10,7 +10,7 @@ use parking_lot::Mutex;
 
 use crate::{
     device_protocol::{DeviceCommand, MttUpdate, PgtUpdate, RecvBufferMeta, UpdateQp},
-    mem::{page::ContiguousPages, PageWithPhysAddr},
+    mem::{page::ContiguousPages, DmaBuf, PageWithPhysAddr},
     mtt::Mtt,
     net::config::NetworkConfig,
     protocol_impl::device::{
@@ -71,17 +71,13 @@ impl<Dev: DeviceAdaptor> CommandController<Dev> {
     ///
     /// # Returns
     /// A new `CommandController` with an initialized command queue
-    pub(crate) fn init_v2(
-        dev: &Dev,
-        req_page: PageWithPhysAddr,
-        resp_page: PageWithPhysAddr,
-    ) -> io::Result<Self> {
-        let mut req_queue = CmdQueue::new(DescRingBuffer::new(req_page.page));
-        let mut resp_queue = CmdRespQueue::new(DescRingBuffer::new(resp_page.page));
+    pub(crate) fn init_v2(dev: &Dev, req_buf: DmaBuf, resp_buf: DmaBuf) -> io::Result<Self> {
+        let mut req_queue = CmdQueue::new(DescRingBuffer::new(req_buf.buf));
+        let mut resp_queue = CmdRespQueue::new(DescRingBuffer::new(resp_buf.buf));
         let req_csr_proxy = CmdQueueCsrProxy(dev.clone());
         let resp_csr_proxy = CmdRespQueueCsrProxy(dev.clone());
-        req_csr_proxy.write_base_addr(req_page.phys_addr)?;
-        resp_csr_proxy.write_base_addr(resp_page.phys_addr)?;
+        req_csr_proxy.write_base_addr(req_buf.phys_addr)?;
+        resp_csr_proxy.write_base_addr(resp_buf.phys_addr)?;
 
         Ok(Self {
             cmd_qp: Mutex::new(CmdQp::new(req_queue, resp_queue)),

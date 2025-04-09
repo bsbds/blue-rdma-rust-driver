@@ -6,6 +6,7 @@ use crate::{
     device_protocol::DeviceCommand,
     mem::{DmaBufAllocator, PageWithPhysAddr},
     net::config::{MacAddress, NetworkConfig},
+    ringbuffer::RingBufAllocator,
 };
 
 use super::{
@@ -36,8 +37,10 @@ impl TestDevice {
         device.init_dma_engine().unwrap();
         let adaptor = device.new_adaptor().unwrap();
         let mut allocator = device.new_dma_buf_allocator().unwrap();
+        let mut rb_allocator = RingBufAllocator::new(allocator);
         let cmd_controller =
-            CommandController::init_v2(&adaptor, allocator.alloc()?, allocator.alloc()?).unwrap();
+            CommandController::init_v2(&adaptor, rb_allocator.alloc()?, rb_allocator.alloc()?)
+                .unwrap();
         let network_config = NetworkConfig {
             ip: Ipv4Network::new("10.0.0.2".parse().unwrap(), 24).unwrap(),
             gateway: "10.0.0.1".parse().unwrap(),

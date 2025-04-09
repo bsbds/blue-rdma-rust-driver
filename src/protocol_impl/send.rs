@@ -5,7 +5,7 @@ use tracing::error;
 
 use crate::{
     device_protocol::{WorkReqSend, WrChunk},
-    mem::PageWithPhysAddr,
+    mem::{DmaBuf, PageWithPhysAddr},
     protocol_impl::device::CsrWriterAdaptor,
 };
 
@@ -164,7 +164,7 @@ impl<Dev: DeviceAdaptor + Send + 'static> SendWorker<Dev> {
 
 pub(crate) fn spawn_send_workers<Dev>(
     dev: &Dev,
-    pages: Vec<PageWithPhysAddr>,
+    bufs: Vec<DmaBuf>,
     mode: Mode,
     global_injector: &Arc<WrInjector>,
 ) -> io::Result<()>
@@ -172,12 +172,12 @@ where
     Dev: DeviceAdaptor + Clone + Send + 'static,
 {
     let mut sq_proxies = build_send_queue_proxies(dev.clone(), mode);
-    for (proxy, page) in sq_proxies.iter_mut().zip(pages.iter()) {
-        proxy.write_base_addr(page.phys_addr)?;
+    for (proxy, buf) in sq_proxies.iter_mut().zip(bufs.iter()) {
+        proxy.write_base_addr(buf.phys_addr)?;
     }
-    let send_queues: Vec<_> = pages
+    let send_queues: Vec<_> = bufs
         .into_iter()
-        .map(|p| SendQueue::new(DescRingBuffer::new(p.page)))
+        .map(|p| SendQueue::new(DescRingBuffer::new(p.buf)))
         .collect();
     let workers: Vec<_> = iter::repeat_with(WrWorker::new_fifo)
         .take(send_queues.len())

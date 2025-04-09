@@ -13,4 +13,4 @@ pub(crate) mod meta_report_queue;
 /// Queue allocator implementation
 pub(crate) mod alloc;
 
-pub(crate) use alloc::{DescRingBuffer, DescRingBufferAllocator};
+pub(crate) use alloc::DescRingBuffer;

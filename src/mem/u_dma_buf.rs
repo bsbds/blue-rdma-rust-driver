@@ -10,11 +10,10 @@ use tracing_subscriber::Layer;
 
 use super::{
     page::{ContiguousPages, MmapMut, PageAllocator},
-    DmaBufAllocator, PageWithPhysAddr,
+    DmaBuf, DmaBufAllocator, PageWithPhysAddr,
 };
 
 const CLASS_PATH: &str = "/sys/class/u-dma-buf/udmabuf0";
-const PAGE_SIZE_2MB: usize = 1 << 21;
 
 pub(crate) struct UDmaBufAllocator {
     fd: File,
@@ -59,30 +58,23 @@ impl UDmaBufAllocator {
     }
 
     #[allow(clippy::cast_possible_wrap)]
-    fn create(&mut self, n: usize) -> io::Result<(MmapMut, u64)> {
-        let size = PAGE_SIZE_2MB * n;
+    fn create(&mut self, len: usize) -> io::Result<DmaBuf> {
         let size_total = Self::size_total()?;
-        let offset_in_bytes = self.offset * PAGE_SIZE_2MB;
-        if self
-            .offset
-            .checked_add(n)
-            .and_then(|x| x.checked_mul(PAGE_SIZE_2MB))
-            .is_none_or(|x| x > size_total)
-        {
+        if self.offset.checked_add(len).is_none_or(|x| x > size_total) {
             return Err(io::Error::new(
                 io::ErrorKind::OutOfMemory,
-                format!("Failed to allocate {n} pages"),
+                format!("Failed to allocate memory of length: {len} bytes"),
             ));
         }
 
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
-                size,
+                len,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED,
                 self.fd.as_raw_fd(),
-                offset_in_bytes as i64,
+                self.offset as i64,
             )
         };
 
@@ -90,20 +82,19 @@ impl UDmaBufAllocator {
             return Err(io::Error::new(io::ErrorKind::Other, "Failed to map memory"));
         }
 
-        self.offset += n;
+        self.offset += len;
 
-        let mmap = MmapMut::new(ptr, size);
+        let mmap = MmapMut::new(ptr, len);
 
-        let phys_addr = Self::phys_addr()? + offset_in_bytes as u64;
+        let phys_addr = Self::phys_addr()? + self.offset as u64;
 
-        Ok((mmap, phys_addr))
+        Ok(DmaBuf::new(mmap, phys_addr))
     }
 }
 
 impl DmaBufAllocator for UDmaBufAllocator {
-    fn alloc(&mut self) -> io::Result<PageWithPhysAddr> {
-        let (mmap, phys_addr) = self.create(1)?;
-        Ok(PageWithPhysAddr::new(ContiguousPages::new(mmap), phys_addr))
+    fn alloc(&mut self, len: usize) -> io::Result<DmaBuf> {
+        self.create(len)
     }
 }
 
@@ -117,13 +108,13 @@ mod tests {
     #[test]
     fn allocate_pages() {
         let mut allocator = UDmaBufAllocator::open().unwrap();
-        let (mut x, _) = allocator.create(1).unwrap();
+        let mut x = allocator.create(0x1000).unwrap();
         let buf: &mut [u8] = x.as_mut();
-        assert_eq!(buf.len(), PAGE_SIZE_2MB);
+        assert_eq!(buf.len(), 0x1000);
         buf.fill(1);
-        let (mut x, _) = allocator.create(2).unwrap();
+        let mut x = allocator.create(0x4000).unwrap();
         let buf: &mut [u8] = x.as_mut();
-        assert_eq!(buf.len(), PAGE_SIZE_2MB * 2);
+        assert_eq!(buf.len(), 0x4000);
         buf.fill(1);
     }
 }

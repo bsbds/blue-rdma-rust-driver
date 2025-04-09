@@ -11,7 +11,10 @@ use tracing::error;
 
 use crate::{
     device_protocol::{FrameRx, FrameTx},
-    mem::{page::ContiguousPages, PageWithPhysAddr},
+    mem::{
+        page::{ContiguousPages, MmapMut},
+        DmaBuf, PageWithPhysAddr,
+    },
     protocol_impl::device::{
         proxy::{SimpleNicRxQueueCsrProxy, SimpleNicTxQueueCsrProxy},
         CsrBaseAddrAdaptor, CsrWriterAdaptor, DeviceAdaptor,
@@ -33,47 +36,23 @@ pub(crate) struct SimpleNicController<Dev> {
 }
 
 impl<Dev: DeviceAdaptor> SimpleNicController<Dev> {
-    #[allow(clippy::too_many_arguments)]
-    pub(crate) fn init(
-        dev: &Dev,
-        tx_rb: DescRingBuffer,
-        tx_rb_base_pa: u64,
-        rx_rb: DescRingBuffer,
-        rx_rb_base_pa: u64,
-        tx_bufffer: ContiguousPages<1>,
-        tx_buf_base_phys_addr: u64,
-        rx_bufffer: ContiguousPages<1>,
-    ) -> io::Result<Self> {
-        let mut tx_queue = SimpleNicTxQueue::new(tx_rb);
-        let mut rx_queue = SimpleNicRxQueue::new(rx_rb);
-        let req_csr_proxy = SimpleNicTxQueueCsrProxy(dev.clone());
-        let resp_csr_proxy = SimpleNicRxQueueCsrProxy(dev.clone());
-        req_csr_proxy.write_base_addr(tx_rb_base_pa)?;
-        resp_csr_proxy.write_base_addr(rx_rb_base_pa)?;
-
-        Ok(Self {
-            tx: FrameTxQueue::new(tx_queue, tx_bufffer, tx_buf_base_phys_addr, req_csr_proxy),
-            rx: FrameRxQueue::new(rx_queue, rx_bufffer, resp_csr_proxy),
-        })
-    }
-
     pub(crate) fn init_v2(
         dev: &Dev,
-        tx_page: PageWithPhysAddr,
-        rx_page: PageWithPhysAddr,
-        tx_buffer: PageWithPhysAddr,
-        rx_buffer: PageWithPhysAddr,
+        tx_rb_buf: DmaBuf,
+        rx_rb_buf: DmaBuf,
+        tx_buffer: DmaBuf,
+        rx_buffer: DmaBuf,
     ) -> io::Result<Self> {
-        let mut tx_queue = SimpleNicTxQueue::new(DescRingBuffer::new(tx_page.page));
-        let mut rx_queue = SimpleNicRxQueue::new(DescRingBuffer::new(rx_page.page));
+        let mut tx_queue = SimpleNicTxQueue::new(DescRingBuffer::new(tx_rb_buf.buf));
+        let mut rx_queue = SimpleNicRxQueue::new(DescRingBuffer::new(rx_rb_buf.buf));
         let req_csr_proxy = SimpleNicTxQueueCsrProxy(dev.clone());
         let resp_csr_proxy = SimpleNicRxQueueCsrProxy(dev.clone());
-        req_csr_proxy.write_base_addr(tx_page.phys_addr)?;
-        resp_csr_proxy.write_base_addr(rx_page.phys_addr)?;
+        req_csr_proxy.write_base_addr(tx_rb_buf.phys_addr)?;
+        resp_csr_proxy.write_base_addr(rx_rb_buf.phys_addr)?;
 
         Ok(Self {
-            tx: FrameTxQueue::new(tx_queue, tx_buffer.page, tx_buffer.phys_addr, req_csr_proxy),
-            rx: FrameRxQueue::new(rx_queue, rx_buffer.page, resp_csr_proxy),
+            tx: FrameTxQueue::new(tx_queue, tx_buffer.buf, tx_buffer.phys_addr, req_csr_proxy),
+            rx: FrameRxQueue::new(rx_queue, rx_buffer.buf, resp_csr_proxy),
         })
     }
 }
@@ -103,7 +82,7 @@ pub(crate) struct FrameTxQueue<Dev> {
     /// CSR Proxy
     csr_proxy: SimpleNicTxQueueCsrProxy<Dev>,
     /// A contiguous memory buffer used for sending data
-    buf: ContiguousPages<1>,
+    buf: MmapMut,
     /// Base physical address of the buffer
     buf_base_phys_addr: u64,
     /// Pointer to the next slot of the buffer
@@ -114,7 +93,7 @@ impl<Dev> FrameTxQueue<Dev> {
     /// Creates a new `FrameTxQueue`
     pub(crate) fn new(
         inner: SimpleNicTxQueue,
-        buf: ContiguousPages<1>,
+        buf: MmapMut,
         buf_base_phys_addr: u64,
         csr_proxy: SimpleNicTxQueueCsrProxy<Dev>,
     ) -> Self {
@@ -174,7 +153,7 @@ pub(crate) struct FrameRxQueue<Dev> {
     /// Queue for receiving frames from the NIC
     rx_queue: SimpleNicRxQueue,
     /// Buffer for storing received frames
-    rx_buf: ContiguousPages<1>,
+    rx_buf: MmapMut,
     /// CSR Proxy
     csr_proxy: SimpleNicRxQueueCsrProxy<Dev>,
 }
@@ -183,7 +162,7 @@ impl<Dev> FrameRxQueue<Dev> {
     /// Creates a new `FrameRxQueue`
     pub(crate) fn new(
         rx_queue: SimpleNicRxQueue,
-        rx_buf: ContiguousPages<1>,
+        rx_buf: MmapMut,
         csr_proxy: SimpleNicRxQueueCsrProxy<Dev>,
     ) -> Self {
         Self {
