@@ -61,12 +61,12 @@ impl<T: Copy> DmaRingBuf<T> {
 
     /// Returns the current head index in the ring buffer
     pub(crate) fn head(&self) -> usize {
-        self.head & RING_BUF_LEN_MASK
+        self.head
     }
 
     /// Returns the current tail index in the ring buffer
     pub(crate) fn tail(&self) -> usize {
-        self.tail & RING_BUF_LEN_MASK
+        self.tail
     }
 
     /// Returns the current length of data in the ring buffer
