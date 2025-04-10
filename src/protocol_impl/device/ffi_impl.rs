@@ -92,12 +92,12 @@ impl BlueRdmaCore {
     }
 }
 
-struct EmulatedHwDevice {
+pub(crate) struct EmulatedHwDevice {
     addr: String,
 }
 
 impl EmulatedHwDevice {
-    fn new(addr: String) -> Self {
+    pub(crate) fn new(addr: String) -> Self {
         Self { addr }
     }
 }

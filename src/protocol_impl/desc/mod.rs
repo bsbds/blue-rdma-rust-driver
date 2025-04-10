@@ -115,10 +115,10 @@ impl RingBufDescCommonHead {
 #[repr(C)]
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct RingBufDescUntyped {
-    /// Common header fields for the ring buffer descriptor
-    head: RingBufDescCommonHead,
     /// Remaining bytes of the descriptor
     rest: [u8; 30],
+    /// Common header fields for the ring buffer descriptor
+    head: RingBufDescCommonHead,
 }
 
 impl RingBufDescUntyped {
