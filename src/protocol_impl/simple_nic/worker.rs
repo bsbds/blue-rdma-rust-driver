@@ -73,7 +73,7 @@ impl<Dev: DeviceAdaptor + Send + 'static> SimpleNicTunnel for SimpleNicControlle
 }
 
 /// A buffer slot size for a single frame
-const FRAME_SLOT_SIZE: usize = 2048;
+const FRAME_SLOT_SIZE: usize = 128;
 
 /// Send frame through `SimpleNicTxQueue`
 pub(crate) struct FrameTxQueue<Dev> {
