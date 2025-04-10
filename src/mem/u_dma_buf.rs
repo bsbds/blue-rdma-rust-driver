@@ -78,8 +78,12 @@ impl UDmaBufAllocator {
             )
         };
 
-        if ptr.is_null() {
+        if ptr == libc::MAP_FAILED {
             return Err(io::Error::new(io::ErrorKind::Other, "Failed to map memory"));
+        }
+
+        unsafe {
+            ptr::write_bytes(ptr.cast::<u8>(), 0, len);
         }
 
         let mmap = MmapMut::new(ptr, len);
