@@ -35,7 +35,7 @@ impl<T: Copy> DmaRingBuf<T> {
             return false;
         }
         unsafe {
-            self.ptr.add(self.head).write_volatile(value);
+            self.ptr.add(self.head_idx()).write_volatile(value);
         }
 
         self.inc_head();
@@ -47,10 +47,12 @@ impl<T: Copy> DmaRingBuf<T> {
     where
         F: FnOnce(&T) -> bool,
     {
-        let value = unsafe { self.ptr.add(self.tail).read_volatile() };
+        let value = unsafe { self.ptr.add(self.tail_idx()).read_volatile() };
         if cond(&value) {
             unsafe {
-                self.ptr.add(self.tail).write_volatile(std::mem::zeroed());
+                self.ptr
+                    .add(self.tail_idx())
+                    .write_volatile(std::mem::zeroed());
             }
             self.inc_tail();
             return Some(value);
@@ -105,6 +107,14 @@ impl<T: Copy> DmaRingBuf<T> {
 
     pub(crate) fn set_head(&mut self, head: u32) {
         self.head = head as usize;
+    }
+
+    fn head_idx(&self) -> usize {
+        self.head & RING_BUF_LEN
+    }
+
+    fn tail_idx(&self) -> usize {
+        self.tail & RING_BUF_LEN
     }
 }
 
