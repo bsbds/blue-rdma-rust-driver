@@ -74,43 +74,87 @@ impl AddressResolver for PhysAddrResolverLinuxX86 {
         let mut file = File::open("/proc/self/pagemap")?;
         let virt_pfn = virt_addr / base_page_size;
         let offset = PFN_MASK_SIZE as u64 * virt_pfn;
-        let _pos = file.seek(io::SeekFrom::Start(offset))?;
         let mut buf = [0u8; PFN_MASK_SIZE];
-        file.read_exact(&mut buf)?;
-        let entry = u64::from_ne_bytes(buf);
 
-        if (entry >> PAGE_PRESENT_BIT) & 1 == 0 {
+        let mut get_pa_from_file = move |mut file: File| {
+            let _pos = file.seek(io::SeekFrom::Start(offset))?;
+            file.read_exact(&mut buf)?;
+            let entry = u64::from_ne_bytes(buf);
+
+            if (entry >> PAGE_PRESENT_BIT) & 1 != 0 {
+                let phy_pfn = entry & PFN_MASK;
+                let phys_addr = phy_pfn * base_page_size + virt_addr % base_page_size;
+                return Ok(Some(phys_addr));
+            }
+
             return Ok(None);
+        };
+
+        if let pa @ Some(_) = get_pa_from_file(file)? {
+            return Ok(pa);
         }
 
-        let phy_pfn = entry & PFN_MASK;
-        let phys_addr = phy_pfn * base_page_size + virt_addr % base_page_size;
+        if let Ok(mut gpu_ptr_translator) = File::open("/dev/gpu_ptr_translator") {
+            if let res @ Ok(Some(_)) = get_pa_from_file(gpu_ptr_translator) {
+                return res;
+            }
+        }
 
-        Ok(Some(phys_addr))
+        return Ok(None);
     }
 
     fn virt_to_phys_range(
         &self,
-        mut start_addr: u64,
+        start_addr: u64,
         num_pages: usize,
     ) -> io::Result<Vec<Option<u64>>> {
         let base_page_size = get_base_page_size();
-        let mut phy_addrs = Vec::with_capacity(num_pages);
+        let mut phy_addrs = vec![None; num_pages];
         let mut file = File::open("/proc/self/pagemap")?;
         let mut buf = [0u8; PFN_MASK_SIZE];
-        for addr in (0..num_pages).map(|i| start_addr + i as u64 * PAGE_SIZE) {
+
+        let mut maybe_gpu_ptr = true;
+
+        let mut addr = start_addr;
+        for i in 0..num_pages {
             let virt_pfn = addr / base_page_size;
             let offset = PFN_MASK_SIZE as u64 * virt_pfn;
             let _pos = file.seek(io::SeekFrom::Start(offset))?;
             file.read_exact(&mut buf)?;
             let entry = u64::from_ne_bytes(buf);
-            if (entry >> PAGE_PRESENT_BIT) & 1 == 0 {
-                phy_addrs.push(None);
-                continue;
+            if (entry >> PAGE_PRESENT_BIT) & 1 != 0 {
+                let phys_pfn = entry & PFN_MASK;
+                let phys_addr = phys_pfn * base_page_size + start_addr % base_page_size;
+                phy_addrs[i] = Some(phys_addr);
+
+                maybe_gpu_ptr = false;
             }
-            let phys_pfn = entry & PFN_MASK;
-            let phys_addr = phys_pfn * base_page_size + start_addr % base_page_size;
-            phy_addrs.push(Some(phys_addr));
+
+            addr += PAGE_SIZE;
+        }
+
+        if maybe_gpu_ptr {
+            debug_assert!(phy_addrs.iter().all(|opt| opt.is_none()));
+
+            let Ok(mut gpu_ptr_translator) = File::open("/dev/gpu_ptr_translator") else {
+                return Ok(phy_addrs);
+            };
+
+            addr = start_addr;
+            for i in 0..num_pages {
+                let virt_pfn = addr / base_page_size;
+                let offset = PFN_MASK_SIZE as u64 * virt_pfn;
+                let _pos = file.seek(io::SeekFrom::Start(offset))?;
+                file.read_exact(&mut buf)?;
+                let entry = u64::from_ne_bytes(buf);
+                if (entry >> PAGE_PRESENT_BIT) & 1 != 0 {
+                    let phys_pfn = entry & PFN_MASK;
+                    let phys_addr = phys_pfn * base_page_size + start_addr % base_page_size;
+                    phy_addrs[i] = Some(phys_addr);
+                }
+
+                addr += PAGE_SIZE;
+            }
         }
 
         Ok(phy_addrs)
