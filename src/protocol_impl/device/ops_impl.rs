@@ -20,7 +20,7 @@ use crate::{
     },
     mem::{
         get_num_page, page::PageAllocator, pin_pages, virt_to_phy::AddressResolver, DmaBuf,
-        DmaBufAllocator, PageWithPhysAddr,
+        DmaBufAllocator, MemoryPinner, PageWithPhysAddr, UmemHandler,
     },
     mtt::{Mtt, PgtEntry},
     net::config::NetworkConfig,
@@ -44,11 +44,11 @@ use super::{mode::Mode, DeviceAdaptor};
 pub(crate) trait HwDevice {
     type Adaptor;
     type DmaBufAllocator;
-    type PhysAddrResolver;
+    type UmemHandler;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor>;
     fn new_dma_buf_allocator(&self) -> io::Result<Self::DmaBufAllocator>;
-    fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver;
+    fn new_umem_handler(&self) -> Self::UmemHandler;
 }
 
 pub(crate) trait DeviceOps {
@@ -86,7 +86,7 @@ where
     H: HwDevice,
     H::Adaptor: DeviceAdaptor + Send + 'static,
     H::DmaBufAllocator: DmaBufAllocator,
-    H::PhysAddrResolver: AddressResolver,
+    H::UmemHandler: UmemHandler,
 {
     pub(crate) fn initialize(device: H, config: DeviceConfig) -> io::Result<Self> {
         let mode = Mode::default();
@@ -219,7 +219,7 @@ impl<H> DeviceOps for HwDeviceCtx<H>
 where
     H: HwDevice,
     H::Adaptor: DeviceAdaptor + Send + 'static,
-    H::PhysAddrResolver: AddressResolver,
+    H::UmemHandler: UmemHandler,
 {
     fn reg_mr(&mut self, addr: u64, length: usize, pd_handle: u32, access: u8) -> io::Result<u32> {
         fn chunks(entry: PgtEntry) -> Vec<PgtEntry> {
@@ -239,14 +239,13 @@ where
                 .collect()
         }
 
-        pin_pages(addr, length)?;
-
-        let addr_resolver = self.device.new_phys_addr_resolver();
+        let umem_handler = self.device.new_umem_handler();
+        umem_handler.pin_pages(addr, length)?;
         let num_pages = get_num_page(addr, length);
         let (mr_key, pgt_entry) = self.mtt.register(num_pages)?;
         let length_u32 =
             u32::try_from(length).map_err(|_err| io::Error::from(io::ErrorKind::InvalidInput))?;
-        let mut phys_addrs = addr_resolver
+        let mut phys_addrs = umem_handler
             .virt_to_phys_range(addr, num_pages)?
             .into_iter()
             .collect::<Option<Vec<_>>>()

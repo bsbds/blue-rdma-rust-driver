@@ -6,7 +6,9 @@ use crate::{
     completion::Completion,
     config::{ConfigLoader, DeviceConfig},
     ctx_ops::RdmaCtxOps,
-    mem::{page::EmulatedPageAllocator, virt_to_phy::PhysAddrResolverEmulated},
+    mem::{
+        page::EmulatedPageAllocator, virt_to_phy::PhysAddrResolverEmulated, EmulatedUmemHandler,
+    },
     net::config::{MacAddress, NetworkConfig},
     recv::RecvWr,
     send::SendWr,
@@ -107,7 +109,7 @@ impl HwDevice for EmulatedHwDevice {
 
     type DmaBufAllocator = EmulatedPageAllocator<1>;
 
-    type PhysAddrResolver = PhysAddrResolverEmulated;
+    type UmemHandler = EmulatedUmemHandler;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor> {
         Ok(EmulatedDevice::new_with_addr(&self.addr))
@@ -119,8 +121,8 @@ impl HwDevice for EmulatedHwDevice {
         ))
     }
 
-    fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver {
-        PhysAddrResolverEmulated::new(bluesimalloc::shm_start_addr() as u64)
+    fn new_umem_handler(&self) -> Self::UmemHandler {
+        EmulatedUmemHandler::new(bluesimalloc::shm_start_addr() as u64)
     }
 }
 

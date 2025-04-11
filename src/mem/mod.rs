@@ -20,6 +20,7 @@ mod utils;
 
 use page::MmapMut;
 pub(crate) use utils::*;
+use virt_to_phy::{AddressResolver, PhysAddrResolverEmulated, PhysAddrResolverLinuxX86};
 
 /// Number of bits for a 4KB page size
 #[cfg(target_arch = "x86_64")]
@@ -66,7 +67,7 @@ impl PageWithPhysAddr {
     pub(crate) fn alloc<A, R>(allocator: &mut A, resolver: &R) -> io::Result<Self>
     where
         A: page::PageAllocator<1>,
-        R: virt_to_phy::AddressResolver,
+        R: AddressResolver,
     {
         let page = allocator.alloc()?;
         let phys_addr = resolver
@@ -127,3 +128,100 @@ impl<A: DmaBufAllocator> DmaBufAllocator for &mut A {
         (**self).alloc(len)
     }
 }
+
+pub(crate) trait MemoryPinner {
+    /// Pins pages in memory to prevent swapping
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pages could not be locked in memory
+    fn pin_pages(&self, addr: u64, length: usize) -> io::Result<()>;
+
+    /// Unpins previously pinned pages
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the pages could not be locked in memory
+    fn unpin_pages(&self, addr: u64, length: usize) -> io::Result<()>;
+}
+
+pub(crate) trait UmemHandler: AddressResolver + MemoryPinner {}
+
+pub(crate) struct HostUmemHandler {
+    resolver: PhysAddrResolverLinuxX86,
+}
+
+impl HostUmemHandler {
+    pub(crate) fn new() -> Self {
+        Self {
+            resolver: PhysAddrResolverLinuxX86,
+        }
+    }
+}
+
+impl MemoryPinner for HostUmemHandler {
+    fn pin_pages(&self, addr: u64, length: usize) -> io::Result<()> {
+        let result = unsafe { libc::mlock(addr as *const std::ffi::c_void, length) };
+        if result != 0 {
+            return Err(io::Error::new(io::ErrorKind::Other, "failed to lock pages"));
+        }
+        Ok(())
+    }
+
+    fn unpin_pages(&self, addr: u64, length: usize) -> io::Result<()> {
+        let result = unsafe { libc::munlock(addr as *const std::ffi::c_void, length) };
+        if result != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "failed to unlock pages",
+            ));
+        }
+        Ok(())
+    }
+}
+
+impl AddressResolver for HostUmemHandler {
+    fn virt_to_phys(&self, virt_addr: u64) -> io::Result<Option<u64>> {
+        self.resolver.virt_to_phys(virt_addr)
+    }
+
+    fn virt_to_phys_range(
+        &self,
+        start_addr: u64,
+        num_pages: usize,
+    ) -> io::Result<Vec<Option<u64>>> {
+        self.resolver.virt_to_phys_range(start_addr, num_pages)
+    }
+}
+
+impl UmemHandler for HostUmemHandler {}
+
+pub(crate) struct EmulatedUmemHandler {
+    resolver: PhysAddrResolverEmulated,
+}
+
+impl EmulatedUmemHandler {
+    pub(crate) fn new(heap_start_addr: u64) -> Self {
+        Self {
+            resolver: PhysAddrResolverEmulated::new(heap_start_addr),
+        }
+    }
+}
+
+impl MemoryPinner for EmulatedUmemHandler {
+    fn pin_pages(&self, addr: u64, length: usize) -> io::Result<()> {
+        Ok(())
+    }
+
+    fn unpin_pages(&self, addr: u64, length: usize) -> io::Result<()> {
+        Ok(())
+    }
+}
+
+impl AddressResolver for EmulatedUmemHandler {
+    fn virt_to_phys(&self, virt_addr: u64) -> io::Result<Option<u64>> {
+        self.resolver.virt_to_phys(virt_addr)
+    }
+}
+
+impl UmemHandler for EmulatedUmemHandler {}

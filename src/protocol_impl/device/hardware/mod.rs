@@ -15,7 +15,7 @@ use std::{
 
 use crate::mem::{
     dmabuf::DmaBufAllocator, page::HostPageAllocator, u_dma_buf::UDmaBufAllocator,
-    virt_to_phy::PhysAddrResolverLinuxX86,
+    virt_to_phy::PhysAddrResolverLinuxX86, HostUmemHandler,
 };
 
 use super::{ops_impl::HwDevice, DeviceAdaptor};
@@ -166,7 +166,7 @@ impl HwDevice for PciHwDevice {
 
     type DmaBufAllocator = UDmaBufAllocator;
 
-    type PhysAddrResolver = PhysAddrResolverLinuxX86;
+    type UmemHandler = HostUmemHandler;
 
     fn new_adaptor(&self) -> io::Result<Self::Adaptor> {
         SysfsPciCsrAdaptor::new(&self.sysfs_path)
@@ -176,8 +176,8 @@ impl HwDevice for PciHwDevice {
         UDmaBufAllocator::open()
     }
 
-    fn new_phys_addr_resolver(&self) -> Self::PhysAddrResolver {
-        PhysAddrResolverLinuxX86
+    fn new_umem_handler(&self) -> Self::UmemHandler {
+        HostUmemHandler::new()
     }
 }
 
