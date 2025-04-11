@@ -120,9 +120,7 @@ impl<Dev> FrameTxQueue<Dev> {
             return None;
         }
         let phys_addr = self.buf_base_phys_addr.wrapping_add(self.buf_head as u64);
-        self.buf
-            .get_mut(self.buf_head..self.buf_head.wrapping_add(data.len()))?
-            .copy_from_slice(data);
+        self.buf.copy_from(self.buf_head, data);
         self.buf_head = self
             .buf_head
             .wrapping_add(FRAME_SLOT_SIZE)
@@ -176,7 +174,7 @@ impl<Dev> FrameRxQueue<Dev> {
 impl<Dev: Send + 'static> FrameRx for FrameRxQueue<Dev> {
     #[allow(clippy::arithmetic_side_effects)]
     #[allow(clippy::as_conversions)] // converting u32 to usize
-    fn recv_nonblocking(&mut self) -> io::Result<&[u8]> {
+    fn recv_nonblocking(&mut self) -> io::Result<Vec<u8>> {
         let Some(desc) = self.rx_queue.pop() else {
             return Err(io::ErrorKind::WouldBlock.into());
         };
@@ -185,10 +183,7 @@ impl<Dev: Send + 'static> FrameRx for FrameRxQueue<Dev> {
             .unwrap_or_else(|| unreachable!("invalid index"));
 
         let len = desc.len() as usize;
-        let frame = self
-            .rx_buf
-            .get(pos..pos + len)
-            .unwrap_or_else(|| unreachable!("invalid len"));
+        let frame = self.rx_buf.get(pos, len);
 
         Ok(frame)
     }
@@ -284,7 +279,7 @@ impl<Rx: FrameRx + Send + 'static> RxWorker<Rx> {
                         }
                     };
 
-                    if let Err(err) = self.dev.send(frame) {
+                    if let Err(err) = self.dev.send(&frame) {
                         tracing::error!("Rx processing error: {err}");
                         return Err(err);
                     }

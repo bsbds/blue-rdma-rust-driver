@@ -265,9 +265,7 @@ where
                 .take(count as usize)
                 .flat_map(u64::to_ne_bytes)
                 .collect();
-            buf.get_mut(..bytes.len())
-                .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
-                .copy_from_slice(&bytes);
+            buf.copy_from(0, &bytes);
             let pgt_update = PgtUpdate::new(self.mtt_buffer.phys_addr, index, count - 1);
             self.cmd_controller.update_pgt(pgt_update)?;
         }

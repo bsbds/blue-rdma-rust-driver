@@ -54,5 +54,5 @@ pub(crate) trait FrameTx {
 /// Trait for receiving frames
 pub(crate) trait FrameRx {
     /// Try to receive a frame, returning immediately if none available
-    fn recv_nonblocking(&mut self) -> io::Result<&[u8]>;
+    fn recv_nonblocking(&mut self) -> io::Result<Vec<u8>>;
 }

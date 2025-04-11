@@ -97,18 +97,6 @@ impl RecvBuffer {
     }
 }
 
-impl AsMut<[u8]> for RecvBuffer {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
-    }
-}
-
-impl AsRef<[u8]> for RecvBuffer {
-    fn as_ref(&self) -> &[u8] {
-        &self.inner
-    }
-}
-
 /// The position of a packet
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum PacketPos {

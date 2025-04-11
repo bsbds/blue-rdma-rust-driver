@@ -23,11 +23,11 @@ struct FrameRxSocket {
 }
 
 impl FrameRx for FrameRxSocket {
-    fn recv_nonblocking(&mut self) -> std::io::Result<&[u8]> {
+    fn recv_nonblocking(&mut self) -> std::io::Result<Vec<u8>> {
         let len = self.buffer.len();
         self.buffer.resize(len + 2048, 0);
         let n = self.socket.recv(&mut self.buffer[len..])?;
-        Ok(&self.buffer[len..len + n])
+        Ok(self.buffer[len..len + n].to_vec())
     }
 }
 

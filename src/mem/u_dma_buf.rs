@@ -112,12 +112,10 @@ mod tests {
     fn allocate_pages() {
         let mut allocator = UDmaBufAllocator::open().unwrap();
         let mut x = allocator.create(0x1000).unwrap();
-        let buf: &mut [u8] = x.as_mut();
-        assert_eq!(buf.len(), 0x1000);
-        buf.fill(1);
+        assert_eq!(x.len(), 0x1000);
+        x.copy_from(0, &[1; 1]);
         let mut x = allocator.create(0x4000).unwrap();
-        let buf: &mut [u8] = x.as_mut();
-        assert_eq!(buf.len(), 0x4000);
-        buf.fill(1);
+        assert_eq!(x.len(), 0x4000);
+        x.copy_from(0, &[1; 1]);
     }
 }

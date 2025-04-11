@@ -11,7 +11,7 @@ use std::{
     ffi::c_void,
     io,
     ops::{Deref, DerefMut},
-    slice,
+    ptr, slice,
 };
 
 /// A trait for allocating contiguous physical memory pages.
@@ -61,18 +61,6 @@ impl<const N: usize> DerefMut for ContiguousPages<N> {
     }
 }
 
-impl<const N: usize> AsMut<[u8]> for ContiguousPages<N> {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.inner
-    }
-}
-
-impl<const N: usize> AsRef<[u8]> for ContiguousPages<N> {
-    fn as_ref(&self) -> &[u8] {
-        &self.inner
-    }
-}
-
 /// Memory-mapped region of host memory.
 #[derive(Debug)]
 pub(crate) struct MmapMut {
@@ -86,6 +74,46 @@ impl MmapMut {
     /// Creates a new `MmapMut`
     pub(crate) fn new(ptr: *mut c_void, len: usize) -> Self {
         Self { ptr, len }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.len
+    }
+
+    // TODO: optimize read/write performance
+    #[allow(clippy::needless_pass_by_ref_mut)]
+    pub(crate) fn copy_from(&mut self, offset: usize, src: &[u8]) {
+        assert!(
+            offset.saturating_add(src.len()) <= self.len,
+            "copy beyond mmap boundaries"
+        );
+        let ptr = self.ptr.cast::<u8>();
+        for (i, x) in src.iter().enumerate() {
+            unsafe {
+                let ptr = ptr.add(offset + i);
+                ptr::write_volatile(ptr, *x);
+            }
+        }
+    }
+
+    pub(crate) fn get(&self, offset: usize, len: usize) -> Vec<u8> {
+        assert!(
+            offset.saturating_add(len) <= self.len,
+            "get beyond mmap boundaries"
+        );
+        let mut buf = Vec::with_capacity(len);
+        let ptr = self.ptr.cast::<u8>();
+        for i in offset..(offset + len) {
+            unsafe {
+                let ptr = ptr.add(i);
+                buf.push(ptr::read_volatile(ptr));
+            }
+        }
+        buf
+    }
+
+    pub(crate) fn as_ptr(&self) -> *const c_void {
+        self.ptr
     }
 }
 
@@ -110,38 +138,4 @@ mod mmap_mut_impl {
     unsafe impl Sync for MmapMut {}
     #[allow(unsafe_code)]
     unsafe impl Send for MmapMut {}
-
-    #[allow(unsafe_code)]
-    impl Deref for MmapMut {
-        type Target = [u8];
-
-        #[inline]
-        fn deref(&self) -> &[u8] {
-            unsafe { slice::from_raw_parts(self.ptr as *const u8, self.len) }
-        }
-    }
-
-    #[allow(unsafe_code)]
-    impl DerefMut for MmapMut {
-        #[inline]
-        fn deref_mut(&mut self) -> &mut [u8] {
-            unsafe { slice::from_raw_parts_mut(self.ptr as *mut u8, self.len) }
-        }
-    }
-
-    #[allow(unsafe_code)]
-    impl AsRef<[u8]> for MmapMut {
-        #[inline]
-        fn as_ref(&self) -> &[u8] {
-            self
-        }
-    }
-
-    #[allow(unsafe_code)]
-    impl AsMut<[u8]> for MmapMut {
-        #[inline]
-        fn as_mut(&mut self) -> &mut [u8] {
-            self
-        }
-    }
 }

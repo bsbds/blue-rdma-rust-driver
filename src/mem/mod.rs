@@ -107,18 +107,6 @@ impl DerefMut for DmaBuf {
     }
 }
 
-impl AsRef<[u8]> for DmaBuf {
-    fn as_ref(&self) -> &[u8] {
-        &self.buf
-    }
-}
-
-impl AsMut<[u8]> for DmaBuf {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.buf
-    }
-}
-
 pub(crate) trait DmaBufAllocator {
     fn alloc(&mut self, len: usize) -> io::Result<DmaBuf>;
 }

@@ -83,23 +83,6 @@ impl Mtt {
         addr.checked_add(length as u64)
             .map(|end| (addr..end).step_by(PAGE_SIZE).collect())
     }
-
-    /// Copies physical addresses into a page.
-    ///
-    /// # Errors
-    ///
-    /// Returns an error if the page is too small to hold all addresses.
-    fn copy_phy_addrs_to_page<Addrs: IntoIterator<Item = u64>>(
-        phy_addrs: Addrs,
-        page: &mut ContiguousPages<1>,
-    ) -> io::Result<()> {
-        let bytes: Vec<u8> = phy_addrs.into_iter().flat_map(u64::to_ne_bytes).collect();
-        page.get_mut(..bytes.len())
-            .ok_or(io::Error::from(io::ErrorKind::OutOfMemory))?
-            .copy_from_slice(&bytes);
-
-        Ok(())
-    }
 }
 
 #[derive(Clone, Copy)]
