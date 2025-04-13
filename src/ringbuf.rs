@@ -1,3 +1,5 @@
+use std::sync::atomic::{fence, Ordering};
+
 use crate::mem::page::MmapMut;
 
 /// Number of bits used to represent the length of the ring buffer.
@@ -49,6 +51,9 @@ impl<T: Copy> DmaRingBuf<T> {
     {
         let value = unsafe { self.ptr.add(self.tail_idx()).read_volatile() };
         if cond(&value) {
+            // Ensures that the value is read atomically from memory
+            fence(Ordering::Acquire);
+            let value = unsafe { self.ptr.add(self.tail_idx()).read_volatile() };
             unsafe {
                 self.ptr
                     .add(self.tail_idx())
